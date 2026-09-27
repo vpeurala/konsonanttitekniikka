@@ -161,13 +161,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "herigone"
-version = "0.1.0"
-dependencies = [
- "macroquad",
-]
-
-[[package]]
 name = "hound"
 version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -184,6 +177,13 @@ dependencies = [
  "color_quant",
  "num-traits",
  "png",
+]
+
+[[package]]
+name = "konsonanttitekniikka"
+version = "0.1.0"
+dependencies = [
+ "macroquad",
 ]
 
 [[package]]

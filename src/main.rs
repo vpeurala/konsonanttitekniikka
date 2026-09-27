@@ -12,7 +12,7 @@ use game::Game;
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "Herigone".to_owned(),
+        window_title: "Konsonanttitekniikka".to_owned(),
         window_width: 800,
         window_height: 600,
         high_dpi: true,
