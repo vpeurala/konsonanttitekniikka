@@ -1,5 +1,6 @@
 use macroquad::prelude::*;
 
+use crate::audio::Sfx;
 use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
 use crate::pairs::{self, PAIRS, Pair};
@@ -203,6 +204,8 @@ pub struct Game {
     level_banner: f32,
     spawn_timer: f32,
     feedback: Option<Feedback>,
+    /// Sound effects triggered since the last `take_sfx`.
+    sfx: Vec<Sfx>,
     effects: Effects,
 }
 
@@ -226,6 +229,7 @@ impl Game {
             level_banner: 0.0,
             spawn_timer: 1.0,
             feedback: None,
+            sfx: Vec::new(),
             effects: Effects::default(),
         }
     }
@@ -237,7 +241,12 @@ impl Game {
         self.keyboard = keyboard;
     }
 
-    fn is_over(&self) -> bool {
+    /// The sound effects triggered since the previous call.
+    pub fn take_sfx(&mut self) -> Vec<Sfx> {
+        std::mem::take(&mut self.sfx)
+    }
+
+    pub fn is_over(&self) -> bool {
         self.energy <= 0.0
     }
 
@@ -361,6 +370,7 @@ impl Game {
     fn type_into(&mut self, slot: Slot, c: char) {
         if self.is_dead_end(slot) {
             self.energy -= WRONG_PENALTY;
+            self.sfx.push(Sfx::Wrong);
             self.feedback = Some(Feedback {
                 text: format!("Väärin: {}", self.slot(slot).to_uppercase()),
                 color: RED,
@@ -371,6 +381,7 @@ impl Game {
         }
 
         self.slot_mut(slot).push(c);
+        self.sfx.push(Sfx::Type);
         let (candidates, outcome) = self.outcome(slot);
         if let InputOutcome::Hit(hits) = outcome {
             let first = self.enemies[candidates[hits[0]].0].pair;
@@ -395,11 +406,13 @@ impl Game {
             self.level_points = 0;
             self.level_time = 0.0;
             self.level_banner = LEVEL_BANNER_SECONDS;
+            self.sfx.push(Sfx::LevelUp);
             self.spawn_timer = LEVEL_BREAK_SECONDS;
         }
     }
 
     fn cast_spell(&mut self, target: Enemy) {
+        self.sfx.push(Sfx::Cast);
         self.cast = Some((target.pos, CAST_SECONDS));
         self.spells.push(Spell {
             pos: girl_hand(self.player, target.pos),
@@ -417,10 +430,12 @@ impl Game {
 
         let step = SPELL_SPEED * dt;
         let effects = &mut self.effects;
+        let sfx = &mut self.sfx;
         self.spells.retain_mut(|spell| {
             let to_target = spell.target.pos - spell.pos;
             if to_target.length() <= step {
                 effects.explode(spell.target.pos, ENEMY_RADIUS, &KILL_PALETTE);
+                sfx.push(Sfx::Explode);
                 effects.explode(spell.target.pos, ENEMY_RADIUS * 0.5, &SPELL_PALETTE);
                 return false;
             }
@@ -446,6 +461,7 @@ impl Game {
         self.enemies = remaining;
         for enemy in &collided {
             self.energy -= COLLISION_PENALTY;
+            self.sfx.extend([Sfx::Explode, Sfx::Hurt]);
             self.effects
                 .explode(enemy.pos, ENEMY_RADIUS, &COLLISION_PALETTE);
             // Show the pair so a collision still teaches something.
@@ -615,6 +631,7 @@ impl Game {
         draw_rectangle(16.0, 16.0, bar_width, 16.0, DARKGRAY);
         draw_rectangle(16.0, 16.0, bar_width * fill, 16.0, GREEN);
         draw_text("Energia", 16.0, 50.0, 22.0, LIGHTGRAY);
+        draw_text("Tab: musiikki", 16.0, screen_height() - 16.0, 18.0, GRAY);
 
         let score = format!("Pisteet: {}", self.score);
         let size = measure_text(&score, None, 28, 1.0);
