@@ -55,10 +55,10 @@ const LEVEL_BANNER_SECONDS: f32 = 2.5;
 /// No new enemies appear for this long after a level starts.
 const LEVEL_BREAK_SECONDS: f32 = 2.0;
 
+/// A new enemy's speed.
 const START_SPEED: f32 = 12.0;
-const MAX_SPEED: f32 = 100.0;
-/// Speed gained per second spent on a level.
-const SPEED_GROWTH: f32 = 1.0;
+/// Speed an enemy gains per second on screen, up to the player's speed.
+const SPEED_GROWTH: f32 = 4.0;
 const START_SPAWN_INTERVAL: f32 = 4.0;
 const MIN_SPAWN_INTERVAL: f32 = 1.2;
 /// Spawn interval lost per second spent on a level.
@@ -79,11 +79,14 @@ pub fn points_to_clear(level: u32) -> u32 {
     FIRST_LEVEL_POINTS + LEVEL_POINTS_INCREASE * (level - 1)
 }
 
-/// Enemies start slow on every level and speed up the longer it lasts.
-pub fn enemy_speed(level_time: f32) -> f32 {
-    (START_SPEED + SPEED_GROWTH * level_time).min(MAX_SPEED)
+/// Every enemy starts slow and speeds up as it ages, until it is as fast
+/// as the player.
+pub fn enemy_speed(age: f32) -> f32 {
+    (START_SPEED + SPEED_GROWTH * age).min(PLAYER_SPEED)
 }
 
+/// Difficulty comes from the spawn rate: enemies appear more often the
+/// longer a level lasts, and a new level starts calm again.
 pub fn spawn_interval(level_time: f32) -> f32 {
     (START_SPAWN_INTERVAL - SPAWN_INTERVAL_SHRINK * level_time).max(MIN_SPAWN_INTERVAL)
 }
@@ -522,9 +525,9 @@ impl Game {
     }
 
     fn move_enemies(&mut self, dt: f32) {
-        let speed = enemy_speed(self.level_time);
         let player = self.player;
         for enemy in &mut self.enemies {
+            let speed = enemy_speed(enemy.age);
             enemy.pos += (player - enemy.pos).normalize_or_zero() * speed * dt;
             enemy.age += dt;
         }
@@ -694,13 +697,7 @@ impl Game {
                 72,
                 Color { a: alpha, ..GOLD },
             );
-            draw_centered_text(
-                "Hirviöt hidastuvat",
-                cx,
-                cy + 50.0,
-                28,
-                Color { a: alpha, ..WHITE },
-            );
+            draw_centered_text("Hienoa!", cx, cy + 50.0, 28, Color { a: alpha, ..WHITE });
         }
     }
 
@@ -891,10 +888,10 @@ mod tests {
     }
 
     #[test]
-    fn enemies_speed_up_within_a_level_up_to_a_cap() {
+    fn enemies_speed_up_with_age_to_the_players_speed() {
         assert_eq!(enemy_speed(0.0), START_SPEED);
         assert!(enemy_speed(10.0) > enemy_speed(0.0));
-        assert_eq!(enemy_speed(1000.0), MAX_SPEED);
+        assert_eq!(enemy_speed(1000.0), PLAYER_SPEED);
     }
 
     #[test]
