@@ -1,10 +1,12 @@
+use std::collections::HashSet;
+
 use macroquad::prelude::*;
 
 use crate::audio::Sfx;
 use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
 use crate::pairs::{self, PAIRS, Pair};
-use crate::sprites::{draw_girl, draw_monster, girl_hand};
+use crate::sprites::{draw_cyclops, draw_girl, draw_monster, girl_hand};
 
 const PLAYER_SPEED: f32 = 260.0;
 const PLAYER_RADIUS: f32 = 16.0;
@@ -19,6 +21,10 @@ const LABEL_FONT_SIZE: u16 = 26;
 const LABEL_PAD: f32 = 6.0;
 /// Distance from an enemy's center to the center of its label.
 const LABEL_OFFSET: f32 = ENEMY_RADIUS + 22.0;
+const LABEL_HEIGHT: f32 = LABEL_FONT_SIZE as f32 + 2.0;
+const HINT_FONT_SIZE: u16 = 24;
+/// Extra room below the label for a first-time hint.
+const HINT_SPACE: f32 = 28.0;
 
 const MAX_ENERGY: f32 = 100.0;
 const HIT_REWARD: f32 = 5.0;
@@ -34,11 +40,11 @@ const LEVEL_BANNER_SECONDS: f32 = 2.5;
 /// No new enemies appear for this long after a level starts.
 const LEVEL_BREAK_SECONDS: f32 = 2.0;
 
-const START_SPEED: f32 = 35.0;
-const MAX_SPEED: f32 = 120.0;
+const START_SPEED: f32 = 12.0;
+const MAX_SPEED: f32 = 100.0;
 /// Speed gained per second spent on a level.
-const SPEED_GROWTH: f32 = 1.5;
-const START_SPAWN_INTERVAL: f32 = 3.5;
+const SPEED_GROWTH: f32 = 1.0;
+const START_SPAWN_INTERVAL: f32 = 4.0;
 const MIN_SPAWN_INTERVAL: f32 = 1.2;
 /// Spawn interval lost per second spent on a level.
 const SPAWN_INTERVAL_SHRINK: f32 = 0.05;
@@ -113,22 +119,34 @@ enum Slot {
     Word,
 }
 
+impl Slot {
+    /// The slot's color, which the monsters it answers share.
+    fn accent(self) -> Color {
+        match self {
+            Slot::Number => SKYBLUE,
+            Slot::Word => VIOLET,
+        }
+    }
+}
+
 struct Enemy {
     pos: Vec2,
     pair: Pair,
     shows_word: bool,
     label: String,
     label_width: f32,
+    /// The answer, shown the first time a pair appears in a game.
+    hint: Option<String>,
     /// Offsets the animation so enemies don't move in sync.
     phase: f32,
 }
 
 impl Enemy {
-    fn new(pos: Vec2, pair: Pair, shows_word: bool) -> Self {
-        let label = if shows_word {
-            pair.word.to_uppercase()
+    fn new(pos: Vec2, pair: Pair, shows_word: bool, with_hint: bool) -> Self {
+        let (label, hint) = if shows_word {
+            (pair.word.to_uppercase(), pair.number.to_owned())
         } else {
-            pair.number.to_owned()
+            (pair.number.to_owned(), pair.word.to_uppercase())
         };
         let label_width = measure_text(&label, None, LABEL_FONT_SIZE, 1.0).width + 2.0 * LABEL_PAD;
         Enemy {
@@ -137,6 +155,7 @@ impl Enemy {
             shows_word,
             label,
             label_width,
+            hint: with_hint.then(|| format!("= {hint}")),
             phase: rand::gen_range(0.0, 100.0),
         }
     }
@@ -144,12 +163,29 @@ impl Enemy {
     /// The radius of the circle enemies keep clear of each other: wide
     /// enough to cover both the body and the label hanging below it.
     fn reach(&self) -> f32 {
-        (ENEMY_RADIUS * 1.6).max(self.label_width / 2.0 + 4.0)
+        let hint_width = self.hint.as_ref().map_or(0.0, |hint| {
+            measure_text(hint, None, HINT_FONT_SIZE, 1.0).width
+        });
+        (ENEMY_RADIUS * 1.6 + self.hint_space() / 2.0)
+            .max(self.label_width / 2.0 + 4.0)
+            .max(hint_width / 2.0 + 4.0)
+    }
+
+    fn hint_space(&self) -> f32 {
+        if self.hint.is_some() { HINT_SPACE } else { 0.0 }
     }
 
     /// The point `reach` is measured from, between the body and the label.
     fn reach_center(&self) -> Vec2 {
-        self.pos + vec2(0.0, LABEL_OFFSET / 2.0)
+        self.pos + vec2(0.0, (LABEL_OFFSET + self.hint_space()) / 2.0)
+    }
+
+    fn draw_body(&self, time: f32, player: Vec2) {
+        if self.shows_word {
+            draw_cyclops(self.pos, ENEMY_RADIUS, time, self.phase, player);
+        } else {
+            draw_monster(self.pos, ENEMY_RADIUS, time, self.phase);
+        }
     }
 
     fn answer_slot(&self) -> Slot {
@@ -187,6 +223,8 @@ pub struct Game {
     player: Vec2,
     player_moving: bool,
     enemies: Vec<Enemy>,
+    /// The pairs that have appeared in this game, by number.
+    seen: HashSet<&'static str>,
     spells: Vec<Spell>,
     /// Where she is casting toward, and for how much longer.
     cast: Option<(Vec2, f32)>,
@@ -216,6 +254,7 @@ impl Game {
             player: vec2(screen_width() / 2.0, screen_height() / 2.0),
             player_moving: false,
             enemies: Vec::new(),
+            seen: HashSet::new(),
             spells: Vec::new(),
             cast: None,
             number_typed: String::new(),
@@ -527,7 +566,8 @@ impl Game {
             return;
         }
         let pair = available[rand::gen_range(0, available.len())];
-        let mut enemy = Enemy::new(Vec2::ZERO, pair, rand::gen_range(0, 2) == 0);
+        let first_time = !self.seen.contains(pair.number);
+        let mut enemy = Enemy::new(Vec2::ZERO, pair, rand::gen_range(0, 2) == 0, first_time);
 
         // Try random edge points; settle for the farthest one from the
         // player if none is clear of everything.
@@ -550,6 +590,7 @@ impl Game {
         }
         if let Some((pos, _)) = best {
             enemy.pos = pos;
+            self.seen.insert(pair.number);
             self.enemies.push(enemy);
         }
     }
@@ -559,12 +600,12 @@ impl Game {
         let time = get_time() as f32;
 
         for enemy in &self.enemies {
-            draw_monster(enemy.pos, ENEMY_RADIUS, time, enemy.phase);
+            enemy.draw_body(time, self.player);
         }
         for spell in &self.spells {
             // Doomed monsters freeze and flash while the spell flies.
             let target = &spell.target;
-            draw_monster(target.pos, ENEMY_RADIUS, time, target.phase);
+            target.draw_body(time, self.player);
             let flash = 0.35 + 0.25 * (time * 40.0).sin();
             draw_circle(
                 target.pos.x,
@@ -692,11 +733,7 @@ impl Game {
 
         for (slot, text, width, empty) in texts {
             let dead_end = self.is_dead_end(slot);
-            let accent = match slot {
-                _ if dead_end => RED,
-                Slot::Number => SKYBLUE,
-                Slot::Word => VIOLET,
-            };
+            let accent = if dead_end { RED } else { slot.accent() };
             let background = if dead_end {
                 Color::new(0.5, 0.0, 0.0, 0.7)
             } else {
@@ -732,7 +769,7 @@ fn draw_spell(pos: Vec2, time: f32) {
 
 /// Draws an enemy's word or number on a plate below its body.
 fn draw_label(enemy: &Enemy) {
-    let height = LABEL_FONT_SIZE as f32 + 2.0;
+    let height = LABEL_HEIGHT;
     let center = enemy.pos + vec2(0.0, LABEL_OFFSET);
     let (x, y) = (center.x - enemy.label_width / 2.0, center.y - height / 2.0);
     draw_rectangle(
@@ -742,8 +779,20 @@ fn draw_label(enemy: &Enemy) {
         height,
         Color::new(0.0, 0.0, 0.0, 0.75),
     );
-    draw_rectangle_lines(x, y, enemy.label_width, height, 2.0, MAROON);
+    draw_rectangle_lines(
+        x,
+        y,
+        enemy.label_width,
+        height,
+        2.0,
+        enemy.answer_slot().accent(),
+    );
     draw_centered_text(&enemy.label, center.x, center.y, LABEL_FONT_SIZE, WHITE);
+
+    if let Some(hint) = &enemy.hint {
+        let hint_y = center.y + height / 2.0 + HINT_SPACE / 2.0;
+        draw_centered_text(hint, center.x, hint_y, HINT_FONT_SIZE, LIME);
+    }
 }
 
 /// Draws text centered horizontally and vertically on (x, y).

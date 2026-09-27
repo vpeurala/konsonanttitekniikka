@@ -178,3 +178,95 @@ pub fn draw_monster(pos: Vec2, radius: f32, time: f32, phase: f32) {
         );
     }
 }
+
+const CYCLOPS_BODY: Color = Color::new(0.04, 0.16, 0.26, 1.0);
+const CYCLOPS_EDGE: Color = Color::new(0.2, 0.55, 0.85, 1.0);
+const CYCLOPS_IRIS: Color = Color::new(0.9, 0.1, 0.1, 1.0);
+
+/// A wobbling one-eyed blob with dangling tentacles, centered on `pos`,
+/// whose eye follows `look_at`. `phase` keeps monsters from moving in
+/// sync.
+pub fn draw_cyclops(pos: Vec2, radius: f32, time: f32, phase: f32, look_at: Vec2) {
+    const SEGMENTS: usize = 24;
+    const TENTACLES: usize = 4;
+    let t = time + phase;
+    let (x, y) = (pos.x, pos.y);
+
+    draw_ellipse(x, y + radius + 8.0, radius * 0.8, 4.0, 0.0, SHADOW);
+
+    // Tentacles hang below the body and sway.
+    for i in 0..TENTACLES {
+        let across = (i as f32 + 0.5) / TENTACLES as f32 * 2.0 - 1.0;
+        let root = vec2(x + across * radius * 0.7, y + radius * 0.5);
+        let sway = (t * 5.0 + i as f32 * 1.3).sin() * radius * 0.3;
+        let tip = root + vec2(sway, radius * 0.9);
+        let half = radius * 0.16;
+        draw_triangle(
+            root - vec2(half, 0.0),
+            root + vec2(half, 0.0),
+            tip,
+            CYCLOPS_EDGE,
+        );
+    }
+
+    // Body: a circle whose outline ripples.
+    let point = |i: usize, scale: f32| {
+        let angle = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
+        let ripple = 1.0 + 0.08 * (angle * 3.0 + t * 3.0).sin();
+        pos + Vec2::from_angle(angle) * radius * ripple * scale
+    };
+    for (scale, color) in [(1.12, CYCLOPS_EDGE), (1.0, CYCLOPS_BODY)] {
+        for i in 0..SEGMENTS {
+            draw_triangle(pos, point(i, scale), point(i + 1, scale), color);
+        }
+    }
+
+    // One big eye, glaring at the target, blinking now and then.
+    let eye = vec2(x, y - radius * 0.2);
+    let blink = (t * 0.7).sin() > 0.97;
+    let eye_height = if blink { 0.05 } else { 0.4 };
+    draw_ellipse(eye.x, eye.y, radius * 0.45, radius * eye_height, 0.0, WHITE);
+    if !blink {
+        let gaze = (look_at - eye).normalize_or_zero() * radius * 0.18;
+        let iris = eye + gaze;
+        draw_circle(iris.x, iris.y, radius * 0.22, CYCLOPS_IRIS);
+        draw_ellipse(iris.x, iris.y, radius * 0.05, radius * 0.18, 0.0, BLACK);
+    }
+    // A heavy brow over the eye.
+    draw_line(
+        eye.x - radius * 0.5,
+        eye.y - radius * 0.45,
+        eye.x + radius * 0.5,
+        eye.y - radius * 0.3,
+        3.0,
+        BLACK,
+    );
+
+    // A wide mouth full of fangs.
+    let mouth_y = y + radius * 0.35;
+    let mouth_w = radius * 1.1;
+    const FANGS: usize = 6;
+    let fang_w = mouth_w / FANGS as f32;
+    draw_line(
+        x - mouth_w / 2.0,
+        mouth_y,
+        x + mouth_w / 2.0,
+        mouth_y,
+        2.0,
+        BLACK,
+    );
+    for i in 0..FANGS {
+        let left = x - mouth_w / 2.0 + i as f32 * fang_w;
+        let (top, down) = if i % 2 == 0 {
+            (mouth_y, radius * 0.22)
+        } else {
+            (mouth_y, -radius * 0.14)
+        };
+        draw_triangle(
+            vec2(left, top),
+            vec2(left + fang_w, top),
+            vec2(left + fang_w / 2.0, top + down),
+            WHITE,
+        );
+    }
+}
