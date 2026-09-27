@@ -12,9 +12,22 @@ const EYES: Color = Color::new(0.15, 0.1, 0.1, 1.0);
 
 const SHADOW: Color = Color::new(0.0, 0.0, 0.0, 0.35);
 
+/// Which side of her body faces `toward`: -1.0 for left, 1.0 for right.
+fn side_toward(pos: Vec2, toward: Vec2) -> f32 {
+    if toward.x < pos.x { -1.0 } else { 1.0 }
+}
+
+/// Where her raised hand is while casting toward `toward`.
+pub fn girl_hand(pos: Vec2, toward: Vec2) -> Vec2 {
+    let side = side_toward(pos, toward);
+    let shoulder = vec2(pos.x + side * 6.0, pos.y - 3.0);
+    shoulder + (toward - shoulder).normalize_or(vec2(side, 0.0)) * 13.0
+}
+
 /// A little girl in a pink dress, centered on `pos`. `time` animates her
-/// walk while `moving` is true.
-pub fn draw_girl(pos: Vec2, time: f32, moving: bool) {
+/// walk while `moving` is true. While `casting` toward a point, she points
+/// a glowing hand at it.
+pub fn draw_girl(pos: Vec2, time: f32, moving: bool, casting: Option<Vec2>) {
     let step = if moving { (time * 14.0).sin() } else { 0.0 };
     let x = pos.x;
     let y = pos.y - step.abs() * 2.0;
@@ -28,11 +41,20 @@ pub fn draw_girl(pos: Vec2, time: f32, moving: bool) {
         draw_ellipse(x + side * 5.0, foot_y + 1.0, 4.0, 2.5, 0.0, SHOES);
     }
 
-    // Arms swing against the legs.
+    // Arms swing against the legs; a casting arm points at its target.
+    let cast_side = casting.map(|toward| side_toward(pos, toward));
     for side in [-1.0, 1.0] {
-        let hand = vec2(x + side * 13.0, y + 5.0 - side * step * 3.0);
+        let hand = match casting {
+            Some(toward) if cast_side == Some(side) => girl_hand(vec2(x, y), toward),
+            _ => vec2(x + side * 13.0, y + 5.0 - side * step * 3.0),
+        };
         draw_line(x + side * 6.0, y - 3.0, hand.x, hand.y, 3.0, SKIN);
         draw_circle(hand.x, hand.y, 2.0, SKIN);
+        if cast_side == Some(side) {
+            let glow = 0.5 + 0.3 * (time * 25.0).sin();
+            draw_circle(hand.x, hand.y, 7.0, Color::new(1.0, 0.5, 0.85, glow));
+            draw_circle(hand.x, hand.y, 3.0, WHITE);
+        }
     }
 
     // Dress: a flared skirt with a collar and a belt.

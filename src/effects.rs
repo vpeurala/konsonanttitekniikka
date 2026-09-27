@@ -49,6 +49,21 @@ impl Effects {
         });
     }
 
+    /// A few slow sparkles, left behind by something moving through `pos`.
+    pub fn trail(&mut self, pos: Vec2, palette: &[Color]) {
+        for _ in 0..3 {
+            let angle = rand::gen_range(0.0, std::f32::consts::TAU);
+            self.particles.push(Particle {
+                pos,
+                vel: Vec2::from_angle(angle) * rand::gen_range(10.0, 50.0),
+                age: 0.0,
+                lifetime: rand::gen_range(0.2, 0.45),
+                size: rand::gen_range(1.5, 3.0),
+                color: palette[rand::gen_range(0, palette.len())],
+            });
+        }
+    }
+
     pub fn update(&mut self, dt: f32) {
         let drag = (-3.0 * dt).exp();
         for p in &mut self.particles {

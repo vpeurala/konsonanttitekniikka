@@ -3,7 +3,7 @@ use macroquad::prelude::*;
 use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
 use crate::pairs::{self, PAIRS, Pair};
-use crate::sprites::{draw_girl, draw_monster};
+use crate::sprites::{draw_girl, draw_monster, girl_hand};
 
 const PLAYER_SPEED: f32 = 260.0;
 const PLAYER_RADIUS: f32 = 16.0;
@@ -26,7 +26,12 @@ const COLLISION_PENALTY: f32 = 20.0;
 
 const FEEDBACK_SECONDS: f32 = 2.5;
 
+const SPELL_SPEED: f32 = 700.0;
+/// How long she keeps her hand raised after casting.
+const CAST_SECONDS: f32 = 0.35;
+
 const KILL_PALETTE: [Color; 4] = [ORANGE, YELLOW, GOLD, WHITE];
+const SPELL_PALETTE: [Color; 4] = [PINK, MAGENTA, VIOLET, WHITE];
 const COLLISION_PALETTE: [Color; 3] = [RED, MAROON, ORANGE];
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
@@ -133,6 +138,13 @@ impl Enemy {
     }
 }
 
+/// A magic bolt flying toward an enemy that has already been answered.
+/// The enemy is out of play and explodes when the bolt reaches it.
+struct Spell {
+    pos: Vec2,
+    target: Enemy,
+}
+
 struct Feedback {
     text: String,
     color: Color,
@@ -144,6 +156,9 @@ pub struct Game {
     player: Vec2,
     player_moving: bool,
     enemies: Vec<Enemy>,
+    spells: Vec<Spell>,
+    /// Where she is casting toward, and for how much longer.
+    cast: Option<(Vec2, f32)>,
     number_typed: String,
     word_typed: String,
     last_slot: Slot,
@@ -161,6 +176,8 @@ impl Game {
             player: vec2(screen_width() / 2.0, screen_height() / 2.0),
             player_moving: false,
             enemies: Vec::new(),
+            spells: Vec::new(),
+            cast: None,
             number_typed: String::new(),
             word_typed: String::new(),
             last_slot: Slot::Word,
@@ -195,6 +212,7 @@ impl Game {
     pub fn update(&mut self) {
         let dt = get_frame_time();
         self.effects.update(dt);
+        self.update_spells(dt);
         let keys = self.keyboard.typed();
 
         if self.is_over() {
@@ -325,13 +343,44 @@ impl Game {
             // keeps the remaining indices valid.
             for &hit in hits.iter().rev() {
                 let enemy = self.enemies.remove(candidates[hit].0);
-                self.effects.explode(enemy.pos, ENEMY_RADIUS, &KILL_PALETTE);
+                self.cast_spell(enemy);
             }
             self.score += hits.len() as u32;
             self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
             self.show_pair(first, GREEN);
             self.slot_mut(slot).clear();
         }
+    }
+
+    fn cast_spell(&mut self, target: Enemy) {
+        self.cast = Some((target.pos, CAST_SECONDS));
+        self.spells.push(Spell {
+            pos: girl_hand(self.player, target.pos),
+            target,
+        });
+    }
+
+    fn update_spells(&mut self, dt: f32) {
+        if let Some((_, seconds_left)) = &mut self.cast {
+            *seconds_left -= dt;
+            if *seconds_left <= 0.0 {
+                self.cast = None;
+            }
+        }
+
+        let step = SPELL_SPEED * dt;
+        let effects = &mut self.effects;
+        self.spells.retain_mut(|spell| {
+            let to_target = spell.target.pos - spell.pos;
+            if to_target.length() <= step {
+                effects.explode(spell.target.pos, ENEMY_RADIUS, &KILL_PALETTE);
+                effects.explode(spell.target.pos, ENEMY_RADIUS * 0.5, &SPELL_PALETTE);
+                return false;
+            }
+            spell.pos += to_target.normalize() * step;
+            effects.trail(spell.pos, &SPELL_PALETTE);
+            true
+        });
     }
 
     fn move_enemies(&mut self, dt: f32) {
@@ -402,7 +451,13 @@ impl Game {
         }
         let available: Vec<Pair> = PAIRS
             .iter()
-            .filter(|p| self.enemies.iter().all(|e| e.pair != **p))
+            .filter(|p| {
+                let mut on_screen = self
+                    .enemies
+                    .iter()
+                    .chain(self.spells.iter().map(|s| &s.target));
+                on_screen.all(|e| e.pair != **p)
+            })
             .copied()
             .collect();
         if available.is_empty() {
@@ -443,13 +498,33 @@ impl Game {
         for enemy in &self.enemies {
             draw_monster(enemy.pos, ENEMY_RADIUS, time, enemy.phase);
         }
-        draw_girl(self.player, time, self.player_moving);
+        for spell in &self.spells {
+            // Doomed monsters freeze and flash while the spell flies.
+            let target = &spell.target;
+            draw_monster(target.pos, ENEMY_RADIUS, time, target.phase);
+            let flash = 0.35 + 0.25 * (time * 40.0).sin();
+            draw_circle(
+                target.pos.x,
+                target.pos.y,
+                ENEMY_RADIUS * 1.2,
+                Color::new(1.0, 1.0, 1.0, flash),
+            );
+        }
+        draw_girl(
+            self.player,
+            time,
+            self.player_moving,
+            self.cast.map(|(toward, _)| toward),
+        );
         for enemy in &self.enemies {
             draw_label(enemy);
         }
         self.effects.draw();
         if !self.is_over() {
             self.draw_slots();
+        }
+        for spell in &self.spells {
+            draw_spell(spell.pos, time);
         }
 
         self.draw_hud();
@@ -559,6 +634,14 @@ fn random_edge_point(margin: f32) -> Vec2 {
         2 => vec2(-margin, rand::gen_range(0.0, h)),
         _ => vec2(w + margin, rand::gen_range(0.0, h)),
     }
+}
+
+/// A glowing magic orb.
+fn draw_spell(pos: Vec2, time: f32) {
+    let pulse = 1.0 + 0.2 * (time * 30.0).sin();
+    draw_circle(pos.x, pos.y, 12.0 * pulse, Color::new(1.0, 0.4, 0.8, 0.3));
+    draw_circle(pos.x, pos.y, 7.0 * pulse, Color::new(1.0, 0.6, 0.9, 0.8));
+    draw_circle(pos.x, pos.y, 3.5, WHITE);
 }
 
 /// Draws an enemy's word or number on a plate below its body.
