@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
@@ -23,12 +23,27 @@ const LABEL_PAD: f32 = 6.0;
 const LABEL_OFFSET: f32 = ENEMY_RADIUS + 22.0;
 const LABEL_HEIGHT: f32 = LABEL_FONT_SIZE as f32 + 2.0;
 const HINT_FONT_SIZE: u16 = 24;
-/// Extra room below the label for a first-time hint.
+/// Extra room below the label for a hint.
 const HINT_SPACE: f32 = 28.0;
+
+/// A pair's first appearances in a game show its answer as a hint.
+const HINTED_APPEARANCES: u32 = 3;
+/// An enemy that has been on screen this long shows its answer too.
+const HINT_AFTER_SECONDS: f32 = 10.0;
+
+/// Whether an enemy shows its answer, given how many times its pair had
+/// appeared in this game before it (`earlier_appearances`) and how long it
+/// has been on screen.
+pub fn shows_hint(earlier_appearances: u32, age: f32) -> bool {
+    earlier_appearances < HINTED_APPEARANCES || age >= HINT_AFTER_SECONDS
+}
 
 const MAX_ENERGY: f32 = 100.0;
 const HIT_REWARD: f32 = 5.0;
 const WRONG_PENALTY: f32 = 10.0;
+/// Wrong keys never take energy below this, so only collisions can end
+/// the game.
+const LOW_ENERGY: f32 = 20.0;
 const COLLISION_PENALTY: f32 = 20.0;
 
 const FEEDBACK_SECONDS: f32 = 2.5;
@@ -48,6 +63,16 @@ const START_SPAWN_INTERVAL: f32 = 4.0;
 const MIN_SPAWN_INTERVAL: f32 = 1.2;
 /// Spawn interval lost per second spent on a level.
 const SPAWN_INTERVAL_SHRINK: f32 = 0.05;
+
+/// The energy left after a wrong key: the penalty, but never below
+/// `LOW_ENERGY`.
+pub fn after_wrong_key(energy: f32) -> f32 {
+    if energy <= LOW_ENERGY {
+        energy
+    } else {
+        (energy - WRONG_PENALTY).max(LOW_ENERGY)
+    }
+}
 
 /// The points needed to finish `level` (counting from 1).
 pub fn points_to_clear(level: u32) -> u32 {
@@ -135,14 +160,18 @@ struct Enemy {
     shows_word: bool,
     label: String,
     label_width: f32,
-    /// The answer, shown the first time a pair appears in a game.
-    hint: Option<String>,
+    /// The answer, as shown in a hint.
+    hint: String,
+    /// How many times this pair had appeared in the game before this enemy.
+    earlier_appearances: u32,
+    /// Seconds on screen.
+    age: f32,
     /// Offsets the animation so enemies don't move in sync.
     phase: f32,
 }
 
 impl Enemy {
-    fn new(pos: Vec2, pair: Pair, shows_word: bool, with_hint: bool) -> Self {
+    fn new(pos: Vec2, pair: Pair, shows_word: bool, earlier_appearances: u32) -> Self {
         let (label, hint) = if shows_word {
             (pair.word.to_uppercase(), pair.number.to_owned())
         } else {
@@ -155,7 +184,9 @@ impl Enemy {
             shows_word,
             label,
             label_width,
-            hint: with_hint.then(|| format!("= {hint}")),
+            hint: format!("= {hint}"),
+            earlier_appearances,
+            age: 0.0,
             phase: rand::gen_range(0.0, 100.0),
         }
     }
@@ -163,16 +194,22 @@ impl Enemy {
     /// The radius of the circle enemies keep clear of each other: wide
     /// enough to cover both the body and the label hanging below it.
     fn reach(&self) -> f32 {
-        let hint_width = self.hint.as_ref().map_or(0.0, |hint| {
-            measure_text(hint, None, HINT_FONT_SIZE, 1.0).width
-        });
+        let hint_width = if self.shows_hint() {
+            measure_text(&self.hint, None, HINT_FONT_SIZE, 1.0).width
+        } else {
+            0.0
+        };
         (ENEMY_RADIUS * 1.6 + self.hint_space() / 2.0)
             .max(self.label_width / 2.0 + 4.0)
             .max(hint_width / 2.0 + 4.0)
     }
 
+    fn shows_hint(&self) -> bool {
+        shows_hint(self.earlier_appearances, self.age)
+    }
+
     fn hint_space(&self) -> f32 {
-        if self.hint.is_some() { HINT_SPACE } else { 0.0 }
+        if self.shows_hint() { HINT_SPACE } else { 0.0 }
     }
 
     /// The point `reach` is measured from, between the body and the label.
@@ -223,8 +260,8 @@ pub struct Game {
     player: Vec2,
     player_moving: bool,
     enemies: Vec<Enemy>,
-    /// The pairs that have appeared in this game, by number.
-    seen: HashSet<&'static str>,
+    /// How many times each pair has appeared in this game, by number.
+    appearances: HashMap<&'static str, u32>,
     spells: Vec<Spell>,
     /// Where she is casting toward, and for how much longer.
     cast: Option<(Vec2, f32)>,
@@ -254,7 +291,7 @@ impl Game {
             player: vec2(screen_width() / 2.0, screen_height() / 2.0),
             player_moving: false,
             enemies: Vec::new(),
-            seen: HashSet::new(),
+            appearances: HashMap::new(),
             spells: Vec::new(),
             cast: None,
             number_typed: String::new(),
@@ -408,7 +445,7 @@ impl Game {
     /// energy, which leaves room to fix a typo with backspace.
     fn type_into(&mut self, slot: Slot, c: char) {
         if self.is_dead_end(slot) {
-            self.energy -= WRONG_PENALTY;
+            self.energy = after_wrong_key(self.energy);
             self.sfx.push(Sfx::Wrong);
             self.feedback = Some(Feedback {
                 text: format!("Väärin: {}", self.slot(slot).to_uppercase()),
@@ -489,6 +526,7 @@ impl Game {
         let player = self.player;
         for enemy in &mut self.enemies {
             enemy.pos += (player - enemy.pos).normalize_or_zero() * speed * dt;
+            enemy.age += dt;
         }
         self.separate_enemies();
 
@@ -566,8 +604,8 @@ impl Game {
             return;
         }
         let pair = available[rand::gen_range(0, available.len())];
-        let first_time = !self.seen.contains(pair.number);
-        let mut enemy = Enemy::new(Vec2::ZERO, pair, rand::gen_range(0, 2) == 0, first_time);
+        let earlier = self.appearances.get(pair.number).copied().unwrap_or(0);
+        let mut enemy = Enemy::new(Vec2::ZERO, pair, rand::gen_range(0, 2) == 0, earlier);
 
         // Try random edge points; settle for the farthest one from the
         // player if none is clear of everything.
@@ -590,7 +628,7 @@ impl Game {
         }
         if let Some((pos, _)) = best {
             enemy.pos = pos;
-            self.seen.insert(pair.number);
+            *self.appearances.entry(pair.number).or_default() += 1;
             self.enemies.push(enemy);
         }
     }
@@ -671,6 +709,9 @@ impl Game {
         let fill = (self.energy / MAX_ENERGY).clamp(0.0, 1.0);
         draw_rectangle(16.0, 16.0, bar_width, 16.0, DARKGRAY);
         draw_rectangle(16.0, 16.0, bar_width * fill, 16.0, GREEN);
+        // Marks the level wrong keys can't take her below.
+        let low_x = 16.0 + bar_width * LOW_ENERGY / MAX_ENERGY;
+        draw_line(low_x, 12.0, low_x, 36.0, 2.0, WHITE);
         draw_text("Energia", 16.0, 50.0, 22.0, LIGHTGRAY);
         draw_text("Tab: musiikki", 16.0, screen_height() - 16.0, 18.0, GRAY);
 
@@ -789,9 +830,9 @@ fn draw_label(enemy: &Enemy) {
     );
     draw_centered_text(&enemy.label, center.x, center.y, LABEL_FONT_SIZE, WHITE);
 
-    if let Some(hint) = &enemy.hint {
+    if enemy.shows_hint() {
         let hint_y = center.y + height / 2.0 + HINT_SPACE / 2.0;
-        draw_centered_text(hint, center.x, hint_y, HINT_FONT_SIZE, LIME);
+        draw_centered_text(&enemy.hint, center.x, hint_y, HINT_FONT_SIZE, LIME);
     }
 }
 
@@ -810,6 +851,32 @@ fn draw_centered_text(text: &str, x: f32, y: f32, font_size: u16, color: Color) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_appearances_of_a_pair_show_a_hint() {
+        for earlier in 0..HINTED_APPEARANCES {
+            assert!(shows_hint(earlier, 0.0));
+        }
+        assert!(!shows_hint(HINTED_APPEARANCES, 0.0));
+    }
+
+    #[test]
+    fn a_long_lived_enemy_shows_a_hint() {
+        assert!(!shows_hint(HINTED_APPEARANCES, HINT_AFTER_SECONDS - 0.1));
+        assert!(shows_hint(HINTED_APPEARANCES, HINT_AFTER_SECONDS));
+    }
+
+    #[test]
+    fn wrong_keys_cost_energy_above_the_low_level() {
+        assert_eq!(after_wrong_key(100.0), 100.0 - WRONG_PENALTY);
+    }
+
+    #[test]
+    fn wrong_keys_never_go_below_the_low_level() {
+        assert_eq!(after_wrong_key(LOW_ENERGY + 1.0), LOW_ENERGY);
+        assert_eq!(after_wrong_key(LOW_ENERGY), LOW_ENERGY);
+        assert_eq!(after_wrong_key(5.0), 5.0);
+    }
 
     #[test]
     fn first_level_needs_ten_points() {
