@@ -64,6 +64,16 @@ pub const PAIRS: &[Pair] = &[
     pair("17", "jousi"),
     pair("18", "jeti"),
     pair("19", "jyvä"),
+    pair("20", "koho"),
+    pair("21", "koju"),
+    pair("22", "keko"),
+    pair("23", "kela"),
+    pair("24", "kuomu"),
+    pair("25", "kupu"),
+    pair("26", "koira"),
+    pair("27", "kaasu"),
+    pair("28", "kota"),
+    pair("29", "kavio"),
 ];
 
 #[cfg(test)]

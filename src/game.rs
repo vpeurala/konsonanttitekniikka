@@ -26,6 +26,36 @@ const COLLISION_PENALTY: f32 = 20.0;
 
 const FEEDBACK_SECONDS: f32 = 2.5;
 
+const FIRST_LEVEL_POINTS: u32 = 10;
+/// How many more points each level needs than the one before.
+const LEVEL_POINTS_INCREASE: u32 = 5;
+const LEVEL_BANNER_SECONDS: f32 = 2.5;
+/// No new enemies appear for this long after a level starts.
+const LEVEL_BREAK_SECONDS: f32 = 2.0;
+
+const START_SPEED: f32 = 35.0;
+const MAX_SPEED: f32 = 120.0;
+/// Speed gained per second spent on a level.
+const SPEED_GROWTH: f32 = 1.5;
+const START_SPAWN_INTERVAL: f32 = 3.5;
+const MIN_SPAWN_INTERVAL: f32 = 1.2;
+/// Spawn interval lost per second spent on a level.
+const SPAWN_INTERVAL_SHRINK: f32 = 0.05;
+
+/// The points needed to finish `level` (counting from 1).
+pub fn points_to_clear(level: u32) -> u32 {
+    FIRST_LEVEL_POINTS + LEVEL_POINTS_INCREASE * (level - 1)
+}
+
+/// Enemies start slow on every level and speed up the longer it lasts.
+pub fn enemy_speed(level_time: f32) -> f32 {
+    (START_SPEED + SPEED_GROWTH * level_time).min(MAX_SPEED)
+}
+
+pub fn spawn_interval(level_time: f32) -> f32 {
+    (START_SPAWN_INTERVAL - SPAWN_INTERVAL_SHRINK * level_time).max(MIN_SPAWN_INTERVAL)
+}
+
 const SPELL_SPEED: f32 = 700.0;
 /// How long she keeps her hand raised after casting.
 const CAST_SECONDS: f32 = 0.35;
@@ -164,6 +194,13 @@ pub struct Game {
     last_slot: Slot,
     energy: f32,
     score: u32,
+    level: u32,
+    /// Points scored on the current level.
+    level_points: u32,
+    /// Seconds spent on the current level.
+    level_time: f32,
+    /// Seconds left to show the "next level" banner.
+    level_banner: f32,
     spawn_timer: f32,
     feedback: Option<Feedback>,
     effects: Effects,
@@ -183,6 +220,10 @@ impl Game {
             last_slot: Slot::Word,
             energy: MAX_ENERGY,
             score: 0,
+            level: 1,
+            level_points: 0,
+            level_time: 0.0,
+            level_banner: 0.0,
             spawn_timer: 1.0,
             feedback: None,
             effects: Effects::default(),
@@ -200,15 +241,6 @@ impl Game {
         self.energy <= 0.0
     }
 
-    /// Enemies speed up and spawn more often as the score grows.
-    fn enemy_speed(&self) -> f32 {
-        (35.0 + 2.0 * self.score as f32).min(110.0)
-    }
-
-    fn spawn_interval(&self) -> f32 {
-        (3.5 - 0.08 * self.score as f32).max(1.2)
-    }
-
     pub fn update(&mut self) {
         let dt = get_frame_time();
         self.effects.update(dt);
@@ -222,6 +254,9 @@ impl Game {
             return;
         }
 
+        self.level_time += dt;
+        self.level_banner = (self.level_banner - dt).max(0.0);
+
         self.move_player(dt);
         for key in keys {
             self.handle_key(key);
@@ -230,7 +265,7 @@ impl Game {
 
         self.spawn_timer -= dt;
         if self.spawn_timer <= 0.0 {
-            self.spawn_timer = self.spawn_interval();
+            self.spawn_timer = spawn_interval(self.level_time);
             self.spawn_enemy();
         }
 
@@ -345,10 +380,22 @@ impl Game {
                 let enemy = self.enemies.remove(candidates[hit].0);
                 self.cast_spell(enemy);
             }
-            self.score += hits.len() as u32;
             self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
             self.show_pair(first, GREEN);
             self.slot_mut(slot).clear();
+            self.add_points(hits.len() as u32);
+        }
+    }
+
+    fn add_points(&mut self, points: u32) {
+        self.score += points;
+        self.level_points += points;
+        if self.level_points >= points_to_clear(self.level) {
+            self.level += 1;
+            self.level_points = 0;
+            self.level_time = 0.0;
+            self.level_banner = LEVEL_BANNER_SECONDS;
+            self.spawn_timer = LEVEL_BREAK_SECONDS;
         }
     }
 
@@ -384,7 +431,7 @@ impl Game {
     }
 
     fn move_enemies(&mut self, dt: f32) {
-        let speed = self.enemy_speed();
+        let speed = enemy_speed(self.level_time);
         let player = self.player;
         for enemy in &mut self.enemies {
             enemy.pos += (player - enemy.pos).normalize_or_zero() * speed * dt;
@@ -538,15 +585,27 @@ impl Game {
                 Color::new(0.0, 0.0, 0.0, 0.7),
             );
             let (cx, cy) = (screen_width() / 2.0, screen_height() / 2.0);
-            draw_centered_text("Peli päättyi!", cx, cy - 40.0, 56, WHITE);
+            draw_centered_text("Peli päättyi!", cx, cy - 60.0, 56, WHITE);
+            draw_centered_text(&format!("Pisteet: {}", self.score), cx, cy - 5.0, 36, WHITE);
+            draw_centered_text(&format!("Taso {}", self.level), cx, cy + 35.0, 36, WHITE);
+            draw_centered_text("Paina Enter", cx, cy + 85.0, 28, LIGHTGRAY);
+        } else if self.level_banner > 0.0 {
+            let alpha = (self.level_banner / 0.5).min(1.0);
+            let (cx, cy) = (screen_width() / 2.0, screen_height() / 3.0);
             draw_centered_text(
-                &format!("Pisteet: {}", self.score),
+                &format!("Taso {}!", self.level),
                 cx,
-                cy + 10.0,
-                36,
-                WHITE,
+                cy,
+                72,
+                Color { a: alpha, ..GOLD },
             );
-            draw_centered_text("Paina Enter", cx, cy + 60.0, 28, LIGHTGRAY);
+            draw_centered_text(
+                "Hirviöt hidastuvat",
+                cx,
+                cy + 50.0,
+                28,
+                Color { a: alpha, ..WHITE },
+            );
         }
     }
 
@@ -566,6 +625,16 @@ impl Game {
             28.0,
             WHITE,
         );
+
+        // Level progress bar under the score.
+        let needed = points_to_clear(self.level);
+        let right = screen_width() - 16.0;
+        let progress = self.level_points as f32 / needed as f32;
+        draw_rectangle(right - bar_width, 44.0, bar_width, 10.0, DARKGRAY);
+        draw_rectangle(right - bar_width, 44.0, bar_width * progress, 10.0, GOLD);
+        let level = format!("Taso {}: {}/{}", self.level, self.level_points, needed);
+        let size = measure_text(&level, None, 22, 1.0);
+        draw_text(&level, right - size.width, 76.0, 22.0, LIGHTGRAY);
 
         let (cx, bottom) = (screen_width() / 2.0, screen_height());
         if let Some(feedback) = &self.feedback {
@@ -675,6 +744,32 @@ fn draw_centered_text(text: &str, x: f32, y: f32, font_size: u16, color: Color) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_level_needs_ten_points() {
+        assert_eq!(points_to_clear(1), 10);
+    }
+
+    #[test]
+    fn each_level_needs_more_points_than_the_last() {
+        for level in 1..50 {
+            assert!(points_to_clear(level + 1) > points_to_clear(level));
+        }
+    }
+
+    #[test]
+    fn enemies_speed_up_within_a_level_up_to_a_cap() {
+        assert_eq!(enemy_speed(0.0), START_SPEED);
+        assert!(enemy_speed(10.0) > enemy_speed(0.0));
+        assert_eq!(enemy_speed(1000.0), MAX_SPEED);
+    }
+
+    #[test]
+    fn spawns_get_more_frequent_within_a_level_down_to_a_floor() {
+        assert_eq!(spawn_interval(0.0), START_SPAWN_INTERVAL);
+        assert!(spawn_interval(10.0) < spawn_interval(0.0));
+        assert_eq!(spawn_interval(1000.0), MIN_SPAWN_INTERVAL);
+    }
 
     #[test]
     fn empty_input_is_pending() {
