@@ -1,0 +1,12 @@
+[package]
+name = "herigone"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+macroquad = "0.4.16"
+
+# Optimize dependencies even in debug builds so the game runs smoothly,
+# while keeping our own code fast to compile.
+[profile.dev.package."*"]
+opt-level = 3
