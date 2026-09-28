@@ -45,7 +45,7 @@ async fn main() {
         if !was_over && game.is_over() {
             audio.play(Sfx::GameOver);
         }
-        audio.set_music(!game.is_over());
+        audio.set_music(!game.is_over() && !game.is_paused());
 
         game.draw();
         next_frame().await

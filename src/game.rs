@@ -453,6 +453,8 @@ pub struct Game {
     portals: Vec<Vec2>,
     /// The current level's stones, trees and lakes.
     obstacles: Vec<Obstacle>,
+    /// Whether the game is paused with the space bar.
+    paused: bool,
 }
 
 impl Game {
@@ -483,6 +485,7 @@ impl Game {
             curriculum: Curriculum::new(),
             portals: portal_positions(1, screen_width(), screen_height()),
             obstacles: Vec::new(),
+            paused: false,
         }
     }
 
@@ -498,15 +501,29 @@ impl Game {
         std::mem::take(&mut self.sfx)
     }
 
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
     pub fn is_over(&self) -> bool {
         self.energy <= 0.0
     }
 
     pub fn update(&mut self) {
         let dt = get_frame_time();
+        // Read the keys even while paused, so nothing typed during the
+        // pause is acted on afterwards.
+        let keys = self.keyboard.typed();
+
+        if is_key_pressed(KeyCode::Space) && !self.is_over() {
+            self.paused = !self.paused;
+        }
+        if self.paused {
+            return;
+        }
+
         self.effects.update(dt);
         self.update_spells(dt);
-        let keys = self.keyboard.typed();
 
         if self.is_over() {
             if is_key_pressed(KeyCode::Enter) {
@@ -1101,6 +1118,17 @@ impl Game {
             draw_centered_text(&format!("Pisteet: {}", self.score), cx, cy - 5.0, 36, WHITE);
             draw_centered_text(&format!("Taso {}", self.level), cx, cy + 35.0, 36, WHITE);
             draw_centered_text("Paina Enter", cx, cy + 85.0, 28, LIGHTGRAY);
+        } else if self.paused {
+            draw_rectangle(
+                0.0,
+                0.0,
+                screen_width(),
+                screen_height(),
+                Color::new(0.0, 0.0, 0.0, 0.6),
+            );
+            let (cx, cy) = (screen_width() / 2.0, screen_height() / 2.0);
+            draw_centered_text("Tauko", cx, cy - 20.0, 64, WHITE);
+            draw_centered_text("Jatka välilyönnillä", cx, cy + 35.0, 28, LIGHTGRAY);
         } else if let Some(banner) = &self.banner {
             let alpha = (banner.seconds_left / 0.5).min(1.0);
             let (cx, cy) = (screen_width() / 2.0, screen_height() / 3.0);
@@ -1133,7 +1161,13 @@ impl Game {
         let low_x = 16.0 + bar_width * LOW_ENERGY / MAX_ENERGY;
         draw_line(low_x, 12.0, low_x, 36.0, 2.0, WHITE);
         draw_text("Energia", 16.0, 50.0, 22.0, LIGHTGRAY);
-        draw_text("Tab: musiikki", 16.0, screen_height() - 16.0, 18.0, GRAY);
+        draw_text(
+            "Tab: musiikki   Välilyönti: tauko",
+            16.0,
+            screen_height() - 16.0,
+            18.0,
+            GRAY,
+        );
 
         let score = format!("Pisteet: {}", self.score);
         let size = measure_text(&score, None, 28, 1.0);
