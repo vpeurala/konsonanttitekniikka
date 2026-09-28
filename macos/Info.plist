@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Embedded into the macOS executable by build.rs, so the menu bar shows
+     the game's name even when it runs straight from `cargo run`. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>fi.villepeurala.konsonanttitekniikka</string>
+    <key>CFBundleName</key>
+    <string>Konsonanttitekniikka</string>
+    <key>CFBundleDisplayName</key>
+    <string>Konsonanttitekniikka</string>
+</dict>
+</plist>

@@ -15,6 +15,8 @@ use crate::rng::{Rng, Stream};
 use crate::sprites::{
     draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal, girl_hand,
 };
+use crate::touch::{Button, TouchInput};
+use crate::view::{ARENA_H, ARENA_W};
 
 const PLAYER_SPEED: f32 = 260.0;
 const PLAYER_RADIUS: f32 = 16.0;
@@ -346,8 +348,8 @@ impl Enemy {
         self.pos.x = self
             .pos
             .x
-            .clamp(half_width, (screen_width() - half_width).max(half_width));
-        self.pos.y = self.pos.y.clamp(top, (screen_height() - bottom).max(top));
+            .clamp(half_width, (ARENA_W - half_width).max(half_width));
+        self.pos.y = self.pos.y.clamp(top, (ARENA_H - bottom).max(top));
     }
 
     /// The point `reach` is measured from, between the body and the label.
@@ -458,15 +460,17 @@ pub struct Game {
     obstacles: Vec<Obstacle>,
     /// Whether the game is paused with the space bar.
     paused: bool,
+    /// Whether she plays with touch controls, which changes some texts.
+    touch: bool,
     /// How well she knows each pair; kept across games.
     memory: Memory,
 }
 
 impl Game {
-    pub fn new() -> Self {
+    pub fn new(touch: bool) -> Self {
         Game {
             keyboard: Keyboard::new(),
-            player: vec2(screen_width() / 2.0, screen_height() / 2.0),
+            player: vec2(ARENA_W / 2.0, ARENA_H / 2.0),
             player_moving: false,
             enemies: Vec::new(),
             appearances: HashMap::new(),
@@ -488,9 +492,10 @@ impl Game {
             effects: Effects::default(),
             rng: Rng::new(Stream::Gameplay, 0),
             curriculum: Curriculum::new(),
-            portals: portal_positions(1, screen_width(), screen_height()),
+            portals: portal_positions(1, ARENA_W, ARENA_H),
             obstacles: Vec::new(),
             paused: false,
+            touch,
             memory: Memory::default(),
         }
     }
@@ -498,7 +503,7 @@ impl Game {
     fn restart(&mut self) {
         let keyboard = std::mem::replace(&mut self.keyboard, Keyboard::new());
         let memory = std::mem::take(&mut self.memory);
-        *self = Game::new();
+        *self = Game::new(self.touch);
         // Reuse the input subscription instead of registering a new one.
         self.keyboard = keyboard;
         // What she has learned carries over to the new game.
@@ -518,13 +523,18 @@ impl Game {
         self.energy <= 0.0
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, touch: &TouchInput) {
         let dt = get_frame_time();
         // Read the keys even while paused, so nothing typed during the
         // pause is acted on afterwards.
-        let keys = self.keyboard.typed();
+        let mut keys = self.keyboard.typed();
+        keys.extend(touch.keys.iter().copied());
 
-        if is_key_pressed(KeyCode::Space) && !self.is_over() {
+        let pause_pressed = is_key_pressed(KeyCode::Space)
+            || touch.buttons.contains(&Button::Pause)
+            // A tap anywhere in the arena also resumes.
+            || (self.paused && touch.arena_taps > 0);
+        if pause_pressed && !self.is_over() {
             self.paused = !self.paused;
         }
         if self.paused {
@@ -535,7 +545,7 @@ impl Game {
         self.update_spells(dt);
 
         if self.is_over() {
-            if is_key_pressed(KeyCode::Enter) {
+            if is_key_pressed(KeyCode::Enter) || touch.arena_taps > 0 {
                 self.restart();
             }
             return;
@@ -549,7 +559,7 @@ impl Game {
             }
         }
 
-        self.move_player(dt);
+        self.move_player(dt, touch.movement);
         for key in keys {
             self.handle_key(key);
         }
@@ -572,7 +582,9 @@ impl Game {
         }
     }
 
-    fn move_player(&mut self, dt: f32) {
+    /// Moves her with the arrow keys, or else with the touch joystick's
+    /// `stick` direction, whose length says how fast.
+    fn move_player(&mut self, dt: f32, stick: Vec2) {
         let mut dir = Vec2::ZERO;
         if is_key_down(KeyCode::Left) {
             dir.x -= 1.0;
@@ -586,16 +598,18 @@ impl Game {
         if is_key_down(KeyCode::Down) {
             dir.y += 1.0;
         }
-        self.player_moving = dir != Vec2::ZERO;
-        self.player += dir.normalize_or_zero() * PLAYER_SPEED * dt;
-        self.player.x = self
-            .player
-            .x
-            .clamp(PLAYER_RADIUS, screen_width() - PLAYER_RADIUS);
+        let velocity = if dir != Vec2::ZERO {
+            dir.normalize()
+        } else {
+            stick.clamp_length_max(1.0)
+        };
+        self.player_moving = velocity != Vec2::ZERO;
+        self.player += velocity * PLAYER_SPEED * dt;
+        self.player.x = self.player.x.clamp(PLAYER_RADIUS, ARENA_W - PLAYER_RADIUS);
         self.player.y = self
             .player
             .y
-            .clamp(PLAYER_RADIUS * 1.5, screen_height() - PLAYER_RADIUS * 1.5);
+            .clamp(PLAYER_RADIUS * 1.5, ARENA_H - PLAYER_RADIUS * 1.5);
         self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
     }
 
@@ -782,7 +796,7 @@ impl Game {
         self.effects.lightning(pos);
         self.sfx.extend([Sfx::Explode, Sfx::Thunder, Sfx::LevelUp]);
         let new_pairs = self.curriculum.next_level();
-        let (width, height) = (screen_width(), screen_height());
+        let (width, height) = (ARENA_W, ARENA_H);
         self.portals = portal_positions(self.level, width, height);
         self.obstacles = obstacles_for_level(self.level, width, height, &self.portals);
         // She may be standing where a new obstacle appeared.
@@ -1124,32 +1138,30 @@ impl Game {
         self.effects.draw_flash();
 
         if self.is_over() {
-            draw_rectangle(
-                0.0,
-                0.0,
-                screen_width(),
-                screen_height(),
-                Color::new(0.0, 0.0, 0.0, 0.7),
-            );
-            let (cx, cy) = (screen_width() / 2.0, screen_height() / 2.0);
+            draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.7));
+            let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 2.0);
             fonts::draw_centered("Peli päättyi!", cx, cy - 60.0, 56, WHITE, Style::Heading);
             draw_centered_text(&format!("Pisteet: {}", self.score), cx, cy - 5.0, 36, WHITE);
             draw_centered_text(&format!("Taso {}", self.level), cx, cy + 35.0, 36, WHITE);
-            draw_centered_text("Paina Enter", cx, cy + 85.0, 28, LIGHTGRAY);
+            let hint = if self.touch {
+                "Napauta aloittaaksesi alusta"
+            } else {
+                "Paina Enter"
+            };
+            draw_centered_text(hint, cx, cy + 85.0, 28, LIGHTGRAY);
         } else if self.paused {
-            draw_rectangle(
-                0.0,
-                0.0,
-                screen_width(),
-                screen_height(),
-                Color::new(0.0, 0.0, 0.0, 0.6),
-            );
-            let (cx, cy) = (screen_width() / 2.0, screen_height() / 2.0);
+            draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.6));
+            let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 2.0);
             fonts::draw_centered("Tauko", cx, cy - 20.0, 64, WHITE, Style::Heading);
-            draw_centered_text("Jatka välilyönnillä", cx, cy + 35.0, 28, LIGHTGRAY);
+            let hint = if self.touch {
+                "Jatka napauttamalla"
+            } else {
+                "Jatka välilyönnillä"
+            };
+            draw_centered_text(hint, cx, cy + 35.0, 28, LIGHTGRAY);
         } else if let Some(banner) = &self.banner {
             let alpha = (banner.seconds_left / 0.5).min(1.0);
-            let (cx, cy) = (screen_width() / 2.0, screen_height() / 3.0);
+            let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 3.0);
             fonts::draw_centered(
                 &banner.title,
                 cx,
@@ -1180,27 +1192,24 @@ impl Game {
         let low_x = 16.0 + bar_width * LOW_ENERGY / MAX_ENERGY;
         draw_line(low_x, 12.0, low_x, 36.0, 2.0, WHITE);
         draw_text("Energia", 16.0, 54.0, 18.0, LIGHTGRAY);
-        draw_text(
-            "Tab: musiikki   Välilyönti: tauko",
-            16.0,
-            screen_height() - 16.0,
-            16.0,
-            GRAY,
-        );
+        // The touch panel has buttons for these instead.
+        if !self.touch {
+            draw_text(
+                "Tab: musiikki   Välilyönti: tauko",
+                16.0,
+                ARENA_H - 16.0,
+                16.0,
+                GRAY,
+            );
+        }
 
         let score = format!("Pisteet: {}", self.score);
         let size = measure_text(&score, None, 24, 1.0);
-        draw_text(
-            &score,
-            screen_width() - size.width - 16.0,
-            32.0,
-            24.0,
-            WHITE,
-        );
+        draw_text(&score, ARENA_W - size.width - 16.0, 32.0, 24.0, WHITE);
 
         // Level progress bar under the score.
         let needed = points_to_clear(self.level);
-        let right = screen_width() - 16.0;
+        let right = ARENA_W - 16.0;
         let progress = self.level_points as f32 / needed as f32;
         let (bar_color, level) = if self.boss_fight {
             (VIOLET, format!("Taso {}: POMO", self.level))
@@ -1221,7 +1230,7 @@ impl Game {
         let size = measure_text(&level, None, 18, 1.0);
         draw_text(&level, right - size.width, 74.0, 18.0, LIGHTGRAY);
 
-        let (cx, bottom) = (screen_width() / 2.0, screen_height());
+        let (cx, bottom) = (ARENA_W / 2.0, ARENA_H);
         if let Some(feedback) = &self.feedback {
             fonts::draw_centered(
                 &feedback.text,
@@ -1244,7 +1253,7 @@ impl Game {
         if new.is_empty() {
             return;
         }
-        let x = screen_width() - WIDTH - 16.0;
+        let x = ARENA_W - WIDTH - 16.0;
         let y = 100.0;
         let height = 40.0 + ROW * new.len() as f32;
         draw_rectangle(x, y, WIDTH, height, Color::new(0.0, 0.0, 0.0, 0.55));
@@ -1301,13 +1310,13 @@ impl Game {
         let total_width = texts[0].2 + GAP + texts[1].2;
 
         let below = self.player.y + PLAYER_RADIUS + 14.0;
-        let y = if below + height > screen_height() {
+        let y = if below + height > ARENA_H {
             self.player.y - PLAYER_RADIUS - 20.0 - height
         } else {
             below
         };
         let mut x =
-            (self.player.x - total_width / 2.0).clamp(0.0, (screen_width() - total_width).max(0.0));
+            (self.player.x - total_width / 2.0).clamp(0.0, (ARENA_W - total_width).max(0.0));
 
         for (slot, text, width, empty) in texts {
             let dead_end = self.is_dead_end(slot);
@@ -1335,7 +1344,7 @@ impl Game {
 
 /// A random point just outside a screen edge, `margin` beyond it.
 fn random_edge_point(rng: &mut Rng, margin: f32) -> Vec2 {
-    let (w, h) = (screen_width(), screen_height());
+    let (w, h) = (ARENA_W, ARENA_H);
     match rng.index(0..4) {
         0 => vec2(rng.range(0.0, w), -margin),
         1 => vec2(rng.range(0.0, w), h + margin),

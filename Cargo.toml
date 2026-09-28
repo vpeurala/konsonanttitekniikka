@@ -3,11 +3,6 @@ name = "konsonanttitekniikka"
 version = "0.1.0"
 edition = "2024"
 
-# Capitalized because macOS shows the executable's name in the menu bar.
-[[bin]]
-name = "Konsonanttitekniikka"
-path = "src/main.rs"
-
 [dependencies]
 macroquad = { version = "0.4.16", features = ["audio"] }
 
@@ -15,3 +10,25 @@ macroquad = { version = "0.4.16", features = ["audio"] }
 # while keeping our own code fast to compile.
 [profile.dev.package."*"]
 opt-level = 3
+
+# Android packaging, used by `cargo quad-apk` (see scripts/android.sh).
+[package.metadata.android]
+package_name = "fi.villepeurala.konsonanttitekniikka"
+label = "Konsonanttitekniikka"
+android_version = 33
+target_sdk_version = 33
+min_sdk_version = 26
+# Practically every phone in use today is 64-bit ARM.
+build_targets = ["aarch64-linux-android"]
+fullscreen = true
+
+[package.metadata.android.activity_attributes]
+# Landscape either way round, following how the phone is held.
+"android:screenOrientation" = "sensorLandscape"
+# Android 12+ requires this on the activity the launcher opens.
+"android:exported" = "true"
+
+# A copy of miniquad 0.4.11 (macroquad's platform layer) with small fixes;
+# see vendor/README.md.
+[patch.crates-io]
+miniquad = { path = "vendor/miniquad" }

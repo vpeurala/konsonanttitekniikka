@@ -1,6 +1,7 @@
 use macroquad::prelude::*;
 
 use crate::rng::{Rng, Stream};
+use crate::view;
 
 const PARTICLES_PER_EXPLOSION: usize = 40;
 const RING_SECONDS: f32 = 0.35;
@@ -220,11 +221,12 @@ impl Effects {
             && age < FLASH_SECONDS
         {
             let alpha = 0.7 * (1.0 - age / FLASH_SECONDS).powi(2);
+            let screen = view::current().visible();
             draw_rectangle(
-                0.0,
-                0.0,
-                screen_width(),
-                screen_height(),
+                screen.x,
+                screen.y,
+                screen.w,
+                screen.h,
                 Color::new(0.9, 0.95, 1.0, alpha),
             );
         }

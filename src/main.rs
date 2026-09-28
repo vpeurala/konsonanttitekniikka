@@ -12,12 +12,16 @@ mod portals;
 mod rng;
 mod sprites;
 mod title;
+mod touch;
+mod view;
 
 use macroquad::prelude::*;
 
 use audio::{Audio, Sfx};
 use game::Game;
 use title::{TitleAction, TitleScreen};
+use touch::{Button, TouchControls, TouchInput};
+use view::{ARENA_H, ARENA_W};
 
 fn window_conf() -> Conf {
     Conf {
@@ -32,8 +36,13 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
     fonts::init();
+    // Touches are handled directly, so they shouldn't also act as a mouse.
+    simulate_mouse_with_touch(false);
+    let touch_mode = touch::enabled();
     let mut audio = Audio::load().await;
-    let mut title = TitleScreen::new();
+    let mut title = TitleScreen::new(touch_mode);
+    let mut controls = TouchControls::default();
+    let touches = touch::TouchReader::new();
     // Created when the player leaves the title screen.
     let mut game: Option<Game> = None;
 
@@ -46,17 +55,30 @@ async fn main() {
         }
 
         let Some(game) = &mut game else {
-            if let TitleAction::StartGame = title.update() {
-                game = Some(Game::new());
+            let view = view::begin(ARENA_W, ARENA_H);
+            if let TitleAction::StartGame = title.update(&touches.pointers(&view)) {
+                game = Some(Game::new(touch_mode));
             }
             audio.set_music(true);
             title.draw();
+            view::mask_outside(ARENA_W, ARENA_H, BLACK);
             next_frame().await;
             continue;
         };
 
+        let panel = if touch_mode { touch::PANEL_W } else { 0.0 };
+        let view = view::begin(ARENA_W + panel, ARENA_H);
+        let input = if touch_mode {
+            controls.update(&touches.pointers(&view), get_frame_time())
+        } else {
+            TouchInput::default()
+        };
+        if input.buttons.contains(&Button::Music) {
+            audio.toggle_music();
+        }
+
         let was_over = game.is_over();
-        game.update();
+        game.update(&input);
         for sfx in game.take_sfx() {
             audio.play(sfx);
         }
@@ -66,6 +88,10 @@ async fn main() {
         audio.set_music(!game.is_over() && !game.is_paused());
 
         game.draw();
+        if touch_mode {
+            controls.draw(audio.music_on(), game.is_paused());
+        }
+        view::mask_outside(ARENA_W + panel, ARENA_H, BLACK);
         next_frame().await
     }
 }

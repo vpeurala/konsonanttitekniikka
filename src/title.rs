@@ -9,6 +9,8 @@ use crate::game::draw_centered_text;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
 use crate::pictures::draw_picture;
 use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
+use crate::touch::Pointer;
+use crate::view::{self, ARENA_H, ARENA_W};
 
 /// Pixels scrolled per second while an arrow key is held.
 const KEY_SCROLL_SPEED: f32 = 500.0;
@@ -34,9 +36,17 @@ const EXPLANATION_AFTER_TABLE: &[&str] = &[
     "ennen kuin hirviö saa sinut kiinni! Liiku nuolinäppäimillä.",
 ];
 
+/// A finger movement shorter than this is a tap, not a drag.
+const TAP_SLOP: f32 = 12.0;
+
 pub struct TitleScreen {
     /// How far the content is scrolled up, in pixels.
     scroll: f32,
+    /// The finger (or mouse) dragging the list: its id, where it was last
+    /// frame, and how far it has moved in total.
+    drag: Option<(u64, f32, f32)>,
+    /// Whether to describe touch controls instead of keys.
+    touch: bool,
 }
 
 /// What the title screen wants to happen next.
@@ -46,17 +56,49 @@ pub enum TitleAction {
 }
 
 impl TitleScreen {
-    pub fn new() -> Self {
-        TitleScreen { scroll: 0.0 }
+    pub fn new(touch: bool) -> Self {
+        TitleScreen {
+            scroll: 0.0,
+            drag: None,
+            touch,
+        }
     }
 
-    pub fn update(&mut self) -> TitleAction {
+    pub fn update(&mut self, pointers: &[Pointer]) -> TitleAction {
         if is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Space) {
             return TitleAction::StartGame;
         }
+        // Dragging scrolls the list; a tap starts the game.
+        for p in pointers {
+            match p.phase {
+                TouchPhase::Started if self.drag.is_none() => {
+                    self.drag = Some((p.id, p.pos.y, 0.0));
+                }
+                TouchPhase::Moved | TouchPhase::Stationary => {
+                    if let Some((id, last_y, moved)) = &mut self.drag
+                        && *id == p.id
+                    {
+                        self.scroll -= p.pos.y - *last_y;
+                        *moved += (p.pos.y - *last_y).abs();
+                        *last_y = p.pos.y;
+                    }
+                }
+                TouchPhase::Ended | TouchPhase::Cancelled => {
+                    if let Some((id, _, moved)) = self.drag
+                        && id == p.id
+                    {
+                        self.drag = None;
+                        if moved < TAP_SLOP && p.phase == TouchPhase::Ended {
+                            return TitleAction::StartGame;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
 
         let dt = get_frame_time();
-        let page = screen_height() - FOOTER_HEIGHT;
+        let page = ARENA_H - FOOTER_HEIGHT;
         if is_key_down(KeyCode::Down) {
             self.scroll += KEY_SCROLL_SPEED * dt;
         }
@@ -83,13 +125,13 @@ impl TitleScreen {
     }
 
     fn max_scroll(&self) -> f32 {
-        (content_height() - (screen_height() - FOOTER_HEIGHT)).max(0.0)
+        (content_height() - (ARENA_H - FOOTER_HEIGHT)).max(0.0)
     }
 
     pub fn draw(&self) {
         clear_background(BACKGROUND);
         let time = get_time() as f32;
-        let cx = screen_width() / 2.0;
+        let cx = ARENA_W / 2.0;
         let mut y = 70.0 - self.scroll;
 
         draw_logo(cx, y, time);
@@ -105,7 +147,13 @@ impl TitleScreen {
         draw_consonant_table(y);
         y += CONSONANT_TABLE_SPACE;
         for line in EXPLANATION_AFTER_TABLE {
-            draw_text(line, SIDE_MARGIN, y, 22.0, TEXT_COLOR);
+            // On touch screens she steers with the joystick instead.
+            let line = if self.touch {
+                line.replace("nuolinäppäimillä", "ohjaussauvalla")
+            } else {
+                line.to_string()
+            };
+            draw_text(&line, SIDE_MARGIN, y, 22.0, TEXT_COLOR);
             y += 28.0;
         }
 
@@ -115,7 +163,7 @@ impl TitleScreen {
         draw_pair_table(y, time);
 
         self.draw_scrollbar();
-        draw_footer();
+        draw_footer(self.touch);
     }
 
     fn draw_scrollbar(&self) {
@@ -123,11 +171,11 @@ impl TitleScreen {
         if max <= 0.0 {
             return;
         }
-        let track = screen_height() - FOOTER_HEIGHT - 20.0;
-        let visible = (screen_height() - FOOTER_HEIGHT) / content_height();
+        let track = ARENA_H - FOOTER_HEIGHT - 20.0;
+        let visible = (ARENA_H - FOOTER_HEIGHT) / content_height();
         let thumb = (track * visible).max(30.0);
         let top = 10.0 + (track - thumb) * self.scroll / max;
-        let x = screen_width() - 10.0;
+        let x = ARENA_W - 10.0;
         draw_rectangle(x, 10.0, 4.0, track, Color::new(1.0, 1.0, 1.0, 0.1));
         draw_rectangle(x, top, 4.0, thumb, Color::new(1.0, 1.0, 1.0, 0.4));
     }
@@ -202,12 +250,17 @@ fn draw_logo(cx: f32, y: f32, time: f32) {
 
 /// Runs `draw` with drawing clipped to the given screen rectangle.
 fn with_clip(x: f32, y: f32, w: f32, h: f32, draw: impl FnOnce()) {
+    // Clipping works in physical pixels, so convert from virtual units.
     let dpi = macroquad::miniquad::window::dpi_scale();
+    let view = view::current();
+    let top_left = view.to_screen(vec2(x, y)) * dpi;
+    let bottom_right = view.to_screen(vec2(x + w, y + h)) * dpi;
+    let size = (bottom_right - top_left).max(Vec2::ZERO);
     let rect = (
-        (x * dpi) as i32,
-        (y * dpi) as i32,
-        (w * dpi).max(0.0) as i32,
-        (h * dpi).max(0.0) as i32,
+        top_left.x as i32,
+        top_left.y as i32,
+        size.x as i32,
+        size.y as i32,
     );
     // Safe as long as nothing else holds the internal GL context, which
     // is true inside ordinary drawing code.
@@ -228,7 +281,7 @@ fn draw_cast(cx: f32, y: f32, time: f32) {
 
 /// Each digit above the consonant that stands for it.
 fn draw_consonant_table(y: f32) {
-    let cell = (screen_width() - 2.0 * SIDE_MARGIN) / 10.0;
+    let cell = (ARENA_W - 2.0 * SIDE_MARGIN) / 10.0;
     for (digit, consonant) in DIGIT_CONSONANTS.iter().enumerate() {
         let x = SIDE_MARGIN + cell * (digit as f32 + 0.5);
         draw_rectangle_lines(x - cell / 2.0 + 3.0, y - 4.0, cell - 6.0, 58.0, 1.5, DIM);
@@ -277,7 +330,7 @@ const PICTURE_MARGIN: f32 = 10.0;
 const CONSONANT_TABLE_SPACE: f32 = 90.0;
 
 fn draw_pair_table(y: f32, time: f32) {
-    let cell = (screen_width() - 2.0 * SIDE_MARGIN) / 10.0;
+    let cell = (ARENA_W - 2.0 * SIDE_MARGIN) / 10.0;
     for (i, row) in pair_rows().iter().enumerate() {
         let row_y = y + i as f32 * PAIR_ROW_HEIGHT;
         if i % 2 == 0 {
@@ -327,13 +380,17 @@ const AUTHOR: &str = "Ville Peurala";
 
 /// The controls on the left and the author's name in the lower right
 /// corner, fixed below the scrolling content.
-fn draw_footer() {
+fn draw_footer(touch: bool) {
     const FONT_SIZE: u16 = 20;
-    let top = screen_height() - FOOTER_HEIGHT;
-    draw_rectangle(0.0, top, screen_width(), FOOTER_HEIGHT, BACKGROUND);
-    draw_line(0.0, top, screen_width(), top, 1.0, DIM);
+    let top = ARENA_H - FOOTER_HEIGHT;
+    draw_rectangle(0.0, top, ARENA_W, FOOTER_HEIGHT, BACKGROUND);
+    draw_line(0.0, top, ARENA_W, top, 1.0, DIM);
 
-    let controls = "Enter tai välilyönti: aloita peli   Nuolet tai hiiri: selaa";
+    let controls = if touch {
+        "Napauta: aloita peli   Vedä: selaa"
+    } else {
+        "Enter tai välilyönti: aloita peli   Nuolet tai hiiri: selaa"
+    };
     let size = measure_text(controls, None, FONT_SIZE, 1.0);
     let baseline = top + FOOTER_HEIGHT / 2.0 + size.offset_y / 2.0;
     draw_text(controls, 16.0, baseline, FONT_SIZE as f32, GOLD);
@@ -341,7 +398,7 @@ fn draw_footer() {
     let author = measure_text(AUTHOR, None, FONT_SIZE, 1.0);
     draw_text(
         AUTHOR,
-        screen_width() - author.width - 16.0,
+        ARENA_W - author.width - 16.0,
         baseline,
         FONT_SIZE as f32,
         DIM,
@@ -356,6 +413,15 @@ mod tests {
     fn every_pair_is_in_the_table_once() {
         let listed: usize = pair_rows().iter().map(Vec::len).sum();
         assert_eq!(listed, PAIRS.len());
+    }
+
+    #[test]
+    fn the_explanation_mentions_the_arrow_keys_that_touch_mode_replaces() {
+        assert!(
+            EXPLANATION_AFTER_TABLE
+                .iter()
+                .any(|l| l.contains("nuolinäppäimillä"))
+        );
     }
 
     #[test]
