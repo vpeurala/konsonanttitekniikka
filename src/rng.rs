@@ -72,6 +72,20 @@ impl Rng {
         &items[self.index(0..items.len())]
     }
 
+    /// The index of a random element of `items`, each chosen in proportion
+    /// to its `weight`. `items` must not be empty.
+    pub fn weighted_index<T>(&mut self, items: &[T], weight: impl Fn(&T) -> f32) -> usize {
+        let total: f32 = items.iter().map(&weight).sum();
+        let mut target = self.unit() * total;
+        for (i, item) in items.iter().enumerate() {
+            target -= weight(item);
+            if target < 0.0 {
+                return i;
+            }
+        }
+        items.len() - 1
+    }
+
     /// Removes and returns a random element of `items`, which must not be
     /// empty.
     pub fn take<T>(&mut self, items: &mut Vec<T>) -> T {
@@ -98,6 +112,18 @@ mod tests {
     fn streams_and_indexes_are_independent() {
         assert_ne!(first(Stream::Gameplay, 0), first(Stream::Effects, 0));
         assert_ne!(first(Stream::Curriculum, 1), first(Stream::Curriculum, 2));
+    }
+
+    #[test]
+    fn heavier_items_are_picked_more_often() {
+        let mut rng = Rng::new(Stream::Gameplay, 0);
+        let weights = [1.0, 3.0];
+        let mut counts = [0; 2];
+        for _ in 0..10_000 {
+            counts[rng.weighted_index(&weights, |w| *w)] += 1;
+        }
+        // Expect about 1:3.
+        assert!((2000..3000).contains(&counts[0]), "{counts:?}");
     }
 
     #[test]

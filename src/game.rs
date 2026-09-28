@@ -6,6 +6,7 @@ use crate::audio::Sfx;
 use crate::curriculum::Curriculum;
 use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
+use crate::memory::Memory;
 use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer};
 use crate::pairs::{self, Pair};
 use crate::portals::portal_positions;
@@ -455,6 +456,8 @@ pub struct Game {
     obstacles: Vec<Obstacle>,
     /// Whether the game is paused with the space bar.
     paused: bool,
+    /// How well she knows each pair; kept across games.
+    memory: Memory,
 }
 
 impl Game {
@@ -486,14 +489,18 @@ impl Game {
             portals: portal_positions(1, screen_width(), screen_height()),
             obstacles: Vec::new(),
             paused: false,
+            memory: Memory::default(),
         }
     }
 
     fn restart(&mut self) {
         let keyboard = std::mem::replace(&mut self.keyboard, Keyboard::new());
+        let memory = std::mem::take(&mut self.memory);
         *self = Game::new();
         // Reuse the input subscription instead of registering a new one.
         self.keyboard = keyboard;
+        // What she has learned carries over to the new game.
+        self.memory = memory;
     }
 
     /// The sound effects triggered since the previous call.
@@ -679,6 +686,9 @@ impl Game {
     /// on its last life leave play at once; a boss with lives left moves on
     /// to its next pair.
     fn hit_enemy(&mut self, index: usize) {
+        let enemy = &self.enemies[index];
+        self.memory
+            .record_answer(enemy.pair, enemy.shown_for, enemy.shows_hint());
         let next = self.enemies[index]
             .boss
             .as_mut()
@@ -726,7 +736,10 @@ impl Game {
         }
         let mut pairs = Vec::with_capacity(count);
         for _ in 0..count {
-            pairs.push(self.rng.take(&mut available));
+            let i = self
+                .rng
+                .weighted_index(&available, |p| self.memory.weight(p));
+            pairs.push(available.swap_remove(i));
         }
         let earlier = self.count_appearance(pairs[0]);
         let phase = self.rng.range(0.0, 100.0);
@@ -900,6 +913,7 @@ impl Game {
                 continue;
             }
             lives.harmless_for = BOSS_HARMLESS_SECONDS;
+            self.memory.record_miss(boss.pair);
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.sfx.push(Sfx::Hurt);
@@ -916,6 +930,7 @@ impl Game {
             .partition(|e| !e.is_boss() && touches(e));
         self.enemies = remaining;
         for enemy in &collided {
+            self.memory.record_miss(enemy.pair);
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.sfx.extend([Sfx::Explode, Sfx::Hurt]);
@@ -999,7 +1014,8 @@ impl Game {
         } else {
             &available
         };
-        let pair = *self.rng.pick(pool);
+        // Pairs she knows less well come up more often.
+        let pair = pool[self.rng.weighted_index(pool, |p| self.memory.weight(p))];
         let earlier = self.count_appearance(pair);
         let shows_word = self.rng.chance(0.5);
         let phase = self.rng.range(0.0, 100.0);
