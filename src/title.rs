@@ -8,6 +8,7 @@ use crate::fonts::{self, Style};
 use crate::game::draw_centered_text;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
 use crate::pictures::draw_picture;
+use crate::save::SaveData;
 use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
 use crate::touch::Pointer;
 use crate::view::{self, ARENA_H, ARENA_W};
@@ -51,9 +52,34 @@ pub struct TitleScreen {
 }
 
 /// What the title screen wants to happen next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TitleAction {
     Stay,
     StartGame,
+    Practice,
+    Progress,
+}
+
+/// Where the menu buttons' centers are, before scrolling.
+const MENU_Y: f32 = 262.0;
+/// The room the menu and the status line under it take.
+const MENU_SPACE: f32 = 105.0;
+const BUTTON_W: f32 = 200.0;
+const BUTTON_H: f32 = 54.0;
+const BUTTON_GAP: f32 = 30.0;
+
+/// The menu: each button's label, key and action.
+const MENU: [(&str, &str, TitleAction); 3] = [
+    ("Pelaa", "Enter", TitleAction::StartGame),
+    ("Harjoittele", "H", TitleAction::Practice),
+    ("Edistyminen", "E", TitleAction::Progress),
+];
+
+/// Where menu button `i` is, with the content scrolled by `scroll`.
+fn button_rect(i: usize, scroll: f32) -> Rect {
+    let total = 3.0 * BUTTON_W + 2.0 * BUTTON_GAP;
+    let x = (ARENA_W - total) / 2.0 + i as f32 * (BUTTON_W + BUTTON_GAP);
+    Rect::new(x, MENU_Y - BUTTON_H / 2.0 - scroll, BUTTON_W, BUTTON_H)
 }
 
 impl TitleScreen {
@@ -69,7 +95,13 @@ impl TitleScreen {
         if is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Space) {
             return TitleAction::StartGame;
         }
-        // Dragging scrolls the list; a tap starts the game.
+        if is_key_pressed(KeyCode::H) {
+            return TitleAction::Practice;
+        }
+        if is_key_pressed(KeyCode::E) {
+            return TitleAction::Progress;
+        }
+        // Dragging scrolls the list; a tap on a menu button picks it.
         for p in pointers {
             match p.phase {
                 TouchPhase::Started if self.drag.is_none() => {
@@ -90,7 +122,11 @@ impl TitleScreen {
                     {
                         self.drag = None;
                         if moved < TAP_SLOP && p.phase == TouchPhase::Ended {
-                            return TitleAction::StartGame;
+                            for (i, &(_, _, action)) in MENU.iter().enumerate() {
+                                if button_rect(i, self.scroll).contains(p.pos) {
+                                    return action;
+                                }
+                            }
                         }
                     }
                 }
@@ -129,7 +165,7 @@ impl TitleScreen {
         (content_height() - (ARENA_H - FOOTER_HEIGHT)).max(0.0)
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&self, progress: &SaveData) {
         clear_background(BACKGROUND);
         let time = get_time() as f32;
         let cx = ARENA_W / 2.0;
@@ -139,6 +175,8 @@ impl TitleScreen {
         y += 90.0;
         draw_cast(cx, y, time);
         y += 90.0;
+        self.draw_menu(progress);
+        y += MENU_SPACE;
 
         for line in EXPLANATION_BEFORE_TABLE {
             draw_text(line, SIDE_MARGIN, y, 22.0, TEXT_COLOR);
@@ -165,6 +203,35 @@ impl TitleScreen {
 
         self.draw_scrollbar();
         draw_footer(self.touch);
+    }
+
+    fn draw_menu(&self, progress: &SaveData) {
+        for (i, (label, key, _)) in MENU.iter().enumerate() {
+            let rect = button_rect(i, self.scroll);
+            let primary = i == 0;
+            let (fill, edge) = if primary {
+                (Color::new(0.85, 0.45, 0.1, 1.0), GOLD)
+            } else {
+                (
+                    Color::new(0.2, 0.18, 0.32, 1.0),
+                    Color::new(0.55, 0.45, 0.85, 1.0),
+                )
+            };
+            draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
+            draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 3.0, edge);
+            let c = rect.center();
+            fonts::draw_centered(label, c.x, c.y - 4.0, 28, WHITE, Style::Heading);
+            // The keyboard shortcut, for those with a keyboard.
+            if !self.touch {
+                fonts::draw_centered(key, c.x, c.y + 17.0, 13, DIM, Style::Body);
+            }
+        }
+        let status = format!(
+            "Päiviä putkeen: {}     Paras taso: {}",
+            progress.streak, progress.best_level
+        );
+        let y = MENU_Y + BUTTON_H / 2.0 + 26.0 - self.scroll;
+        draw_centered_text(&status, ARENA_W / 2.0, y, 20, DIM);
     }
 
     fn draw_scrollbar(&self) {
@@ -305,7 +372,7 @@ fn draw_consonant_table(y: f32) {
 /// The pairs grouped into rows: the single digits, then one row per
 /// first digit of the two-digit numbers, each pair in the column of its
 /// last digit.
-fn pair_rows() -> Vec<Vec<Pair>> {
+pub fn pair_rows() -> Vec<Vec<Pair>> {
     let mut rows: Vec<Vec<Pair>> = Vec::new();
     let singles: Vec<Pair> = PAIRS
         .iter()
@@ -372,6 +439,7 @@ fn content_height() -> f32 {
         28.0 * (EXPLANATION_BEFORE_TABLE.len() + EXPLANATION_AFTER_TABLE.len()) as f32;
     70.0 + 90.0
         + 90.0
+        + MENU_SPACE
         + explanation
         + 10.0
         + CONSONANT_TABLE_SPACE
@@ -392,9 +460,9 @@ fn draw_footer(touch: bool) {
     draw_line(0.0, top, ARENA_W, top, 1.0, DIM);
 
     let controls = if touch {
-        "Napauta: aloita peli   Vedä: selaa"
+        "Vedä: selaa"
     } else {
-        "Enter tai välilyönti: aloita peli   Nuolet tai hiiri: selaa"
+        "Nuolet tai hiiri: selaa"
     };
     let size = measure_text(controls, None, FONT_SIZE, 1.0);
     let baseline = top + FOOTER_HEIGHT / 2.0 + size.offset_y / 2.0;

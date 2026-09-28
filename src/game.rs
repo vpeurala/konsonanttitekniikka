@@ -13,7 +13,8 @@ use crate::pairs::{self, Pair};
 use crate::portals::portal_positions;
 use crate::rng::{Rng, Stream};
 use crate::sprites::{
-    draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal, girl_hand,
+    draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal, draw_star,
+    girl_hand,
 };
 use crate::touch::{Button, TouchInput};
 use crate::view::{ARENA_H, ARENA_W};
@@ -416,10 +417,36 @@ struct Feedback {
 }
 
 /// A big message in the middle of the screen, like "Taso 2!".
+/// Something the game wants saved, reported through `take_events`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameEvent {
+    /// A level was finished (its boss beaten) with this many stars.
+    LevelCompleted { level: u32, stars: u8 },
+}
+
+/// Stars for finishing a level with this fraction of energy left: three
+/// for most of it, two for some, one for scraping through.
+pub fn stars_for(energy_fraction: f32) -> u8 {
+    if energy_fraction >= 0.7 {
+        3
+    } else if energy_fraction >= 0.35 {
+        2
+    } else {
+        1
+    }
+}
+
+/// The current time, in seconds since 1970, for spaced repetition.
+fn now() -> f64 {
+    macroquad::miniquad::date::now()
+}
+
 struct Banner {
     title: String,
     subtitle: String,
     color: Color,
+    /// Stars earned, shown under a level-up banner.
+    stars: Option<u8>,
     seconds_left: f32,
 }
 
@@ -450,6 +477,8 @@ pub struct Game {
     feedback: Option<Feedback>,
     /// Sound effects triggered since the last `take_sfx`.
     sfx: Vec<Sfx>,
+    /// Things to save, triggered since the last `take_events`.
+    events: Vec<GameEvent>,
     effects: Effects,
     /// Every gameplay decision's randomness, the same in every game.
     rng: Rng,
@@ -467,7 +496,8 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(touch: bool) -> Self {
+    /// A new game, knowing what `memory` says about each pair.
+    pub fn new(touch: bool, memory: Memory) -> Self {
         Game {
             keyboard: Keyboard::new(),
             player: vec2(ARENA_W / 2.0, ARENA_H / 2.0),
@@ -489,6 +519,7 @@ impl Game {
             spawn_timer: 1.0,
             feedback: None,
             sfx: Vec::new(),
+            events: Vec::new(),
             effects: Effects::default(),
             rng: Rng::new(Stream::Gameplay, 0),
             curriculum: Curriculum::new(),
@@ -496,14 +527,14 @@ impl Game {
             obstacles: Vec::new(),
             paused: false,
             touch,
-            memory: Memory::default(),
+            memory,
         }
     }
 
     fn restart(&mut self) {
         let keyboard = std::mem::replace(&mut self.keyboard, Keyboard::new());
         let memory = std::mem::take(&mut self.memory);
-        *self = Game::new(self.touch);
+        *self = Game::new(self.touch, Memory::default());
         // Reuse the input subscription instead of registering a new one.
         self.keyboard = keyboard;
         // What she has learned carries over to the new game.
@@ -511,6 +542,16 @@ impl Game {
     }
 
     /// The sound effects triggered since the previous call.
+    /// What the game knows about each pair, for saving.
+    pub fn memory(&self) -> &Memory {
+        &self.memory
+    }
+
+    /// The things to save triggered since the previous call.
+    pub fn take_events(&mut self) -> Vec<GameEvent> {
+        std::mem::take(&mut self.events)
+    }
+
     pub fn take_sfx(&mut self) -> Vec<Sfx> {
         std::mem::take(&mut self.sfx)
     }
@@ -711,7 +752,7 @@ impl Game {
     fn hit_enemy(&mut self, index: usize) {
         let enemy = &self.enemies[index];
         self.memory
-            .record_answer(enemy.pair, enemy.shown_for, enemy.shows_hint());
+            .record_answer(enemy.pair, enemy.shown_for, enemy.shows_hint(), now());
         let next = self.enemies[index]
             .boss
             .as_mut()
@@ -761,7 +802,7 @@ impl Game {
         for _ in 0..count {
             let i = self
                 .rng
-                .weighted_index(&available, |p| self.memory.weight(p));
+                .weighted_index(&available, |p| self.memory.weight(p, now()));
             pairs.push(available.swap_remove(i));
         }
         let earlier = self.count_appearance(pairs[0]);
@@ -782,6 +823,7 @@ impl Game {
             title: "Pomo saapuu!".to_owned(),
             subtitle: format!("Tarvitaan {count} osumaa"),
             color: VIOLET,
+            stars: None,
             seconds_left: BANNER_SECONDS,
         });
     }
@@ -790,6 +832,11 @@ impl Game {
     /// boss fell. Any monsters left on screen explode with it, so the next
     /// level starts from a clear slate.
     fn complete_level(&mut self, pos: Vec2) {
+        let stars = stars_for(self.energy / MAX_ENERGY);
+        self.events.push(GameEvent::LevelCompleted {
+            level: self.level,
+            stars,
+        });
         self.level += 1;
         self.level_points = 0;
         self.level_time = 0.0;
@@ -816,6 +863,7 @@ impl Game {
                 "Hienoa!".to_owned()
             },
             color: GOLD,
+            stars: Some(stars),
             seconds_left: BANNER_SECONDS,
         });
     }
@@ -936,7 +984,7 @@ impl Game {
                 continue;
             }
             lives.harmless_for = BOSS_HARMLESS_SECONDS;
-            self.memory.record_miss(boss.pair);
+            self.memory.record_miss(boss.pair, now());
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.sfx.push(Sfx::Hurt);
@@ -953,7 +1001,7 @@ impl Game {
             .partition(|e| !e.is_boss() && touches(e));
         self.enemies = remaining;
         for enemy in &collided {
-            self.memory.record_miss(enemy.pair);
+            self.memory.record_miss(enemy.pair, now());
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.sfx.extend([Sfx::Explode, Sfx::Hurt]);
@@ -1038,7 +1086,10 @@ impl Game {
             &available
         };
         // Pairs she knows less well come up more often.
-        let pair = pool[self.rng.weighted_index(pool, |p| self.memory.weight(p))];
+        let now = now();
+        let pair = pool[self
+            .rng
+            .weighted_index(pool, |p| self.memory.weight(p, now))];
         let earlier = self.count_appearance(pair);
         let shows_word = self.rng.chance(0.5);
         let phase = self.rng.range(0.0, 100.0);
@@ -1187,6 +1238,15 @@ impl Game {
                 28,
                 Color { a: alpha, ..WHITE },
             );
+            // The stars earned on the level just finished.
+            if let Some(stars) = banner.stars
+                && alpha > 0.5
+            {
+                for i in 0..3u8 {
+                    let x = cx + (f32::from(i) - 1.0) * 46.0;
+                    draw_star(vec2(x, cy + 100.0), 20.0, i < stars);
+                }
+            }
         }
     }
 
@@ -1467,6 +1527,17 @@ mod tests {
         assert_eq!(after_wrong_key(LOW_ENERGY + 1.0), LOW_ENERGY);
         assert_eq!(after_wrong_key(LOW_ENERGY), LOW_ENERGY);
         assert_eq!(after_wrong_key(5.0), 5.0);
+    }
+
+    #[test]
+    fn more_energy_left_earns_more_stars() {
+        assert_eq!(stars_for(1.0), 3);
+        assert_eq!(stars_for(0.5), 2);
+        assert_eq!(stars_for(0.1), 1);
+        for i in 0..100 {
+            let e = i as f32 / 100.0;
+            assert!(stars_for(e + 0.01) >= stars_for(e));
+        }
     }
 
     #[test]

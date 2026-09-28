@@ -564,3 +564,31 @@ pub fn draw_obstacle(obstacle: &Obstacle, time: f32) {
         }
     }
 }
+
+/// A five-pointed star centered on `pos`: filled gold if earned, or a dim
+/// outline if not.
+pub fn draw_star(pos: Vec2, radius: f32, earned: bool) {
+    let point = |i: usize| {
+        let r = if i.is_multiple_of(2) {
+            radius
+        } else {
+            radius * 0.45
+        };
+        let angle = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
+        pos + Vec2::from_angle(angle) * r
+    };
+    if earned {
+        for i in 0..10 {
+            draw_triangle(pos, point(i), point(i + 1), GOLD);
+        }
+    }
+    let edge = if earned {
+        Color::new(1.0, 0.95, 0.6, 1.0)
+    } else {
+        Color::new(1.0, 1.0, 1.0, 0.35)
+    };
+    for i in 0..10 {
+        let (a, b) = (point(i), point(i + 1));
+        draw_line(a.x, a.y, b.x, b.y, 2.0, edge);
+    }
+}

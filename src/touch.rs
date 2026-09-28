@@ -35,10 +35,10 @@ pub fn content_rect(touch: bool) -> Rect {
 }
 
 /// Whether to show touch controls: always on phones, and on a computer
-/// when the `KONSONANTTI_TOUCH` environment variable is set.
+/// when the `LUKULOITSU_TOUCH` environment variable is set.
 pub fn enabled() -> bool {
     cfg!(any(target_os = "ios", target_os = "android"))
-        || std::env::var_os("KONSONANTTI_TOUCH").is_some()
+        || std::env::var_os("LUKULOITSU_TOUCH").is_some()
 }
 
 /// A finger or the mouse, in virtual units.
@@ -300,9 +300,12 @@ impl TouchControls {
         input
     }
 
-    /// Draws the joystick over the arena and the keypad panels beside it.
-    pub fn draw(&self, music_on: bool, paused: bool) {
-        self.draw_stick();
+    /// Draws the keypad panels beside the arena, and the joystick over the
+    /// arena if `show_stick` (practice mode has nothing to move).
+    pub fn draw(&self, music_on: bool, paused: bool, show_stick: bool) {
+        if show_stick {
+            self.draw_stick();
+        }
         let panel = Color::new(0.06, 0.06, 0.09, 1.0);
         let edge = Color::new(0.3, 0.3, 0.4, 1.0);
         draw_rectangle(-LEFT_W, 0.0, LEFT_W, ARENA_H, panel);
