@@ -32,16 +32,25 @@ const HINT_FONT_SIZE: u16 = 24;
 /// Extra room below the label for a hint.
 const HINT_SPACE: f32 = 28.0;
 
-/// A pair's first appearances in a game show its answer as a hint.
+/// A pair's first appearances in a game get an early hint.
 const HINTED_APPEARANCES: u32 = 3;
-/// An enemy that has been on screen this long shows its answer too.
-const HINT_AFTER_SECONDS: f32 = 6.0;
+/// How long an early hint waits after the pair is shown.
+const EARLY_HINT_SECONDS: f32 = 2.0;
+/// Any other enemy shows its answer once it is this fast, as a fraction of
+/// its top speed. With the current speeds that takes about 22 seconds.
+const HINT_SPEED_FRACTION: f32 = 0.3;
 
-/// Whether an enemy shows its answer, given how many times its pair had
-/// appeared in this game before it (`earlier_appearances`) and how long it
-/// has been on screen.
-pub fn shows_hint(earlier_appearances: u32, age: f32) -> bool {
-    earlier_appearances < HINTED_APPEARANCES || age >= HINT_AFTER_SECONDS
+/// Whether an enemy shows its answer. Every enemy starts without a hint.
+/// One of the first appearances of its pair in this game
+/// (`earlier_appearances`) gets it soon after the pair is shown
+/// (`shown_for` seconds ago); any other only once it has reached
+/// `HINT_SPEED_FRACTION` of its top speed (`speed_fraction`).
+pub fn shows_hint(earlier_appearances: u32, shown_for: f32, speed_fraction: f32) -> bool {
+    if earlier_appearances < HINTED_APPEARANCES {
+        shown_for >= EARLY_HINT_SECONDS
+    } else {
+        speed_fraction >= HINT_SPEED_FRACTION
+    }
 }
 
 const MAX_ENERGY: f32 = 100.0;
@@ -310,7 +319,10 @@ impl Enemy {
     }
 
     fn shows_hint(&self) -> bool {
-        shows_hint(self.earlier_appearances, self.shown_for)
+        // The boss's speed factor applies to its top speed as well, so it
+        // cancels out of the fraction.
+        let speed_fraction = enemy_speed(self.age) / PLAYER_SPEED;
+        shows_hint(self.earlier_appearances, self.shown_for, speed_fraction)
     }
 
     fn hint_space(&self) -> f32 {
@@ -1327,17 +1339,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn first_appearances_of_a_pair_show_a_hint() {
-        for earlier in 0..HINTED_APPEARANCES {
-            assert!(shows_hint(earlier, 0.0));
+    fn every_enemy_appears_without_a_hint() {
+        for earlier in 0..10 {
+            assert!(!shows_hint(earlier, 0.0, enemy_speed(0.0) / PLAYER_SPEED));
         }
-        assert!(!shows_hint(HINTED_APPEARANCES, 0.0));
     }
 
     #[test]
-    fn a_long_lived_enemy_shows_a_hint() {
-        assert!(!shows_hint(HINTED_APPEARANCES, HINT_AFTER_SECONDS - 0.1));
-        assert!(shows_hint(HINTED_APPEARANCES, HINT_AFTER_SECONDS));
+    fn first_appearances_of_a_pair_get_a_hint_soon() {
+        for earlier in 0..HINTED_APPEARANCES {
+            assert!(!shows_hint(earlier, EARLY_HINT_SECONDS - 0.1, 0.0));
+            assert!(shows_hint(earlier, EARLY_HINT_SECONDS, 0.0));
+        }
+    }
+
+    #[test]
+    fn later_appearances_get_a_hint_only_when_fast() {
+        let earlier = HINTED_APPEARANCES;
+        assert!(!shows_hint(earlier, 1000.0, HINT_SPEED_FRACTION - 0.01));
+        assert!(shows_hint(earlier, 0.0, HINT_SPEED_FRACTION));
     }
 
     #[test]
