@@ -79,6 +79,41 @@
     <div id="loading">Ladataan…</div>
     <div id="turn"><span>&#x1F4F1;&#x21BA;</span>Käännä laite vaakatasoon</div>
     <noscript>Lukuloitsu tarvitsee JavaScriptin.</noscript>
+    <script>
+        // A hidden page gets no frames, so the game can't stop its own
+        // music when she switches to another tab or app. The page does it
+        // instead, pausing all sound while it is hidden. This must run
+        // before mq_js_bundle.js, which takes AudioContext when it loads.
+        (function () {
+            const Original = window.AudioContext || window.webkitAudioContext;
+            if (!Original) {
+                return;
+            }
+            const contexts = [];
+            class Tracked extends Original {
+                constructor(...args) {
+                    super(...args);
+                    contexts.push(this);
+                    // A page opened in a background tab starts hidden.
+                    if (document.hidden) {
+                        this.suspend().catch(function () {});
+                    }
+                }
+            }
+            window.AudioContext = Tracked;
+            if (window.webkitAudioContext) {
+                window.webkitAudioContext = Tracked;
+            }
+            document.addEventListener("visibilitychange", function () {
+                for (const context of contexts) {
+                    // Resuming fails before she has touched the page, which
+                    // browsers require before playing sound; that's fine.
+                    const change = document.hidden ? context.suspend() : context.resume();
+                    change.catch(function () {});
+                }
+            });
+        })();
+    </script>
     <script src="mq_js_bundle.js"></script>
     <script src="lukuloitsu.js"></script>
     <script>load("lukuloitsu.wasm");</script>
