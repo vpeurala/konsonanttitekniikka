@@ -21,6 +21,8 @@ mod sprites;
 mod title;
 mod touch;
 mod view;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 use macroquad::prelude::*;
 
@@ -78,6 +80,8 @@ async fn main() {
     simulate_mouse_with_touch(false);
     let touch_mode = touch::enabled();
     let mut audio = Audio::load().await;
+    #[cfg(target_arch = "wasm32")]
+    web::loaded();
     let mut progress = save::load();
     progress.record_play_day(save::day_of(miniquad::date::now()));
     save::store(&progress);
@@ -108,7 +112,8 @@ async fn main() {
         let mut next = None;
         match &mut screen {
             Screen::Title => {
-                if escape {
+                // A web page can't be quit, only left.
+                if escape && !cfg!(target_arch = "wasm32") {
                     break;
                 }
                 let view = view::begin(title_rect);

@@ -37,6 +37,10 @@ pub fn content_rect(touch: bool) -> Rect {
 /// Whether to show touch controls: always on phones, and on a computer
 /// when the `LUKULOITSU_TOUCH` environment variable is set.
 pub fn enabled() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    if crate::web::touch_screen() {
+        return true;
+    }
     cfg!(any(target_os = "ios", target_os = "android"))
         || std::env::var_os("LUKULOITSU_TOUCH").is_some()
 }
@@ -96,22 +100,28 @@ impl TouchReader {
     }
 }
 
-/// The mouse as a finger, for trying touch controls on a computer.
-fn mouse_pointer(view: &View) -> Option<Pointer> {
-    let phase = if is_mouse_button_pressed(MouseButton::Left) {
-        TouchPhase::Started
-    } else if is_mouse_button_released(MouseButton::Left) {
-        TouchPhase::Ended
-    } else if is_mouse_button_down(MouseButton::Left) {
-        TouchPhase::Moved
-    } else {
-        return None;
+/// The mouse as a finger, for trying touch controls on a computer. A
+/// click quick enough to press and release within one frame, as a
+/// browser's synthetic clicks are, still counts as both.
+fn mouse_pointer(view: &View) -> Vec<Pointer> {
+    let pressed = is_mouse_button_pressed(MouseButton::Left);
+    let released = is_mouse_button_released(MouseButton::Left);
+    let phases = match (pressed, released) {
+        (true, true) => vec![TouchPhase::Started, TouchPhase::Ended],
+        (true, false) => vec![TouchPhase::Started],
+        (false, true) => vec![TouchPhase::Ended],
+        _ if is_mouse_button_down(MouseButton::Left) => vec![TouchPhase::Moved],
+        _ => Vec::new(),
     };
-    Some(Pointer {
-        id: MOUSE_ID,
-        pos: view.to_virtual(mouse_position().into()),
-        phase,
-    })
+    let pos = view.to_virtual(mouse_position().into());
+    phases
+        .into_iter()
+        .map(|phase| Pointer {
+            id: MOUSE_ID,
+            pos,
+            phase,
+        })
+        .collect()
 }
 
 /// On-screen buttons besides the keypad keys.

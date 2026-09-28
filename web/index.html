@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>Lukuloitsu</title>
+    <meta name="description" content="Lukuloitsu on peli, jossa opit konsonanttitekniikan: muistisäännön, jolla muistat minkä tahansa luvun.">
+    <meta name="theme-color" content="#17171f">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #17171f;
+        }
+        /* The game takes every touch itself: no scrolling, zooming or
+           text selection in the page. */
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        #loading {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #17171f;
+            color: #f4c430;
+            font: bold 28px sans-serif;
+            pointer-events: none;
+        }
+        /* The game is made for a landscape screen, and a phone held upright
+           shows it tiny. */
+        #turn {
+            display: none;
+        }
+        @media (orientation: portrait) and (pointer: coarse) {
+            #turn {
+                display: flex;
+                position: fixed;
+                inset: 0;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 24px;
+                background: #17171f;
+                color: #f4c430;
+                font: bold 26px sans-serif;
+                text-align: center;
+                padding: 24px;
+            }
+            #turn span {
+                font-size: 72px;
+            }
+        }
+        noscript {
+            color: #eee;
+            font: 20px sans-serif;
+            position: absolute;
+            top: 40%;
+            width: 100%;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glcanvas" tabindex="1"></canvas>
+    <div id="loading">Ladataan…</div>
+    <div id="turn"><span>&#x1F4F1;&#x21BA;</span>Käännä laite vaakatasoon</div>
+    <noscript>Lukuloitsu tarvitsee JavaScriptin.</noscript>
+    <script src="mq_js_bundle.js"></script>
+    <script src="lukuloitsu.js"></script>
+    <script>load("lukuloitsu.wasm");</script>
+</body>
+</html>

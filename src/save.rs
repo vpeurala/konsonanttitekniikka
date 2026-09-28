@@ -1,6 +1,7 @@
 //! Saving progress on the device, so it survives closing the app: how well
 //! each pair is known, the best level, stars, the daily streak and the
-//! music setting. Nothing leaves the device.
+//! music setting. Nothing leaves the device: in a browser, it stays in the
+//! page's local storage.
 //!
 //! The file is plain text, one fact per line, and a damaged line is
 //! skipped rather than losing everything:
@@ -15,6 +16,7 @@
 //! ```
 
 use std::collections::BTreeMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 use crate::memory::{Memory, PairRecord};
@@ -153,6 +155,7 @@ pub fn day_of(seconds: f64) -> i64 {
 }
 
 /// Where the save file lives, if saving is possible on this platform.
+#[cfg(not(target_arch = "wasm32"))]
 fn path() -> Option<PathBuf> {
     if cfg!(target_os = "android") {
         // The app's private storage, which Android gives every app.
@@ -173,16 +176,26 @@ fn path() -> Option<PathBuf> {
 
 /// Loads the saved progress, or the defaults if there is none.
 pub fn load() -> SaveData {
-    path()
-        .and_then(|path| std::fs::read_to_string(path).ok())
+    read_text()
         .map(|text| SaveData::from_text(&text))
         .unwrap_or_default()
 }
 
-/// Saves progress, writing a new file and then swapping it in, so an
-/// interrupted save never leaves a half-written file behind. Failing to
-/// save is not worth stopping the game for, so errors are only logged.
+/// Saves progress. Failing to save is not worth stopping the game for, so
+/// errors are only logged.
 pub fn store(data: &SaveData) {
+    write_text(&data.to_text());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_text() -> Option<String> {
+    std::fs::read_to_string(path()?).ok()
+}
+
+/// Writes a new file and then swaps it in, so an interrupted save never
+/// leaves a half-written file behind.
+#[cfg(not(target_arch = "wasm32"))]
+fn write_text(text: &str) {
     let Some(path) = path() else {
         return;
     };
@@ -191,11 +204,22 @@ pub fn store(data: &SaveData) {
     };
     let temporary = path.with_extension("tmp");
     let result = std::fs::create_dir_all(dir)
-        .and_then(|_| std::fs::write(&temporary, data.to_text()))
+        .and_then(|_| std::fs::write(&temporary, text))
         .and_then(|_| std::fs::rename(&temporary, &path));
     if let Err(error) = result {
         macroquad::logging::warn!("Saving progress to {} failed: {error}", path.display());
     }
+}
+
+// In a browser, progress is kept in the page's local storage.
+#[cfg(target_arch = "wasm32")]
+fn read_text() -> Option<String> {
+    crate::web::load()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn write_text(text: &str) {
+    crate::web::store(text);
 }
 
 #[cfg(test)]

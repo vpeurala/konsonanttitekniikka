@@ -7,3 +7,9 @@ rustflags = ["-C", "link-arg=-Wl,-platform_version,ios-simulator,14.0,18.0"]
 
 [target.aarch64-apple-ios]
 rustflags = ["-C", "link-arg=-Wl,-platform_version,ios,14.0,18.0"]
+
+# In the browser, the game calls JavaScript functions (audio, saving) that
+# only exist once the page loads it, so the linker must leave them
+# undefined for the page to fill in.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=--allow-undefined"]

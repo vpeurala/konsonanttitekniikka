@@ -1,0 +1,12 @@
+# Netlify builds the web version from this repository on every push and
+# publishes it at lukuloitsu.fi.
+[build]
+command = "scripts/netlify-build.sh"
+publish = "target/web"
+
+# The files have fixed names, so browsers must check for a new version
+# each time rather than keep an old game.
+[[headers]]
+for = "/*"
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
