@@ -450,6 +450,10 @@ struct Feedback {
 /// Something the game wants saved, reported through `take_events`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameEvent {
+    /// A game started (or started again) from this level.
+    Started { level: u32 },
+    /// The game ended on this level.
+    Over { level: u32 },
     /// A level was finished (its boss beaten) with this many stars.
     LevelCompleted { level: u32, stars: u8 },
 }
@@ -563,6 +567,7 @@ impl Game {
             start_level: 1,
         };
         game.start_at(start_level);
+        game.events.push(GameEvent::Started { level: game.level });
         game
     }
 
@@ -670,6 +675,9 @@ impl Game {
             self.handle_key(key);
         }
         self.move_enemies(dt);
+        if self.is_over() {
+            self.events.push(GameEvent::Over { level: self.level });
+        }
 
         // No new monsters join a boss fight.
         if !self.boss_fight {

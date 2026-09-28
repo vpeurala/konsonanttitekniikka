@@ -1,12 +1,13 @@
 //! What the game needs from the web page when it runs in a browser:
 //! saving in the browser's local storage, and whether the screen is a
-//! touch screen, and telling it when loading is done. The functions are in
+//! touch screen, telling it when loading is done, and counting events for
+//! its visitor statistics. The functions are in
 //! `web/lukuloitsu.js`.
 
 /// The version of the functions below. `web/lukuloitsu.js` states the same
 /// number, and the page complains if they differ, as when a browser has
 /// kept an old copy of one of the files.
-const PAGE_VERSION: u32 = 1;
+const PAGE_VERSION: u32 = 2;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn lukuloitsu_crate_version() -> u32 {
@@ -20,6 +21,7 @@ mod page {
         pub fn lukuloitsu_save_write(ptr: *const u8, len: u32);
         pub fn lukuloitsu_touch_screen() -> u32;
         pub fn lukuloitsu_loaded();
+        pub fn lukuloitsu_event(path: *const u8, path_len: u32, title: *const u8, title_len: u32);
     }
 }
 
@@ -49,6 +51,19 @@ pub fn store(text: &str) {
 pub fn loaded() {
     // SAFETY: takes nothing and returns nothing.
     unsafe { page::lukuloitsu_loaded() }
+}
+
+/// Hands an event to the page's visitor statistics.
+pub fn event(path: &str, title: &str) {
+    // SAFETY: the page only reads the given bytes, during the call.
+    unsafe {
+        page::lukuloitsu_event(
+            path.as_ptr(),
+            path.len() as u32,
+            title.as_ptr(),
+            title.len() as u32,
+        )
+    }
 }
 
 /// Whether the page is shown on a touch screen without a mouse, as on a

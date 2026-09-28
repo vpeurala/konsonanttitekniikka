@@ -1,4 +1,5 @@
 mod audio;
+mod analytics;
 mod curriculum;
 mod effects;
 mod fonts;
@@ -140,6 +141,7 @@ async fn main() {
                         });
                     }
                     TitleAction::Practice => {
+                        analytics::event("harjoittelu", "Harjoittelu");
                         let memory = progress.memory();
                         next = Some(Screen::Practice(Box::new(PracticeScreen::new(
                             progress.best_level,
@@ -147,7 +149,10 @@ async fn main() {
                             touch_mode,
                         ))));
                     }
-                    TitleAction::Progress => next = Some(Screen::Progress(ProgressScreen)),
+                    TitleAction::Progress => {
+                        analytics::event("edistyminen", "Edistyminen");
+                        next = Some(Screen::Progress(ProgressScreen));
+                    }
                 }
                 audio.set_music(true);
                 title.draw(&progress);
@@ -244,7 +249,23 @@ async fn main() {
                 let mut save_now = escape;
                 for event in game.take_events() {
                     match event {
+                        GameEvent::Started { level } => {
+                            analytics::event(
+                                &format!("peli-alkoi/taso-{level}"),
+                                &format!("Peli alkoi tasolta {level}"),
+                            );
+                        }
+                        GameEvent::Over { level } => {
+                            analytics::event(
+                                &format!("peli-paattyi/taso-{level}"),
+                                &format!("Peli päättyi tasolla {level}"),
+                            );
+                        }
                         GameEvent::LevelCompleted { level, stars } => {
+                            analytics::event(
+                                &format!("taso-lapaisty/{level}"),
+                                &format!("Taso {level} läpäisty ({stars} tähteä)"),
+                            );
                             progress.record_level(level, stars);
                             save_now = true;
                         }
