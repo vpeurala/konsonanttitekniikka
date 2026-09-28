@@ -4,6 +4,7 @@ mod effects;
 mod fonts;
 mod game;
 mod keyboard;
+mod lifecycle;
 mod memory;
 mod obstacles;
 mod pairs;
@@ -43,6 +44,7 @@ async fn main() {
     let mut title = TitleScreen::new(touch_mode);
     let mut controls = TouchControls::default();
     let touches = touch::TouchReader::new();
+    let lifecycle = lifecycle::Lifecycle::new();
     // Created when the player leaves the title screen.
     let mut game: Option<Game> = None;
 
@@ -53,6 +55,9 @@ async fn main() {
         if is_key_pressed(KeyCode::Tab) {
             audio.toggle_music();
         }
+        // Coming back after the app was in the background (or the phone was
+        // locked) finds the game paused rather than lost.
+        let was_away = lifecycle.was_away();
 
         let Some(game) = &mut game else {
             let view = view::begin(ARENA_W, ARENA_H);
@@ -77,6 +82,9 @@ async fn main() {
             audio.toggle_music();
         }
 
+        if was_away {
+            game.pause();
+        }
         let was_over = game.is_over();
         game.update(&input);
         for sfx in game.take_sfx() {

@@ -515,6 +515,13 @@ impl Game {
         std::mem::take(&mut self.sfx)
     }
 
+    /// Pauses the game, unless it is already over.
+    pub fn pause(&mut self) {
+        if !self.is_over() {
+            self.paused = true;
+        }
+    }
+
     pub fn is_paused(&self) -> bool {
         self.paused
     }
