@@ -4,6 +4,8 @@
 
 use macroquad::math::{Vec2, vec2};
 
+use crate::rng::{Rng, Stream};
+
 /// Keeps portals clear of the screen edges and the HUD: the energy bar
 /// and score at the top, and the new-pairs panel on the right.
 const MARGIN_LEFT: f32 = 80.0;
@@ -29,7 +31,7 @@ pub fn portal_count(level: u32) -> usize {
 
 /// The portal positions for `level` on a screen of the given size.
 pub fn portal_positions(level: u32, width: f32, height: f32) -> Vec<Vec2> {
-    let mut rng = SplitMix(0x9e37_79b9_7f4a_7c15 ^ u64::from(level));
+    let mut rng = Rng::new(Stream::Portals, u64::from(level));
     let center = vec2(width / 2.0, height / 2.0);
     let (min_x, max_x) = (MARGIN_LEFT, (width - MARGIN_RIGHT).max(MARGIN_LEFT));
     let (min_y, max_y) = (MARGIN_TOP, (height - MARGIN_BOTTOM).max(MARGIN_TOP));
@@ -62,26 +64,6 @@ pub fn portal_positions(level: u32, width: f32, height: f32) -> Vec<Vec2> {
         portals.push(vec2(rng.range(min_x, max_x), rng.range(min_y, max_y)));
     }
     portals
-}
-
-/// A small seeded random number generator, independent of the game's
-/// global one.
-struct SplitMix(u64);
-
-impl SplitMix {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        z ^ (z >> 31)
-    }
-
-    /// A number in `min..max`.
-    fn range(&mut self, min: f32, max: f32) -> f32 {
-        let unit = (self.next() >> 40) as f32 / (1u64 << 24) as f32;
-        min + (max - min) * unit
-    }
 }
 
 #[cfg(test)]

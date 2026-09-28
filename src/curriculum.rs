@@ -1,14 +1,15 @@
 //! Which pairs the player has met so far. The first level uses only the
-//! single-digit pairs; every later level brings in a few new ones.
-
-use macroquad::rand;
+//! single-digit pairs; every later level brings in a few new ones, the
+//! same ones in every game.
 
 use crate::pairs::{PAIRS, Pair};
+use crate::rng::{Rng, Stream};
 
 /// How many pairs each level after the first introduces.
 const NEW_PAIRS_PER_LEVEL: usize = 5;
 
 pub struct Curriculum {
+    level: u32,
     unlocked: Vec<Pair>,
     /// The pairs introduced on the current level.
     new: Vec<Pair>,
@@ -23,14 +24,18 @@ impl Curriculum {
             .copied()
             .collect();
         Curriculum {
+            level: 1,
             unlocked: first.clone(),
             new: first,
         }
     }
 
     /// Moves to the next level, introducing up to `NEW_PAIRS_PER_LEVEL`
-    /// random pairs not yet met. Returns how many were introduced.
+    /// random pairs not yet met, always the same ones for a given level.
+    /// Returns how many were introduced.
     pub fn next_level(&mut self) -> usize {
+        self.level += 1;
+        let mut rng = Rng::new(Stream::Curriculum, u64::from(self.level));
         let mut locked: Vec<Pair> = PAIRS
             .iter()
             .filter(|p| !self.unlocked.contains(p))
@@ -38,7 +43,7 @@ impl Curriculum {
             .collect();
         self.new.clear();
         for _ in 0..NEW_PAIRS_PER_LEVEL.min(locked.len()) {
-            let pair = locked.swap_remove(rand::gen_range(0, locked.len()));
+            let pair = rng.take(&mut locked);
             self.unlocked.push(pair);
             self.new.push(pair);
         }
@@ -82,6 +87,15 @@ mod tests {
         assert_eq!(new.len(), NEW_PAIRS_PER_LEVEL);
         assert!(new.iter().all(|p| !before.contains(p)));
         assert!(new.iter().all(|p| curriculum.unlocked().contains(p)));
+    }
+
+    #[test]
+    fn every_game_introduces_the_same_pairs() {
+        let (mut a, mut b) = (Curriculum::new(), Curriculum::new());
+        while a.next_level() > 0 {
+            b.next_level();
+            assert_eq!(a.new_pairs(), b.new_pairs());
+        }
     }
 
     #[test]

@@ -1,5 +1,7 @@
 use macroquad::prelude::*;
 
+use crate::rng::{Rng, Stream};
+
 const PARTICLES_PER_EXPLOSION: usize = 40;
 const RING_SECONDS: f32 = 0.35;
 const LIGHTNING_SECONDS: f32 = 0.45;
@@ -30,8 +32,8 @@ struct Bolt {
 }
 
 /// Short-lived visual effects that don't affect gameplay.
-#[derive(Default)]
 pub struct Effects {
+    rng: Rng,
     particles: Vec<Particle>,
     rings: Vec<Ring>,
     bolts: Vec<Bolt>,
@@ -39,9 +41,21 @@ pub struct Effects {
     lightning_age: Option<f32>,
 }
 
+impl Default for Effects {
+    fn default() -> Self {
+        Effects {
+            rng: Rng::new(Stream::Effects, 0),
+            particles: Vec::new(),
+            rings: Vec::new(),
+            bolts: Vec::new(),
+            lightning_age: None,
+        }
+    }
+}
+
 /// A jagged line from `from` to `to`, wandering sideways by up to
 /// `jitter`.
-fn jagged(from: Vec2, to: Vec2, segments: usize, jitter: f32) -> Vec<Vec2> {
+fn jagged(rng: &mut Rng, from: Vec2, to: Vec2, segments: usize, jitter: f32) -> Vec<Vec2> {
     let side = (to - from).perp().normalize_or_zero();
     (0..=segments)
         .map(|i| {
@@ -49,7 +63,7 @@ fn jagged(from: Vec2, to: Vec2, segments: usize, jitter: f32) -> Vec<Vec2> {
             let wander = if i == 0 || i == segments {
                 0.0
             } else {
-                rand::gen_range(-jitter, jitter)
+                rng.range(-jitter, jitter)
             };
             from.lerp(to, t) + side * wander
         })
@@ -60,15 +74,15 @@ impl Effects {
     /// A burst of sparks and a shockwave ring, tinted with `palette`.
     pub fn explode(&mut self, pos: Vec2, radius: f32, palette: &[Color]) {
         for _ in 0..PARTICLES_PER_EXPLOSION {
-            let angle = rand::gen_range(0.0, std::f32::consts::TAU);
-            let speed = rand::gen_range(50.0, 280.0);
+            let angle = self.rng.range(0.0, std::f32::consts::TAU);
+            let speed = self.rng.range(50.0, 280.0);
             self.particles.push(Particle {
                 pos,
                 vel: Vec2::from_angle(angle) * speed,
                 age: 0.0,
-                lifetime: rand::gen_range(0.4, 0.9),
-                size: rand::gen_range(2.0, 5.0),
-                color: palette[rand::gen_range(0, palette.len())],
+                lifetime: self.rng.range(0.4, 0.9),
+                size: self.rng.range(2.0, 5.0),
+                color: *self.rng.pick(palette),
             });
         }
         self.rings.push(Ring {
@@ -79,17 +93,35 @@ impl Effects {
         });
     }
 
+    /// `count` explosions scattered up to `spread` away from `pos`.
+    pub fn explode_around(
+        &mut self,
+        pos: Vec2,
+        spread: f32,
+        count: usize,
+        radius: f32,
+        palette: &[Color],
+    ) {
+        for _ in 0..count {
+            let offset = vec2(
+                self.rng.range(-spread, spread),
+                self.rng.range(-spread, spread),
+            );
+            self.explode(pos + offset, radius, palette);
+        }
+    }
+
     /// A few slow sparkles, left behind by something moving through `pos`.
     pub fn trail(&mut self, pos: Vec2, palette: &[Color]) {
         for _ in 0..3 {
-            let angle = rand::gen_range(0.0, std::f32::consts::TAU);
+            let angle = self.rng.range(0.0, std::f32::consts::TAU);
             self.particles.push(Particle {
                 pos,
-                vel: Vec2::from_angle(angle) * rand::gen_range(10.0, 50.0),
+                vel: Vec2::from_angle(angle) * self.rng.range(10.0, 50.0),
                 age: 0.0,
-                lifetime: rand::gen_range(0.2, 0.45),
-                size: rand::gen_range(1.5, 3.0),
-                color: palette[rand::gen_range(0, palette.len())],
+                lifetime: self.rng.range(0.2, 0.45),
+                size: self.rng.range(1.5, 3.0),
+                color: *self.rng.pick(palette),
             });
         }
     }
@@ -97,22 +129,18 @@ impl Effects {
     /// A lightning bolt from the top of the screen down to `to`, with a
     /// few branches, a burst at the impact and a screen-wide flash.
     pub fn lightning(&mut self, to: Vec2) {
-        let from = vec2(to.x + rand::gen_range(-120.0, 120.0), -10.0);
-        let trunk = jagged(from, to, BOLT_SEGMENTS, 25.0);
+        let from = vec2(to.x + self.rng.range(-120.0, 120.0), -10.0);
+        let trunk = jagged(&mut self.rng, from, to, BOLT_SEGMENTS, 25.0);
         self.bolts.clear();
         for _ in 0..BOLT_BRANCHES {
-            let start = trunk[rand::gen_range(2, BOLT_SEGMENTS - 2)];
-            let angle = rand::gen_range(0.3, 1.2)
-                * if rand::gen_range(0, 2) == 0 {
-                    -1.0
-                } else {
-                    1.0
-                };
+            let start = trunk[self.rng.index(2..BOLT_SEGMENTS - 2)];
+            let side = if self.rng.chance(0.5) { -1.0 } else { 1.0 };
+            let angle = self.rng.range(0.3, 1.2) * side;
             let end = start
                 + Vec2::from_angle(std::f32::consts::FRAC_PI_2 + angle)
-                    * rand::gen_range(60.0, 140.0);
+                    * self.rng.range(60.0, 140.0);
             self.bolts.push(Bolt {
-                points: jagged(start, end, 5, 12.0),
+                points: jagged(&mut self.rng, start, end, 5, 12.0),
                 width: 2.0,
             });
         }

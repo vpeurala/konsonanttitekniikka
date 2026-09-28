@@ -5,6 +5,7 @@ mod game;
 mod keyboard;
 mod pairs;
 mod portals;
+mod rng;
 mod sprites;
 
 use macroquad::prelude::*;
@@ -24,7 +25,6 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    rand::srand(miniquad::date::now() as u64);
     let mut audio = Audio::load().await;
     let mut game = Game::new();
 

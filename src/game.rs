@@ -8,6 +8,7 @@ use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
 use crate::pairs::{self, Pair};
 use crate::portals::portal_positions;
+use crate::rng::{Rng, Stream};
 use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster, draw_portal, girl_hand};
 
 const PLAYER_SPEED: f32 = 260.0;
@@ -225,7 +226,8 @@ struct Enemy {
 }
 
 impl Enemy {
-    fn new(pair: Pair, shows_word: bool, earlier_appearances: u32) -> Self {
+    /// `phase` offsets its animation from other enemies'.
+    fn new(pair: Pair, shows_word: bool, earlier_appearances: u32, phase: f32) -> Self {
         let mut enemy = Enemy {
             pos: Vec2::ZERO,
             radius: ENEMY_RADIUS,
@@ -237,7 +239,7 @@ impl Enemy {
             earlier_appearances: 0,
             age: 0.0,
             shown_for: 0.0,
-            phase: rand::gen_range(0.0, 100.0),
+            phase,
             boss: None,
         };
         enemy.show(pair, earlier_appearances);
@@ -246,8 +248,8 @@ impl Enemy {
 
     /// A boss showing the numbers of `pairs`, one after another. Its
     /// `earlier_appearances` are for the first pair.
-    fn boss(pairs: &[Pair], earlier_appearances: u32) -> Self {
-        let mut boss = Enemy::new(pairs[0], false, earlier_appearances);
+    fn boss(pairs: &[Pair], earlier_appearances: u32, phase: f32) -> Self {
+        let mut boss = Enemy::new(pairs[0], false, earlier_appearances, phase);
         boss.radius = BOSS_RADIUS;
         boss.boss = Some(BossLives {
             queue: pairs[1..].to_vec(),
@@ -429,6 +431,8 @@ pub struct Game {
     /// Sound effects triggered since the last `take_sfx`.
     sfx: Vec<Sfx>,
     effects: Effects,
+    /// Every gameplay decision's randomness, the same in every game.
+    rng: Rng,
     curriculum: Curriculum,
     /// The current level's portals.
     portals: Vec<Vec2>,
@@ -458,6 +462,7 @@ impl Game {
             feedback: None,
             sfx: Vec::new(),
             effects: Effects::default(),
+            rng: Rng::new(Stream::Gameplay, 0),
             curriculum: Curriculum::new(),
             portals: portal_positions(1, screen_width(), screen_height()),
         }
@@ -685,10 +690,11 @@ impl Game {
         }
         let mut pairs = Vec::with_capacity(count);
         for _ in 0..count {
-            pairs.push(available.swap_remove(rand::gen_range(0, available.len())));
+            pairs.push(self.rng.take(&mut available));
         }
         let earlier = self.count_appearance(pairs[0]);
-        let mut boss = Enemy::boss(&pairs, earlier);
+        let phase = self.rng.range(0.0, 100.0);
+        let mut boss = Enemy::boss(&pairs, earlier, phase);
         // The boss is slow, so without a portal it starts just inside the
         // edge.
         boss.pos = match self.portal_spawn_position() {
@@ -789,11 +795,7 @@ impl Game {
                     effects.explode(pos, enemy.radius, &KILL_PALETTE);
                     if enemy.is_boss() {
                         // A boss goes out with a bigger bang.
-                        for _ in 0..3 {
-                            let offset =
-                                vec2(rand::gen_range(-30.0, 30.0), rand::gen_range(-30.0, 30.0));
-                            effects.explode(pos + offset, enemy.radius, &KILL_PALETTE);
-                        }
+                        effects.explode_around(pos, 30.0, 3, enemy.radius, &KILL_PALETTE);
                         boss_fell_at = Some(pos);
                     }
                 }
@@ -889,7 +891,7 @@ impl Game {
                     let dir = if distance > 0.001 {
                         offset / distance
                     } else {
-                        Vec2::from_angle(rand::gen_range(0.0, std::f32::consts::TAU))
+                        Vec2::from_angle(self.rng.range(0.0, std::f32::consts::TAU))
                     };
                     let push = dir * (min_distance - distance) / 2.0;
                     self.enemies[i].pos -= push;
@@ -938,15 +940,17 @@ impl Game {
             .filter(|p| self.curriculum.is_new(p))
             .copied()
             .collect();
-        let pool = if !new.is_empty() && rand::gen_range(0.0, 1.0) < NEW_PAIR_SHARE {
+        let pool = if !new.is_empty() && self.rng.chance(NEW_PAIR_SHARE) {
             &new
         } else {
             &available
         };
-        let pair = pool[rand::gen_range(0, pool.len())];
+        let pair = *self.rng.pick(pool);
         let earlier = self.count_appearance(pair);
-        let mut enemy = Enemy::new(pair, rand::gen_range(0, 2) == 0, earlier);
-        let portal = if rand::gen_range(0.0, 1.0) < PORTAL_SPAWN_SHARE {
+        let shows_word = self.rng.chance(0.5);
+        let phase = self.rng.range(0.0, 100.0);
+        let mut enemy = Enemy::new(pair, shows_word, earlier, phase);
+        let portal = if self.rng.chance(PORTAL_SPAWN_SHARE) {
             self.portal_spawn_position()
         } else {
             None
@@ -970,7 +974,7 @@ impl Game {
         if usable.is_empty() {
             return None;
         }
-        let pos = usable[rand::gen_range(0, usable.len())];
+        let pos = *self.rng.pick(&usable);
         self.effects.explode(pos, 24.0, &PORTAL_PALETTE);
         Some(pos)
     }
@@ -978,12 +982,12 @@ impl Game {
     /// A random point just outside a screen edge, away from the player and
     /// clear of the other enemies, or else the farthest one from the player
     /// that was tried.
-    fn spawn_position(&self, enemy: &Enemy) -> Vec2 {
+    fn spawn_position(&mut self, enemy: &Enemy) -> Vec2 {
         let reach = enemy.reach();
         let center_offset = enemy.reach_center() - enemy.pos;
         let mut best = (Vec2::ZERO, f32::NEG_INFINITY);
         for _ in 0..SPAWN_ATTEMPTS {
-            let pos = random_edge_point(reach);
+            let pos = random_edge_point(&mut self.rng, reach);
             let player_distance = pos.distance(self.player);
             let clear = player_distance >= MIN_SPAWN_DISTANCE
                 && self.enemies.iter().all(|other| {
@@ -1216,13 +1220,13 @@ impl Game {
 }
 
 /// A random point just outside a screen edge, `margin` beyond it.
-fn random_edge_point(margin: f32) -> Vec2 {
+fn random_edge_point(rng: &mut Rng, margin: f32) -> Vec2 {
     let (w, h) = (screen_width(), screen_height());
-    match rand::gen_range(0, 4) {
-        0 => vec2(rand::gen_range(0.0, w), -margin),
-        1 => vec2(rand::gen_range(0.0, w), h + margin),
-        2 => vec2(-margin, rand::gen_range(0.0, h)),
-        _ => vec2(w + margin, rand::gen_range(0.0, h)),
+    match rng.index(0..4) {
+        0 => vec2(rng.range(0.0, w), -margin),
+        1 => vec2(rng.range(0.0, w), h + margin),
+        2 => vec2(-margin, rng.range(0.0, h)),
+        _ => vec2(w + margin, rng.range(0.0, h)),
     }
 }
 
