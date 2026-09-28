@@ -22,6 +22,8 @@ pub enum Sfx {
     Wrong,
     LevelUp,
     GameOver,
+    Boss,
+    Thunder,
 }
 
 pub struct Audio {
@@ -35,6 +37,8 @@ pub struct Audio {
     wrong: Sound,
     level_up: Sound,
     game_over: Sound,
+    boss: Sound,
+    thunder: Sound,
 }
 
 impl Audio {
@@ -50,6 +54,8 @@ impl Audio {
             wrong: load(&wrong()).await,
             level_up: load(&level_up()).await,
             game_over: load(&game_over()).await,
+            boss: load(&boss()).await,
+            thunder: load(&thunder()).await,
         }
     }
 
@@ -62,6 +68,8 @@ impl Audio {
             Sfx::Wrong => (&self.wrong, 0.8),
             Sfx::LevelUp => (&self.level_up, 0.9),
             Sfx::GameOver => (&self.game_over, 0.9),
+            Sfx::Boss => (&self.boss, 1.0),
+            Sfx::Thunder => (&self.thunder, 1.0),
         };
         play_sound(
             sound,
@@ -319,6 +327,49 @@ fn game_over() -> Vec<f32> {
     out
 }
 
+/// A deep, wobbling growl that drops in pitch.
+fn boss() -> Vec<f32> {
+    let seconds = 1.0;
+    let n = sample_count(seconds);
+    let mut noise = Noise(0x0bad_f00d);
+    let mut phase = 0.0;
+    let mut out: Vec<f32> = (0..n)
+        .map(|i| {
+            let t = i as f32 / RATE as f32;
+            let wobble = 1.0 + 0.08 * (t * 18.0 * TAU).sin();
+            let freq = (110.0 - 50.0 * t / seconds) * wobble;
+            phase += freq / RATE as f32;
+            // Two detuned pulses and a little breath make it rough.
+            let tone = Wave::Pulse(0.3).at(phase) + 0.6 * Wave::Pulse(0.5).at(phase * 1.01);
+            (tone + 0.3 * noise.next()) * envelope(t, 0.08, 0.45)
+        })
+        .collect();
+    limit(&mut out, 0.8);
+    out
+}
+
+/// A sharp crack followed by a long, low rumble.
+fn thunder() -> Vec<f32> {
+    let n = sample_count(2.0);
+    let mut noise = Noise(0x7e57_ab1e);
+    let (mut bright, mut dark) = (0.0, 0.0);
+    let mut out: Vec<f32> = (0..n)
+        .map(|i| {
+            let t = i as f32 / RATE as f32;
+            let white = noise.next();
+            bright += (white - bright) * 0.6;
+            dark += (white - dark) * 0.02;
+            let crack = bright * envelope(t, 0.001, 0.08);
+            // The rumble swells a moment after the crack and rolls on.
+            let roll = 1.0 + 0.5 * (t * 7.0).sin();
+            let rumble = dark * envelope(t, 0.15, 0.7) * roll * 6.0;
+            crack + rumble
+        })
+        .collect();
+    limit(&mut out, 0.9);
+    out
+}
+
 // ---------------------------------------------------------------------
 // Music
 
@@ -460,6 +511,8 @@ mod tests {
             wrong(),
             level_up(),
             game_over(),
+            boss(),
+            thunder(),
             music(),
         ] {
             let peak = sound.iter().fold(0.0f32, |m, s| m.max(s.abs()));

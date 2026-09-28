@@ -270,3 +270,29 @@ pub fn draw_cyclops(pos: Vec2, radius: f32, time: f32, phase: f32, look_at: Vec2
         );
     }
 }
+
+const HORN: Color = Color::new(0.93, 0.88, 0.75, 1.0);
+const BOSS_AURA: Color = Color::new(0.7, 0.0, 0.15, 0.25);
+
+/// A big horned spiky monster in a pulsing red aura.
+pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
+    let pulse = 1.0 + 0.1 * ((time + phase) * 4.0).sin();
+    draw_circle(pos.x, pos.y, radius * 1.6 * pulse, BOSS_AURA);
+
+    // Curved horns, drawn behind the body as two stacked triangles each.
+    for side in [-1.0, 1.0] {
+        let root = pos + vec2(side * radius * 0.45, -radius * 0.7);
+        let bend = root + vec2(side * radius * 0.45, -radius * 0.55);
+        let tip = bend + vec2(-side * radius * 0.05, -radius * 0.45);
+        let half = radius * 0.18;
+        draw_triangle(root - vec2(half, 0.0), root + vec2(half, 0.0), bend, HORN);
+        draw_triangle(
+            bend - vec2(half * 0.6, 0.0),
+            bend + vec2(half * 0.6, 0.0),
+            tip,
+            HORN,
+        );
+    }
+
+    draw_monster(pos, radius, time, phase);
+}
