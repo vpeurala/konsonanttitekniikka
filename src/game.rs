@@ -492,7 +492,6 @@ pub struct Game {
     cast: Option<(Vec2, f32)>,
     number_typed: String,
     word_typed: String,
-    last_slot: Slot,
     energy: f32,
     score: u32,
     level: u32,
@@ -542,7 +541,6 @@ impl Game {
             cast: None,
             number_typed: String::new(),
             word_typed: String::new(),
-            last_slot: Slot::Word,
             energy: MAX_ENERGY,
             score: 0,
             level: 1,
@@ -723,8 +721,10 @@ impl Game {
 
     fn handle_key(&mut self, key: Key) {
         match key {
+            // Backspace starts over: it empties both slots.
             Key::Backspace => {
-                self.slot_mut(self.last_slot).pop();
+                self.number_typed.clear();
+                self.word_typed.clear();
             }
             Key::Char(c) if pairs::is_answer_char(c) => {
                 let slot = if c.is_ascii_digit() {
@@ -732,7 +732,6 @@ impl Game {
                 } else {
                     Slot::Word
                 };
-                self.last_slot = slot;
                 self.type_into(slot, c);
             }
             Key::Char(_) => {}
