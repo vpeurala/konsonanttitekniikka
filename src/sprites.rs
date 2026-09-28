@@ -96,8 +96,16 @@ pub fn draw_girl(pos: Vec2, time: f32, moving: bool, casting: Option<Vec2>) {
         draw_circle(x + side * 4.0 + 0.7, y - 14.7, 0.7, WHITE);
         draw_circle(x + side * 6.5, y - 10.5, 2.0, CHEEKS);
     }
-    draw_line(x - 2.5, y - 9.5, x, y - 8.5, 1.2, EYES);
-    draw_line(x, y - 8.5, x + 2.5, y - 9.5, 1.2, EYES);
+    // A smile: a shallow curve.
+    let smile: Vec<Vec2> = (0..=6)
+        .map(|i| {
+            let t = i as f32 / 6.0 * 2.0 - 1.0;
+            vec2(x + t * 2.8, y - 8.3 - (1.0 - t * t) * -1.2 - 1.2)
+        })
+        .collect();
+    for pair in smile.windows(2) {
+        draw_line(pair[0].x, pair[0].y, pair[1].x, pair[1].y, 1.1, EYES);
+    }
 }
 
 const MONSTER_BODY: Color = Color::new(0.16, 0.04, 0.18, 1.0);

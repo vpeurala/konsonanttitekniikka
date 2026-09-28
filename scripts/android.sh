@@ -5,8 +5,7 @@
 # Usage: scripts/android.sh [--release]
 #
 # Needs the Android SDK and NDK in ~/Library/Android/sdk, Java 8 from
-# SDKMAN (the APK tool compiles its Java glue for Java 7), and
-# `cargo install cargo-quad-apk`.
+# SDKMAN, and cargo-quad-apk installed with scripts/install-cargo-quad-apk.sh.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

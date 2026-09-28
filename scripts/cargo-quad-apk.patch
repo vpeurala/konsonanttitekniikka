@@ -1,0 +1,18 @@
+diff --git a/src/ops/build.rs b/src/ops/build.rs
+index 31237e6..ad86187 100644
+--- a/src/ops/build.rs
++++ b/src/ops/build.rs
+@@ -227,7 +227,12 @@ fn build_apks(
+             .arg("build/gen");
+ 
+         if let Some(res_path) = target_config.res_path {
+-            aapt_link_cmd.arg("-R").arg("build/res2.zip");
++            // The app's resources are an overlay; let it add new resources
++            // (like a launcher icon), not only replace existing ones.
++            aapt_link_cmd
++                .arg("--auto-add-overlay")
++                .arg("-R")
++                .arg("build/res2.zip");
+         }
+ 
+         // Link assets

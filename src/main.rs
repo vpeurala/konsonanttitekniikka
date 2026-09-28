@@ -3,6 +3,7 @@ mod curriculum;
 mod effects;
 mod fonts;
 mod game;
+mod icon;
 mod keyboard;
 mod lifecycle;
 mod memory;
@@ -37,6 +38,11 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
     fonts::init();
+    // `cargo run -- --render-icons` regenerates the app icon files.
+    if std::env::args().any(|a| a == "--render-icons") {
+        icon::render_all(env!("CARGO_MANIFEST_DIR"));
+        return;
+    }
     // Touches are handled directly, so they shouldn't also act as a mouse.
     simulate_mouse_with_touch(false);
     let touch_mode = touch::enabled();

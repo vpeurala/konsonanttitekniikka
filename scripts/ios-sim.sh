@@ -20,6 +20,16 @@ mkdir -p "$APP"
 cp "target/$TARGET/debug/konsonanttitekniikka" "$APP/"
 cp ios/Info.plist "$APP/"
 
+# Compile the app icon (rendered by `cargo run -- --render-icons`) and add
+# its entries to Info.plist.
+PARTIAL="$(mktemp)"
+xcrun actool ios/Assets.xcassets --compile "$APP" --platform iphonesimulator \
+    --minimum-deployment-target 14.0 --app-icon AppIcon \
+    --target-device iphone --target-device ipad \
+    --output-partial-info-plist "$PARTIAL" >/dev/null
+/usr/libexec/PlistBuddy -c "Merge $PARTIAL" "$APP/Info.plist" >/dev/null
+rm -f "$PARTIAL"
+
 # Boot the simulator if it isn't running yet, and show its window if the
 # Simulator app is installed.
 xcrun simctl boot "$DEVICE" 2>/dev/null || true
