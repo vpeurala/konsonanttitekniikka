@@ -6,6 +6,7 @@ use macroquad::prelude::*;
 
 use crate::game::draw_centered_text;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
+use crate::pictures::draw_picture;
 use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
 
 /// Pixels scrolled per second while an arrow key is held.
@@ -110,7 +111,7 @@ impl TitleScreen {
         y += 30.0;
         draw_centered_text("Kaikki parit", cx, y, 36, TITLE_COLOR);
         y += 40.0;
-        draw_pair_table(y);
+        draw_pair_table(y, time);
 
         self.draw_scrollbar();
         draw_footer();
@@ -178,11 +179,13 @@ fn pair_rows() -> Vec<Vec<Pair>> {
     rows
 }
 
-const PAIR_ROW_HEIGHT: f32 = 52.0;
+const PAIR_ROW_HEIGHT: f32 = 118.0;
+/// The size of each word's picture, leaving a gap between cells.
+const PICTURE_MARGIN: f32 = 10.0;
 /// The consonant table's height plus room before the next line.
 const CONSONANT_TABLE_SPACE: f32 = 90.0;
 
-fn draw_pair_table(y: f32) {
+fn draw_pair_table(y: f32, time: f32) {
     let cell = (screen_width() - 2.0 * SIDE_MARGIN) / 10.0;
     for (i, row) in pair_rows().iter().enumerate() {
         let row_y = y + i as f32 * PAIR_ROW_HEIGHT;
@@ -199,8 +202,10 @@ fn draw_pair_table(y: f32) {
             let last_digit = pair.number.chars().last().and_then(|c| c.to_digit(10));
             let column = last_digit.unwrap_or(0) as f32;
             let x = SIDE_MARGIN + cell * (column + 0.5);
-            draw_centered_text(pair.number, x, row_y + 8.0, 20, DIM);
-            draw_centered_text(&pair.word.to_uppercase(), x, row_y + 30.0, 20, WHITE);
+            let size = cell - PICTURE_MARGIN;
+            draw_picture(pair.number, vec2(x, row_y + size / 2.0), size, time);
+            draw_centered_text(pair.number, x, row_y + size + 14.0, 20, DIM);
+            draw_centered_text(&pair.word.to_uppercase(), x, row_y + size + 36.0, 20, WHITE);
         }
     }
 }

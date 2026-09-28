@@ -6,6 +6,7 @@ mod keyboard;
 mod memory;
 mod obstacles;
 mod pairs;
+mod pictures;
 mod portals;
 mod rng;
 mod sprites;
