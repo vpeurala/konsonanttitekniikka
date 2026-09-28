@@ -9,6 +9,7 @@ mod levels;
 mod lifecycle;
 mod long_numbers;
 mod memory;
+mod music;
 mod obstacles;
 mod pairs;
 mod pictures;
@@ -74,6 +75,15 @@ async fn main() {
     // `cargo run -- --render-icons` regenerates the app icon files.
     if std::env::args().any(|a| a == "--render-icons") {
         icon::render_all(env!("CARGO_MANIFEST_DIR"));
+        return;
+    }
+    // `cargo run --release -- --render-music FILE.wav` writes the music
+    // loop to a file, for listening to it outside the game.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--render-music") {
+        let path = args.get(i + 1).map_or("music.wav", String::as_str);
+        std::fs::write(path, audio::wav(&music::music())).expect("the music file should be writable");
+        println!("wrote {path}");
         return;
     }
     // Touches are handled directly, so they shouldn't also act as a mouse.

@@ -7,7 +7,7 @@ use std::f32::consts::TAU;
 
 use macroquad::audio::{PlaySoundParams, Sound, load_sound_from_bytes, play_sound, stop_sound};
 
-const RATE: u32 = 44_100;
+pub const RATE: u32 = 44_100;
 
 const MUSIC_VOLUME: f32 = 0.35;
 const SFX_VOLUME: f32 = 0.6;
@@ -44,7 +44,7 @@ pub struct Audio {
 impl Audio {
     pub async fn load() -> Self {
         Audio {
-            music: load(&music()).await,
+            music: load(&crate::music::music()).await,
             music_on: true,
             playing: false,
             type_key: load(&type_key()).await,
@@ -118,7 +118,7 @@ async fn load(samples: &[f32]) -> Sound {
 }
 
 /// Encodes mono samples in -1..1 as a 16-bit PCM WAV file.
-fn wav(samples: &[f32]) -> Vec<u8> {
+pub fn wav(samples: &[f32]) -> Vec<u8> {
     let data_len = (samples.len() * 2) as u32;
     let mut out = Vec::with_capacity(44 + data_len as usize);
     out.extend_from_slice(b"RIFF");
@@ -143,16 +143,16 @@ fn wav(samples: &[f32]) -> Vec<u8> {
 // ---------------------------------------------------------------------
 // Building blocks
 
-fn sample_count(seconds: f32) -> usize {
+pub fn sample_count(seconds: f32) -> usize {
     (seconds * RATE as f32) as usize
 }
 
-fn midi_to_freq(note: u8) -> f32 {
+pub fn midi_to_freq(note: u8) -> f32 {
     440.0 * 2f32.powf((note as f32 - 69.0) / 12.0)
 }
 
 #[derive(Clone, Copy)]
-enum Wave {
+pub enum Wave {
     Sine,
     Triangle,
     /// A pulse wave with the given duty cycle; 0.5 is a square.
@@ -161,7 +161,7 @@ enum Wave {
 
 impl Wave {
     /// The wave's value at `phase`, measured in cycles.
-    fn at(self, phase: f32) -> f32 {
+    pub fn at(self, phase: f32) -> f32 {
         let p = phase.fract();
         match self {
             Wave::Sine => (p * TAU).sin(),
@@ -178,10 +178,10 @@ impl Wave {
 }
 
 /// A deterministic white-noise source (xorshift).
-struct Noise(u32);
+pub struct Noise(pub u32);
 
 impl Noise {
-    fn next(&mut self) -> f32 {
+    pub fn next(&mut self) -> f32 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 17;
         self.0 ^= self.0 << 5;
@@ -190,7 +190,7 @@ impl Noise {
 }
 
 /// A quick linear attack followed by an exponential decay.
-fn envelope(t: f32, attack: f32, decay: f32) -> f32 {
+pub fn envelope(t: f32, attack: f32, decay: f32) -> f32 {
     if t < attack {
         t / attack
     } else {
@@ -224,7 +224,7 @@ fn mix(into: &mut Vec<f32>, other: &[f32], offset: f32, gain: f32) {
 }
 
 /// Scales `samples` down so the loudest one is at most `peak`.
-fn limit(samples: &mut [f32], peak: f32) {
+pub fn limit(samples: &mut [f32], peak: f32) {
     let loudest = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
     if loudest > peak {
         for s in samples {
@@ -378,127 +378,9 @@ fn thunder() -> Vec<f32> {
     out
 }
 
-// ---------------------------------------------------------------------
-// Music
-
-const BPM: f32 = 140.0;
-const BEAT: f32 = 60.0 / BPM;
-const BARS: usize = 8;
-
-/// The chord root (MIDI) of each bar: Am F C G Am F G E.
-const BASS_ROOTS: [u8; BARS] = [45, 41, 48, 43, 45, 41, 43, 40];
-
-/// The lead line as (MIDI note, beats); 4 beats per bar.
-const LEAD: [(u8, f32); 35] = [
-    // Am
-    (76, 1.0),
-    (72, 0.5),
-    (69, 0.5),
-    (71, 1.0),
-    (72, 1.0),
-    // F
-    (69, 1.5),
-    (67, 0.5),
-    (65, 1.0),
-    (69, 1.0),
-    // C
-    (67, 1.0),
-    (72, 1.0),
-    (76, 1.0),
-    (74, 0.5),
-    (72, 0.5),
-    // G
-    (74, 2.0),
-    (71, 1.0),
-    (67, 1.0),
-    // Am
-    (76, 0.5),
-    (76, 0.5),
-    (74, 0.5),
-    (72, 0.5),
-    (71, 1.0),
-    (69, 1.0),
-    // F
-    (72, 1.0),
-    (69, 1.0),
-    (65, 1.0),
-    (69, 1.0),
-    // G
-    (71, 1.0),
-    (74, 1.0),
-    (71, 0.5),
-    (67, 0.5),
-    (71, 1.0),
-    // E
-    (68, 1.0),
-    (71, 1.0),
-    (76, 2.0),
-];
-
-/// An upbeat, slightly spooky chiptune loop.
-fn music() -> Vec<f32> {
-    let total = sample_count(BARS as f32 * 4.0 * BEAT);
-    let mut out = vec![0.0; total];
-
-    // Adds a sound, wrapping its tail to the start so the loop is seamless.
-    let mut add = |sound: &[f32], at_beat: f32, gain: f32| {
-        let start = sample_count(at_beat * BEAT);
-        for (i, s) in sound.iter().enumerate() {
-            out[(start + i) % total] += s * gain;
-        }
-    };
-
-    // Lead: a thin pulse wave, slightly shortened so notes articulate.
-    let mut beat = 0.0;
-    for &(note, beats) in &LEAD {
-        let freq = midi_to_freq(note);
-        let tone = sweep(Wave::Pulse(0.25), freq, freq, beats * BEAT * 0.9, 0.4);
-        add(&tone, beat, 0.18);
-        beat += beats;
-    }
-
-    // Bass: eighth notes bouncing between the root and its octave.
-    for (bar, &root) in BASS_ROOTS.iter().enumerate() {
-        for eighth in 0..8 {
-            let note = if eighth % 2 == 0 { root } else { root + 12 };
-            let freq = midi_to_freq(note);
-            let tone = sweep(Wave::Triangle, freq, freq, BEAT * 0.45, 0.2);
-            add(&tone, bar as f32 * 4.0 + eighth as f32 * 0.5, 0.35);
-        }
-    }
-
-    // Drums: kick on 1 and 3, snare on 2 and 4, hi-hat on the off-beats.
-    let kick = sweep(Wave::Sine, 110.0, 45.0, 0.18, 0.08);
-    let mut noise = Noise(0x1234_5678);
-    let snare: Vec<f32> = (0..sample_count(0.15))
-        .map(|i| noise.next() * envelope(i as f32 / RATE as f32, 0.001, 0.05))
-        .collect();
-    let hat: Vec<f32> = (0..sample_count(0.04))
-        .map(|i| noise.next() * envelope(i as f32 / RATE as f32, 0.001, 0.01))
-        .collect();
-    for beat in 0..BARS * 4 {
-        let at = beat as f32;
-        if beat.is_multiple_of(2) {
-            add(&kick, at, 0.5);
-        } else {
-            add(&snare, at, 0.15);
-        }
-        add(&hat, at + 0.5, 0.08);
-    }
-
-    limit(&mut out, 0.9);
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn lead_fills_every_bar_exactly() {
-        let beats: f32 = LEAD.iter().map(|(_, beats)| beats).sum();
-        assert_eq!(beats, BARS as f32 * 4.0);
-    }
 
     #[test]
     fn wav_header_matches_the_data() {
@@ -521,7 +403,6 @@ mod tests {
             game_over(),
             boss(),
             thunder(),
-            music(),
         ] {
             let peak = sound.iter().fold(0.0f32, |m, s| m.max(s.abs()));
             assert!(peak <= 1.0, "peak {peak}");
