@@ -9,10 +9,30 @@ use macroquad::prelude::*;
 
 use crate::fonts::{self, Style};
 use crate::keyboard::Key;
+use crate::pairs::{DIGIT_CONSONANTS, VOWELS};
 use crate::view::{ARENA_H, ARENA_W, View};
 
-/// The keypad panel's width, beside the arena.
-pub const PANEL_W: f32 = 330.0;
+/// A key's size, and the gaps around keys and panel edges.
+const KEY: f32 = 60.0;
+const GAP: f32 = 6.0;
+const PAD: f32 = 10.0;
+
+/// The keypad is split like a tablet keyboard: the left hand's keys on a
+/// panel left of the arena, the right hand's on a panel right of it.
+const LEFT_COLUMNS: f32 = 5.0;
+const RIGHT_COLUMNS: f32 = 6.0;
+const LEFT_W: f32 = 2.0 * PAD + LEFT_COLUMNS * KEY + (LEFT_COLUMNS - 1.0) * GAP;
+const RIGHT_W: f32 = 2.0 * PAD + RIGHT_COLUMNS * KEY + (RIGHT_COLUMNS - 1.0) * GAP;
+
+/// Everything the game shows, in virtual units: the arena, with the keypad
+/// panels on both sides when using touch controls.
+pub fn content_rect(touch: bool) -> Rect {
+    if touch {
+        Rect::new(-LEFT_W, 0.0, LEFT_W + ARENA_W + RIGHT_W, ARENA_H)
+    } else {
+        Rect::new(0.0, 0.0, ARENA_W, ARENA_H)
+    }
+}
 
 /// Whether to show touch controls: always on phones, and on a computer
 /// when the `KONSONANTTI_TOUCH` environment variable is set.
@@ -117,74 +137,76 @@ enum Label {
     Backspace,
 }
 
-struct KeySpec {
-    label: Label,
-    /// Column and row in the keypad grid, and width in columns.
-    col: f32,
-    row: f32,
-    span: f32,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Side {
+    Left,
+    Right,
 }
 
-const COLUMNS: usize = 5;
-const PAD: f32 = 12.0;
-const GAP: f32 = 6.0;
-const KEYS_TOP: f32 = 96.0;
-const BUTTON_TOP: f32 = 18.0;
-const BUTTON_H: f32 = 60.0;
+struct KeySpec {
+    label: Label,
+    side: Side,
+    /// Column within its panel, and row: 0 for the digits, then the
+    /// keyboard's Q, A and Z rows.
+    col: f32,
+    row: f32,
+}
 
-/// The keypad: digits 0-9 above the consonants H-V, so each consonant sits
-/// in the same column as its digit, then the vowels and backspace.
+/// The keys in their places on a Finnish QWERTY keyboard, split between
+/// the hands, with gaps (`.`) for letters the game never uses.
+const LEFT_ROWS: [&str; 4] = ["12345", "..ert", "as...", "...v."];
+const RIGHT_ROWS: [&str; 4] = ["67890<", "yuiop.", "hjklöä", ".m...."];
+
 fn keypad() -> Vec<KeySpec> {
-    let rows: [&str; 5] = ["01234", "56789", "hjklm", "prstv", "aeiou"];
     let mut keys = Vec::new();
-    for (row, chars) in rows.iter().enumerate() {
-        for (col, c) in chars.chars().enumerate() {
-            keys.push(KeySpec {
-                label: Label::Char(c),
-                col: col as f32,
-                row: row as f32,
-                span: 1.0,
-            });
+    for (side, rows) in [(Side::Left, LEFT_ROWS), (Side::Right, RIGHT_ROWS)] {
+        for (row, chars) in rows.iter().enumerate() {
+            for (col, c) in chars.chars().enumerate() {
+                let label = match c {
+                    '.' => continue,
+                    // Backspace sits right of 0, as on a real keyboard.
+                    '<' => Label::Backspace,
+                    c => Label::Char(c),
+                };
+                keys.push(KeySpec {
+                    label,
+                    side,
+                    col: col as f32,
+                    row: row as f32,
+                });
+            }
         }
     }
-    for (col, c) in "yäö".chars().enumerate() {
-        keys.push(KeySpec {
-            label: Label::Char(c),
-            col: col as f32,
-            row: 5.0,
-            span: 1.0,
-        });
-    }
-    keys.push(KeySpec {
-        label: Label::Backspace,
-        col: 3.0,
-        row: 5.0,
-        span: 2.0,
-    });
     keys
 }
 
-fn key_size() -> f32 {
-    (PANEL_W - 2.0 * PAD - (COLUMNS - 1) as f32 * GAP) / COLUMNS as f32
+/// The top of the digit row. The keys sit low, where thumbs rest.
+const KEYS_TOP: f32 = ARENA_H - PAD - 4.0 * KEY - 3.0 * GAP;
+
+fn panel_left(side: Side) -> f32 {
+    match side {
+        Side::Left => -LEFT_W + PAD,
+        Side::Right => ARENA_W + PAD,
+    }
 }
 
 fn key_rect(key: &KeySpec) -> Rect {
-    let size = key_size();
     Rect::new(
-        ARENA_W + PAD + key.col * (size + GAP),
-        KEYS_TOP + key.row * (size + GAP),
-        size * key.span + GAP * (key.span - 1.0),
-        size,
+        panel_left(key.side) + key.col * (KEY + GAP),
+        KEYS_TOP + key.row * (KEY + GAP),
+        KEY,
+        KEY,
     )
 }
 
+/// Pause in the top left corner, music in the top right.
 fn button_rect(button: Button) -> Rect {
-    let w = (PANEL_W - 2.0 * PAD - GAP) / 2.0;
+    let w = 2.0 * KEY + GAP;
     let x = match button {
-        Button::Pause => ARENA_W + PAD,
-        Button::Music => ARENA_W + PAD + w + GAP,
+        Button::Pause => panel_left(Side::Left),
+        Button::Music => ARENA_W + RIGHT_W - PAD - w,
     };
-    Rect::new(x, BUTTON_TOP, w, BUTTON_H)
+    Rect::new(x, PAD, w, KEY)
 }
 
 const STICK_RADIUS: f32 = 60.0;
@@ -192,7 +214,8 @@ const STICK_RADIUS: f32 = 60.0;
 const STICK_DEAD_ZONE: f32 = 0.15;
 /// Where the joystick is hinted at before the first touch.
 const STICK_HOME: Vec2 = vec2(110.0, ARENA_H - 110.0);
-const PRESS_FLASH_SECONDS: f32 = 0.15;
+/// How long a pressed key stays highlighted and magnified.
+const PRESS_FLASH_SECONDS: f32 = 0.3;
 
 struct Stick {
     id: u64,
@@ -218,7 +241,7 @@ impl TouchControls {
         let mut input = TouchInput::default();
         let keys = keypad();
         for p in pointers {
-            let in_arena = p.pos.x < ARENA_W;
+            let in_arena = (0.0..ARENA_W).contains(&p.pos.x);
             match p.phase {
                 TouchPhase::Started if in_arena => {
                     input.arena_taps += 1;
@@ -277,28 +300,19 @@ impl TouchControls {
         input
     }
 
-    /// Draws the joystick over the arena and the keypad panel beside it.
+    /// Draws the joystick over the arena and the keypad panels beside it.
     pub fn draw(&self, music_on: bool, paused: bool) {
         self.draw_stick();
-        draw_rectangle(
-            ARENA_W,
-            0.0,
-            PANEL_W,
-            ARENA_H,
-            Color::new(0.06, 0.06, 0.09, 1.0),
-        );
-        draw_line(
-            ARENA_W,
-            0.0,
-            ARENA_W,
-            ARENA_H,
-            2.0,
-            Color::new(0.3, 0.3, 0.4, 1.0),
-        );
+        let panel = Color::new(0.06, 0.06, 0.09, 1.0);
+        let edge = Color::new(0.3, 0.3, 0.4, 1.0);
+        draw_rectangle(-LEFT_W, 0.0, LEFT_W, ARENA_H, panel);
+        draw_rectangle(ARENA_W, 0.0, RIGHT_W, ARENA_H, panel);
+        draw_line(0.0, 0.0, 0.0, ARENA_H, 2.0, edge);
+        draw_line(ARENA_W, 0.0, ARENA_W, ARENA_H, 2.0, edge);
 
         draw_button(button_rect(Button::Pause), |r| {
+            let c = r.center();
             if paused {
-                let c = r.center();
                 draw_triangle(
                     c + vec2(-8.0, -12.0),
                     c + vec2(-8.0, 12.0),
@@ -306,8 +320,8 @@ impl TouchControls {
                     WHITE,
                 );
             } else {
-                draw_rectangle(r.center().x - 10.0, r.center().y - 12.0, 7.0, 24.0, WHITE);
-                draw_rectangle(r.center().x + 3.0, r.center().y - 12.0, 7.0, 24.0, WHITE);
+                draw_rectangle(c.x - 10.0, c.y - 12.0, 7.0, 24.0, WHITE);
+                draw_rectangle(c.x + 3.0, c.y - 12.0, 7.0, 24.0, WHITE);
             }
         });
         draw_button(button_rect(Button::Music), |r| {
@@ -322,36 +336,22 @@ impl TouchControls {
             }
         });
 
-        for (i, key) in keypad().iter().enumerate() {
-            let rect = key_rect(key);
+        let keys = keypad();
+        for (i, key) in keys.iter().enumerate() {
             let flashing = self.flashes.iter().any(|f| f.0 == i);
-            let (fill, accent) = match key.label {
-                Label::Char(c) if c.is_ascii_digit() => (Color::new(0.1, 0.2, 0.32, 1.0), SKYBLUE),
-                Label::Char(_) => (Color::new(0.2, 0.12, 0.3, 1.0), VIOLET),
-                Label::Backspace => (Color::new(0.25, 0.25, 0.3, 1.0), LIGHTGRAY),
-            };
-            let fill = if flashing { accent } else { fill };
-            draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
-            draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 2.0, accent);
-            let c = rect.center();
-            match key.label {
-                Label::Char(ch) => {
-                    let text = ch.to_uppercase().to_string();
-                    fonts::draw_centered(&text, c.x, c.y, 30, WHITE, Style::Bold);
-                }
-                Label::Backspace => {
-                    // A left-pointing arrow with a cross.
-                    draw_triangle(
-                        c + vec2(-26.0, 0.0),
-                        c + vec2(-12.0, -14.0),
-                        c + vec2(-12.0, 14.0),
-                        WHITE,
-                    );
-                    draw_rectangle(c.x - 12.0, c.y - 14.0, 38.0, 28.0, WHITE);
-                    draw_line(c.x + 1.0, c.y - 7.0, c.x + 15.0, c.y + 7.0, 3.0, fill);
-                    draw_line(c.x + 15.0, c.y - 7.0, c.x + 1.0, c.y + 7.0, 3.0, fill);
-                }
-            }
+            draw_key(key, key_rect(key), flashing, 30);
+        }
+        // Pressed keys pop up enlarged above the finger that covers them.
+        for &(i, _) in &self.flashes {
+            let rect = key_rect(&keys[i]);
+            let size = KEY * 1.5;
+            let bubble = Rect::new(
+                rect.center().x - size / 2.0,
+                (rect.y - size - GAP).max(0.0),
+                size,
+                size,
+            );
+            draw_key(&keys[i], bubble, true, 48);
         }
     }
 
@@ -379,6 +379,83 @@ impl TouchControls {
             STICK_RADIUS * 0.45,
             Color::new(1.0, 1.0, 1.0, alpha),
         );
+    }
+}
+
+/// A key's colors, by kind: digits blue like the number slot, consonants
+/// violet like the word slot, vowels amber, so the eye can search one
+/// group at a time. Returns (fill, accent).
+fn key_colors(label: &Label) -> (Color, Color) {
+    match label {
+        Label::Char(c) if c.is_ascii_digit() => (Color::new(0.1, 0.2, 0.32, 1.0), SKYBLUE),
+        Label::Char(c) if VOWELS.contains(c) => (
+            Color::new(0.28, 0.2, 0.06, 1.0),
+            Color::new(0.95, 0.72, 0.25, 1.0),
+        ),
+        Label::Char(_) => (Color::new(0.2, 0.12, 0.3, 1.0), VIOLET),
+        Label::Backspace => (Color::new(0.25, 0.25, 0.3, 1.0), LIGHTGRAY),
+    }
+}
+
+/// Draws `key` filling `rect`, lit up if `pressed`.
+fn draw_key(key: &KeySpec, rect: Rect, pressed: bool, font_size: u16) {
+    let (fill, accent) = key_colors(&key.label);
+    let fill = if pressed { accent } else { fill };
+    let text_color = if pressed { BLACK } else { WHITE };
+    draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
+    draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 2.0, accent);
+    let c = rect.center();
+    let scale = rect.w / KEY;
+    match key.label {
+        Label::Char(ch) => {
+            let text = ch.to_uppercase().to_string();
+            fonts::draw_centered(&text, c.x, c.y, font_size, text_color, Style::Bold);
+            // Consonants show the digit they stand for, in the corner.
+            if let Some(digit) = DIGIT_CONSONANTS.iter().position(|&d| d == ch) {
+                let badge = if pressed { BLACK } else { SKYBLUE };
+                fonts::draw_centered(
+                    &digit.to_string(),
+                    rect.x + rect.w - 10.0 * scale,
+                    rect.y + 11.0 * scale,
+                    (15.0 * scale) as u16,
+                    badge,
+                    Style::Bold,
+                );
+            }
+        }
+        Label::Backspace => {
+            // A left-pointing arrow with a cross.
+            let s = scale * 0.8;
+            draw_triangle(
+                c + vec2(-24.0, 0.0) * s,
+                c + vec2(-10.0, -13.0) * s,
+                c + vec2(-10.0, 13.0) * s,
+                text_color,
+            );
+            draw_rectangle(
+                c.x - 10.0 * s,
+                c.y - 13.0 * s,
+                32.0 * s,
+                26.0 * s,
+                text_color,
+            );
+            draw_line(
+                c.x + 1.0 * s,
+                c.y - 7.0 * s,
+                c.x + 15.0 * s,
+                c.y + 7.0 * s,
+                3.0,
+                fill,
+            );
+            draw_line(
+                c.x + 15.0 * s,
+                c.y - 7.0 * s,
+                c.x + 1.0 * s,
+                c.y + 7.0 * s,
+                3.0,
+                fill,
+            );
+        }
     }
 }
 
@@ -417,18 +494,32 @@ mod tests {
     }
 
     #[test]
-    fn each_consonant_sits_below_its_digit() {
-        use crate::pairs::DIGIT_CONSONANTS;
+    fn letters_keep_their_qwerty_order_within_each_row() {
+        let qwerty = ["1234567890", "qwertyuiopå", "asdfghjklöä", "zxcvbnm"];
         let keys = keypad();
-        let column_of = |c: char| {
-            keys.iter()
-                .find(|k| matches!(k.label, Label::Char(x) if x == c))
-                .map(|k| k.col)
-                .unwrap()
-        };
-        for (digit, consonant) in DIGIT_CONSONANTS.iter().enumerate() {
-            let digit_char = char::from_digit(digit as u32, 10).unwrap();
-            assert_eq!(column_of(digit_char), column_of(*consonant), "{digit}");
+        for (row, order) in qwerty.iter().enumerate() {
+            // Positions along the row, left panel first.
+            let mut placed: Vec<(f32, char)> = keys
+                .iter()
+                .filter(|k| k.row == row as f32)
+                .filter_map(|k| match k.label {
+                    Label::Char(c) => {
+                        let x = if k.side == Side::Left {
+                            k.col
+                        } else {
+                            100.0 + k.col
+                        };
+                        Some((x, c))
+                    }
+                    Label::Backspace => None,
+                })
+                .collect();
+            placed.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let indexes: Vec<usize> = placed
+                .iter()
+                .map(|(_, c)| order.chars().position(|o| o == *c).unwrap())
+                .collect();
+            assert!(indexes.is_sorted(), "row {row}: {placed:?}");
         }
     }
 
@@ -509,7 +600,9 @@ mod tests {
         rects.push(button_rect(Button::Pause));
         rects.push(button_rect(Button::Music));
         for (i, r) in rects.iter().enumerate() {
-            assert!(r.x >= ARENA_W && r.x + r.w <= ARENA_W + PANEL_W, "{r:?}");
+            let in_left = r.x >= -LEFT_W && r.x + r.w <= 0.0;
+            let in_right = r.x >= ARENA_W && r.x + r.w <= ARENA_W + RIGHT_W;
+            assert!(in_left || in_right, "{r:?}");
             assert!(r.y >= 0.0 && r.y + r.h <= ARENA_H, "{r:?}");
             for other in &rects[i + 1..] {
                 assert!(!r.overlaps(other), "{r:?} {other:?}");

@@ -150,6 +150,13 @@ class QuadSurface
     @SuppressWarnings("deprecation")
     @Override
     public boolean onKey(View v, int keyCode, KeyEvent event) {
+        // Let Android handle the volume buttons. (Changed from miniquad.)
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+                || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE) {
+            return false;
+        }
+
         if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode != 0) {
             QuadNative.surfaceOnKeyDown(keyCode);
         }
@@ -263,6 +270,9 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         this.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        // The volume buttons adjust media volume, which the game plays on.
+        // (Changed from miniquad.)
+        setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
 
         view = new QuadSurface(this);
         // Put it inside a parent layout which can resize it using padding

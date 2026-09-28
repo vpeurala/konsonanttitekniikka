@@ -66,19 +66,20 @@ async fn main() {
         let was_away = lifecycle.was_away();
 
         let Some(game) = &mut game else {
-            let view = view::begin(ARENA_W, ARENA_H);
+            let title_rect = Rect::new(0.0, 0.0, ARENA_W, ARENA_H);
+            let view = view::begin(title_rect);
             if let TitleAction::StartGame = title.update(&touches.pointers(&view)) {
                 game = Some(Game::new(touch_mode));
             }
             audio.set_music(true);
             title.draw();
-            view::mask_outside(ARENA_W, ARENA_H, BLACK);
+            view::mask_outside(title_rect, BLACK);
             next_frame().await;
             continue;
         };
 
-        let panel = if touch_mode { touch::PANEL_W } else { 0.0 };
-        let view = view::begin(ARENA_W + panel, ARENA_H);
+        let content = touch::content_rect(touch_mode);
+        let view = view::begin(content);
         let input = if touch_mode {
             controls.update(&touches.pointers(&view), get_frame_time())
         } else {
@@ -105,7 +106,7 @@ async fn main() {
         if touch_mode {
             controls.draw(audio.music_on(), game.is_paused());
         }
-        view::mask_outside(ARENA_W + panel, ARENA_H, BLACK);
+        view::mask_outside(content, BLACK);
         next_frame().await
     }
 }

@@ -39,13 +39,13 @@ impl View {
 
 static CURRENT: Mutex<Option<View>> = Mutex::new(None);
 
-/// Starts drawing content of the given virtual size, scaled to fit and
-/// centered on the screen. Returns the mapping for this frame.
-pub fn begin(content_w: f32, content_h: f32) -> View {
+/// Starts drawing `content`, a rectangle in virtual units, scaled to fit
+/// and centered on the screen. Returns the mapping for this frame.
+pub fn begin(content: Rect) -> View {
     let screen = vec2(screen_width(), screen_height());
-    let scale = (screen.x / content_w).min(screen.y / content_h);
+    let scale = (screen.x / content.w).min(screen.y / content.h);
     let visible = screen / scale;
-    let origin = -(visible - vec2(content_w, content_h)) / 2.0;
+    let origin = content.point() - (visible - content.size()) / 2.0;
     // Like `Camera2D::from_display_rect`, but with y pointing down, as on
     // the screen.
     set_camera(&Camera2D {
@@ -61,14 +61,16 @@ pub fn begin(content_w: f32, content_h: f32) -> View {
 /// Paints over everything outside the content, so things partly off the
 /// arena, like monsters coming in from an edge, don't show in the bands
 /// around it.
-pub fn mask_outside(content_w: f32, content_h: f32, color: Color) {
+pub fn mask_outside(content: Rect, color: Color) {
     let screen = current().visible();
     let (left, top) = (screen.x, screen.y);
     let (right, bottom) = (screen.x + screen.w, screen.y + screen.h);
-    draw_rectangle(left, top, screen.w, -top, color);
-    draw_rectangle(left, content_h, screen.w, bottom - content_h, color);
-    draw_rectangle(left, 0.0, -left, content_h, color);
-    draw_rectangle(content_w, 0.0, right - content_w, content_h, color);
+    let (c_left, c_top) = (content.x, content.y);
+    let (c_right, c_bottom) = (content.x + content.w, content.y + content.h);
+    draw_rectangle(left, top, screen.w, c_top - top, color);
+    draw_rectangle(left, c_bottom, screen.w, bottom - c_bottom, color);
+    draw_rectangle(left, c_top, c_left - left, content.h, color);
+    draw_rectangle(c_right, c_top, right - c_right, content.h, color);
 }
 
 /// The view set up by the latest `begin`.
@@ -89,6 +91,20 @@ mod tests {
             origin: -(screen / scale - content) / 2.0,
             scale,
         }
+    }
+
+    #[test]
+    fn content_left_of_zero_is_centered_too() {
+        // As `begin` computes it, for content spanning -100..700.
+        let content = Rect::new(-100.0, 0.0, 800.0, 600.0);
+        let screen = vec2(1600.0, 600.0);
+        let scale = (screen.x / content.w).min(screen.y / content.h);
+        let visible = screen / scale;
+        let origin = content.point() - (visible - content.size()) / 2.0;
+        let v = View { origin, scale };
+        let left = v.to_virtual(vec2(0.0, 0.0)).x;
+        let right = v.to_virtual(vec2(1600.0, 0.0)).x;
+        assert!(((-100.0 - left) - (right - 700.0)).abs() < 0.001);
     }
 
     #[test]
