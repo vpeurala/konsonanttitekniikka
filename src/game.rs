@@ -5,6 +5,7 @@ use macroquad::prelude::*;
 use crate::audio::Sfx;
 use crate::curriculum::Curriculum;
 use crate::effects::Effects;
+use crate::fonts::{self, Style};
 use crate::keyboard::{Key, Keyboard};
 use crate::memory::Memory;
 use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer};
@@ -24,12 +25,12 @@ const MAX_ENEMIES: usize = 6;
 const MIN_SPAWN_DISTANCE: f32 = 300.0;
 const SPAWN_ATTEMPTS: usize = 40;
 
-const LABEL_FONT_SIZE: u16 = 26;
+const LABEL_FONT_SIZE: u16 = 22;
 const LABEL_PAD: f32 = 6.0;
 /// Gap between an enemy's body and the center of its label.
 const LABEL_GAP: f32 = 22.0;
 const LABEL_HEIGHT: f32 = LABEL_FONT_SIZE as f32 + 2.0;
-const HINT_FONT_SIZE: u16 = 24;
+const HINT_FONT_SIZE: u16 = 20;
 /// Extra room below the label for a hint.
 const HINT_SPACE: f32 = 28.0;
 
@@ -280,7 +281,8 @@ impl Enemy {
         } else {
             (pair.number.to_owned(), pair.word.to_uppercase())
         };
-        self.label_width = measure_text(&label, None, LABEL_FONT_SIZE, 1.0).width + 2.0 * LABEL_PAD;
+        self.label_width =
+            fonts::measure(&label, Style::Bold, LABEL_FONT_SIZE).width + 2.0 * LABEL_PAD;
         self.label = label;
         self.hint = format!("= {hint}");
         self.pair = pair;
@@ -310,7 +312,7 @@ impl Enemy {
     /// enough to cover both the body and the label hanging below it.
     fn reach(&self) -> f32 {
         let hint_width = if self.shows_hint() {
-            measure_text(&self.hint, None, HINT_FONT_SIZE, 1.0).width
+            fonts::measure(&self.hint, Style::Bold, HINT_FONT_SIZE).width
         } else {
             0.0
         };
@@ -1130,7 +1132,7 @@ impl Game {
                 Color::new(0.0, 0.0, 0.0, 0.7),
             );
             let (cx, cy) = (screen_width() / 2.0, screen_height() / 2.0);
-            draw_centered_text("Peli päättyi!", cx, cy - 60.0, 56, WHITE);
+            fonts::draw_centered("Peli päättyi!", cx, cy - 60.0, 56, WHITE, Style::Heading);
             draw_centered_text(&format!("Pisteet: {}", self.score), cx, cy - 5.0, 36, WHITE);
             draw_centered_text(&format!("Taso {}", self.level), cx, cy + 35.0, 36, WHITE);
             draw_centered_text("Paina Enter", cx, cy + 85.0, 28, LIGHTGRAY);
@@ -1143,12 +1145,12 @@ impl Game {
                 Color::new(0.0, 0.0, 0.0, 0.6),
             );
             let (cx, cy) = (screen_width() / 2.0, screen_height() / 2.0);
-            draw_centered_text("Tauko", cx, cy - 20.0, 64, WHITE);
+            fonts::draw_centered("Tauko", cx, cy - 20.0, 64, WHITE, Style::Heading);
             draw_centered_text("Jatka välilyönnillä", cx, cy + 35.0, 28, LIGHTGRAY);
         } else if let Some(banner) = &self.banner {
             let alpha = (banner.seconds_left / 0.5).min(1.0);
             let (cx, cy) = (screen_width() / 2.0, screen_height() / 3.0);
-            draw_centered_text(
+            fonts::draw_centered(
                 &banner.title,
                 cx,
                 cy,
@@ -1157,6 +1159,7 @@ impl Game {
                     a: alpha,
                     ..banner.color
                 },
+                Style::Heading,
             );
             draw_centered_text(
                 &banner.subtitle,
@@ -1176,22 +1179,22 @@ impl Game {
         // Marks the level wrong keys can't take her below.
         let low_x = 16.0 + bar_width * LOW_ENERGY / MAX_ENERGY;
         draw_line(low_x, 12.0, low_x, 36.0, 2.0, WHITE);
-        draw_text("Energia", 16.0, 50.0, 22.0, LIGHTGRAY);
+        draw_text("Energia", 16.0, 54.0, 18.0, LIGHTGRAY);
         draw_text(
             "Tab: musiikki   Välilyönti: tauko",
             16.0,
             screen_height() - 16.0,
-            18.0,
+            16.0,
             GRAY,
         );
 
         let score = format!("Pisteet: {}", self.score);
-        let size = measure_text(&score, None, 28, 1.0);
+        let size = measure_text(&score, None, 24, 1.0);
         draw_text(
             &score,
             screen_width() - size.width - 16.0,
             32.0,
-            28.0,
+            24.0,
             WHITE,
         );
 
@@ -1215,12 +1218,19 @@ impl Game {
             10.0,
             bar_color,
         );
-        let size = measure_text(&level, None, 22, 1.0);
-        draw_text(&level, right - size.width, 76.0, 22.0, LIGHTGRAY);
+        let size = measure_text(&level, None, 18, 1.0);
+        draw_text(&level, right - size.width, 74.0, 18.0, LIGHTGRAY);
 
         let (cx, bottom) = (screen_width() / 2.0, screen_height());
         if let Some(feedback) = &self.feedback {
-            draw_centered_text(&feedback.text, cx, bottom - 30.0, 32, feedback.color);
+            fonts::draw_centered(
+                &feedback.text,
+                cx,
+                bottom - 30.0,
+                30,
+                feedback.color,
+                Style::Bold,
+            );
         }
     }
 
@@ -1229,7 +1239,7 @@ impl Game {
     fn draw_new_pairs(&self) {
         const WIDTH: f32 = 150.0;
         const ROW: f32 = 24.0;
-        const FONT_SIZE: u16 = 22;
+        const FONT_SIZE: u16 = 18;
         let new = self.curriculum.new_pairs();
         if new.is_empty() {
             return;
@@ -1239,7 +1249,14 @@ impl Game {
         let height = 40.0 + ROW * new.len() as f32;
         draw_rectangle(x, y, WIDTH, height, Color::new(0.0, 0.0, 0.0, 0.55));
         draw_rectangle_lines(x, y, WIDTH, height, 2.0, GOLD);
-        draw_centered_text("Uudet parit", x + WIDTH / 2.0, y + 18.0, FONT_SIZE, GOLD);
+        fonts::draw_centered(
+            "Uudet parit",
+            x + WIDTH / 2.0,
+            y + 18.0,
+            FONT_SIZE,
+            GOLD,
+            Style::Heading,
+        );
         for (i, pair) in new.iter().enumerate() {
             let row_y = y + 44.0 + ROW * i as f32;
             let number = measure_text(pair.number, None, FONT_SIZE, 1.0);
@@ -1265,7 +1282,7 @@ impl Game {
     /// above it when the player is near the bottom edge. A dead-end slot
     /// turns red.
     fn draw_slots(&self) {
-        const FONT_SIZE: u16 = 24;
+        const FONT_SIZE: u16 = 20;
         const PAD: f32 = 6.0;
         const GAP: f32 = 8.0;
         const MIN_WIDTH: f32 = 36.0;
@@ -1273,11 +1290,11 @@ impl Game {
         let texts = [Slot::Number, Slot::Word].map(|slot| {
             let typed = self.slot(slot);
             let text = if typed.is_empty() {
-                "_".to_owned()
+                "·".to_owned()
             } else {
                 typed.to_uppercase()
             };
-            let width = measure_text(&text, None, FONT_SIZE, 1.0).width + 2.0 * PAD;
+            let width = fonts::measure(&text, Style::Bold, FONT_SIZE).width + 2.0 * PAD;
             (slot, text, width.max(MIN_WIDTH), typed.is_empty())
         });
         let height = FONT_SIZE as f32 + PAD;
@@ -1303,7 +1320,14 @@ impl Game {
             draw_rectangle(x, y, width, height, background);
             draw_rectangle_lines(x, y, width, height, 2.0, accent);
             let color = if empty { GRAY } else { WHITE };
-            draw_centered_text(&text, x + width / 2.0, y + height / 2.0, FONT_SIZE, color);
+            fonts::draw_centered(
+                &text,
+                x + width / 2.0,
+                y + height / 2.0,
+                FONT_SIZE,
+                color,
+                Style::Bold,
+            );
             x += width + GAP;
         }
     }
@@ -1349,11 +1373,25 @@ fn draw_label(enemy: &Enemy) {
         2.0,
         enemy.answer_slot().accent(),
     );
-    draw_centered_text(&enemy.label, center.x, center.y, LABEL_FONT_SIZE, WHITE);
+    fonts::draw_centered(
+        &enemy.label,
+        center.x,
+        center.y,
+        LABEL_FONT_SIZE,
+        WHITE,
+        Style::Bold,
+    );
 
     if enemy.shows_hint() {
         let hint_y = center.y + height / 2.0 + HINT_SPACE / 2.0;
-        draw_centered_text(&enemy.hint, center.x, hint_y, HINT_FONT_SIZE, LIME);
+        fonts::draw_centered(
+            &enemy.hint,
+            center.x,
+            hint_y,
+            HINT_FONT_SIZE,
+            LIME,
+            Style::Bold,
+        );
     }
 
     if let Some(lives) = &enemy.boss {
@@ -1374,14 +1412,7 @@ fn draw_label(enemy: &Enemy) {
 
 /// Draws text centered horizontally and vertically on (x, y).
 pub fn draw_centered_text(text: &str, x: f32, y: f32, font_size: u16, color: Color) {
-    let size = measure_text(text, None, font_size, 1.0);
-    draw_text(
-        text,
-        x - size.width / 2.0,
-        y + size.offset_y / 2.0,
-        font_size as f32,
-        color,
-    );
+    fonts::draw_centered(text, x, y, font_size, color, Style::Body);
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 mod audio;
 mod curriculum;
 mod effects;
+mod fonts;
 mod game;
 mod keyboard;
 mod memory;
@@ -30,6 +31,7 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    fonts::init();
     let mut audio = Audio::load().await;
     let mut title = TitleScreen::new();
     // Created when the player leaves the title screen.

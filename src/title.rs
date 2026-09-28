@@ -4,6 +4,7 @@
 
 use macroquad::prelude::*;
 
+use crate::fonts::{self, Style};
 use crate::game::draw_centered_text;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
 use crate::pictures::draw_picture;
@@ -91,7 +92,7 @@ impl TitleScreen {
         let cx = screen_width() / 2.0;
         let mut y = 70.0 - self.scroll;
 
-        draw_centered_text("Konsonanttitekniikka", cx, y, 64, TITLE_COLOR);
+        draw_logo(cx, y, time);
         y += 90.0;
         draw_cast(cx, y, time);
         y += 90.0;
@@ -109,7 +110,7 @@ impl TitleScreen {
         }
 
         y += 30.0;
-        draw_centered_text("Kaikki parit", cx, y, 36, TITLE_COLOR);
+        fonts::draw_centered("Kaikki parit", cx, y, 36, TITLE_COLOR, Style::Heading);
         y += 40.0;
         draw_pair_table(y, time);
 
@@ -132,6 +133,89 @@ impl TitleScreen {
     }
 }
 
+const LOGO_TEXT: &str = "Konsonanttitekniikka";
+const LOGO_SIZE: u16 = 68;
+const LOGO_SHADOW: Color = Color::new(0.0, 0.0, 0.0, 0.45);
+const LOGO_OUTLINE: Color = Color::new(0.28, 0.1, 0.03, 1.0);
+const LOGO_FILL: Color = Color::new(1.0, 0.5, 0.1, 1.0);
+const LOGO_GLOSS: Color = Color::new(1.0, 0.86, 0.3, 1.0);
+const LOGO_SHINE: Color = Color::new(1.0, 0.97, 0.8, 1.0);
+
+/// The game's name as a logo: chunky letters with a dark outline and a
+/// drop shadow, an orange fill with a glossy golden top, bobbing in a
+/// gentle wave. Centered on (cx, y).
+fn draw_logo(cx: f32, y: f32, time: f32) {
+    let measure = |text: &str| fonts::measure(text, Style::Heading, LOGO_SIZE);
+    let whole = measure(LOGO_TEXT);
+    let left = cx - whole.width / 2.0;
+    let baseline = y + whole.offset_y / 2.0;
+
+    // Each letter's position, measured from the width of the text before
+    // it so the spacing matches the font's.
+    let letters: Vec<(String, f32, f32)> = LOGO_TEXT
+        .char_indices()
+        .enumerate()
+        .map(|(i, (byte, ch))| {
+            let x = left + measure(&LOGO_TEXT[..byte]).width;
+            let bob = (time * 2.5 - i as f32 * 0.35).sin() * 4.0;
+            (ch.to_string(), x, baseline + bob)
+        })
+        .collect();
+    let draw_all = |dx: f32, dy: f32, color: Color| {
+        for (letter, x, y) in &letters {
+            fonts::draw(letter, x + dx, y + dy, LOGO_SIZE, color, Style::Heading);
+        }
+    };
+
+    draw_all(5.0, 7.0, LOGO_SHADOW);
+    for i in 0..16 {
+        let a = i as f32 / 16.0 * std::f32::consts::TAU;
+        draw_all(a.cos() * 4.5, a.sin() * 4.5, LOGO_OUTLINE);
+    }
+    draw_all(0.0, 0.0, LOGO_FILL);
+
+    // The gloss: the same letters in gold, clipped to a band over the top
+    // of the lowercase letters, with a pale shine at its very top.
+    let x_height = measure("o").offset_y;
+    let top = baseline - whole.offset_y - 8.0;
+    let gloss_bottom = baseline - x_height * 0.5;
+    with_clip(
+        left - 10.0,
+        top,
+        whole.width + 20.0,
+        gloss_bottom - top,
+        || {
+            draw_all(0.0, 0.0, LOGO_GLOSS);
+        },
+    );
+    let shine_bottom = baseline - x_height * 0.85;
+    with_clip(
+        left - 10.0,
+        top,
+        whole.width + 20.0,
+        shine_bottom - top,
+        || {
+            draw_all(0.0, 0.0, LOGO_SHINE);
+        },
+    );
+}
+
+/// Runs `draw` with drawing clipped to the given screen rectangle.
+fn with_clip(x: f32, y: f32, w: f32, h: f32, draw: impl FnOnce()) {
+    let dpi = macroquad::miniquad::window::dpi_scale();
+    let rect = (
+        (x * dpi) as i32,
+        (y * dpi) as i32,
+        (w * dpi).max(0.0) as i32,
+        (h * dpi).max(0.0) as i32,
+    );
+    // Safe as long as nothing else holds the internal GL context, which
+    // is true inside ordinary drawing code.
+    unsafe { get_internal_gl() }.quad_gl.scissor(Some(rect));
+    draw();
+    unsafe { get_internal_gl() }.quad_gl.scissor(None);
+}
+
 /// The heroine among some of the monsters she will meet.
 fn draw_cast(cx: f32, y: f32, time: f32) {
     draw_boss(vec2(cx - 250.0, y), 32.0, time, 0.0);
@@ -148,8 +232,15 @@ fn draw_consonant_table(y: f32) {
     for (digit, consonant) in DIGIT_CONSONANTS.iter().enumerate() {
         let x = SIDE_MARGIN + cell * (digit as f32 + 0.5);
         draw_rectangle_lines(x - cell / 2.0 + 3.0, y - 4.0, cell - 6.0, 58.0, 1.5, DIM);
-        draw_centered_text(&digit.to_string(), x, y + 14.0, 28, WHITE);
-        draw_centered_text(&consonant.to_uppercase().to_string(), x, y + 40.0, 28, LIME);
+        draw_centered_text(&digit.to_string(), x, y + 12.0, 22, WHITE);
+        fonts::draw_centered(
+            &consonant.to_uppercase().to_string(),
+            x,
+            y + 38.0,
+            24,
+            LIME,
+            Style::Bold,
+        );
     }
 }
 
@@ -204,8 +295,15 @@ fn draw_pair_table(y: f32, time: f32) {
             let x = SIDE_MARGIN + cell * (column + 0.5);
             let size = cell - PICTURE_MARGIN;
             draw_picture(pair.number, vec2(x, row_y + size / 2.0), size, time);
-            draw_centered_text(pair.number, x, row_y + size + 14.0, 20, DIM);
-            draw_centered_text(&pair.word.to_uppercase(), x, row_y + size + 36.0, 20, WHITE);
+            draw_centered_text(pair.number, x, row_y + size + 14.0, 16, DIM);
+            fonts::draw_centered(
+                &pair.word.to_uppercase(),
+                x,
+                row_y + size + 34.0,
+                14,
+                WHITE,
+                Style::Bold,
+            );
         }
     }
 }
