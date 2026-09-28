@@ -3,6 +3,7 @@ mod curriculum;
 mod effects;
 mod game;
 mod keyboard;
+mod obstacles;
 mod pairs;
 mod portals;
 mod rng;

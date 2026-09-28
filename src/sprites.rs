@@ -1,6 +1,8 @@
-//! Procedurally drawn characters.
+//! Procedurally drawn characters and scenery.
 
 use macroquad::prelude::*;
+
+use crate::obstacles::{Kind, Obstacle};
 
 const SKIN: Color = Color::new(1.0, 0.86, 0.75, 1.0);
 const HAIR: Color = Color::new(0.98, 0.84, 0.42, 1.0);
@@ -445,6 +447,112 @@ pub fn draw_portal(pos: Vec2, time: f32) {
                     ..color
                 },
             );
+        }
+    }
+}
+
+const STONE: Color = Color::new(0.45, 0.45, 0.5, 1.0);
+const STONE_DARK: Color = Color::new(0.28, 0.28, 0.32, 1.0);
+const STONE_LIGHT: Color = Color::new(0.62, 0.62, 0.68, 1.0);
+const TRUNK: Color = Color::new(0.4, 0.26, 0.12, 1.0);
+const LEAVES_DARK: Color = Color::new(0.08, 0.3, 0.12, 1.0);
+const LEAVES: Color = Color::new(0.14, 0.45, 0.18, 1.0);
+const LEAVES_LIGHT: Color = Color::new(0.3, 0.62, 0.28, 1.0);
+const SHORE: Color = Color::new(0.35, 0.5, 0.25, 1.0);
+const WATER_DEEP: Color = Color::new(0.1, 0.25, 0.55, 1.0);
+const WATER: Color = Color::new(0.2, 0.42, 0.75, 1.0);
+const WATER_SHINE: Color = Color::new(0.75, 0.9, 1.0, 0.7);
+
+/// A closed outline around `pos` whose radius at each point is
+/// `radius` scaled by `min..max` according to `shape`.
+fn outline(pos: Vec2, radius: f32, shape: &[f32], min: f32, max: f32) -> Vec<Vec2> {
+    shape
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let angle = i as f32 / shape.len() as f32 * std::f32::consts::TAU;
+            pos + Vec2::from_angle(angle) * radius * (min + (max - min) * s)
+        })
+        .collect()
+}
+
+/// Fills a star-shaped polygon as a fan of triangles from `center`.
+fn fill_fan(center: Vec2, points: &[Vec2], color: Color) {
+    for i in 0..points.len() {
+        let next = points[(i + 1) % points.len()];
+        draw_triangle(center, points[i], next, color);
+    }
+}
+
+/// Draws a stone, tree or lake filling its blocked circle.
+pub fn draw_obstacle(obstacle: &Obstacle, time: f32) {
+    let (pos, r, shape) = (obstacle.pos, obstacle.radius, &obstacle.shape);
+    match obstacle.kind {
+        Kind::Stone => {
+            draw_ellipse(
+                pos.x + 4.0,
+                pos.y + r * 0.6,
+                r * 1.05,
+                r * 0.45,
+                0.0,
+                SHADOW,
+            );
+            fill_fan(pos, &outline(pos, r, shape, 0.9, 1.1), STONE_DARK);
+            fill_fan(pos, &outline(pos, r, shape, 0.78, 0.95), STONE);
+            // A highlight on the upper left, and a crack.
+            let light = pos + vec2(-r * 0.3, -r * 0.3);
+            draw_ellipse(light.x, light.y, r * 0.35, r * 0.2, -30.0, STONE_LIGHT);
+            let crack = [
+                pos + vec2(r * 0.1, -r * 0.1),
+                pos + vec2(r * 0.25, r * 0.15),
+                pos + vec2(r * 0.15, r * 0.4),
+            ];
+            for pair in crack.windows(2) {
+                draw_line(pair[0].x, pair[0].y, pair[1].x, pair[1].y, 1.5, STONE_DARK);
+            }
+        }
+        Kind::Tree => {
+            draw_ellipse(pos.x + 6.0, pos.y + r * 0.7, r * 1.1, r * 0.45, 0.0, SHADOW);
+            draw_rectangle(pos.x - r * 0.15, pos.y, r * 0.3, r * 0.75, TRUNK);
+            // A canopy of overlapping leaf clusters.
+            draw_circle(pos.x, pos.y, r, LEAVES_DARK);
+            for i in 0..5 {
+                let angle = i as f32 / 5.0 * std::f32::consts::TAU + shape[0] * 3.0;
+                let cluster = pos + Vec2::from_angle(angle) * r * 0.45;
+                draw_circle(
+                    cluster.x,
+                    cluster.y,
+                    r * (0.45 + 0.15 * shape[i + 1]),
+                    LEAVES,
+                );
+            }
+            draw_circle(pos.x - r * 0.25, pos.y - r * 0.3, r * 0.35, LEAVES_LIGHT);
+        }
+        Kind::Lake => {
+            fill_fan(pos, &outline(pos, r, shape, 1.0, 1.12), SHORE);
+            fill_fan(pos, &outline(pos, r, shape, 0.88, 1.0), WATER);
+            fill_fan(pos, &outline(pos, r * 0.6, shape, 0.85, 1.0), WATER_DEEP);
+            // Glints drifting slowly across the surface.
+            for (i, s) in shape.iter().take(3).enumerate() {
+                let t = time * 0.3 + s * 10.0;
+                let glint = pos
+                    + vec2(
+                        (t + i as f32 * 2.0).sin() * r * 0.45,
+                        (t * 0.7 + i as f32).cos() * r * 0.35,
+                    );
+                let alpha = 0.4 + 0.3 * (time * 2.0 + i as f32).sin();
+                draw_line(
+                    glint.x - r * 0.12,
+                    glint.y,
+                    glint.x + r * 0.12,
+                    glint.y,
+                    2.0,
+                    Color {
+                        a: alpha,
+                        ..WATER_SHINE
+                    },
+                );
+            }
         }
     }
 }

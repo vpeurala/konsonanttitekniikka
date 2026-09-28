@@ -6,10 +6,13 @@ use crate::audio::Sfx;
 use crate::curriculum::Curriculum;
 use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
+use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer};
 use crate::pairs::{self, Pair};
 use crate::portals::portal_positions;
 use crate::rng::{Rng, Stream};
-use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster, draw_portal, girl_hand};
+use crate::sprites::{
+    draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal, girl_hand,
+};
 
 const PLAYER_SPEED: f32 = 260.0;
 const PLAYER_RADIUS: f32 = 16.0;
@@ -436,6 +439,8 @@ pub struct Game {
     curriculum: Curriculum,
     /// The current level's portals.
     portals: Vec<Vec2>,
+    /// The current level's stones, trees and lakes.
+    obstacles: Vec<Obstacle>,
 }
 
 impl Game {
@@ -465,6 +470,7 @@ impl Game {
             rng: Rng::new(Stream::Gameplay, 0),
             curriculum: Curriculum::new(),
             portals: portal_positions(1, screen_width(), screen_height()),
+            obstacles: Vec::new(),
         }
     }
 
@@ -552,6 +558,7 @@ impl Game {
             .player
             .y
             .clamp(PLAYER_RADIUS * 1.5, screen_height() - PLAYER_RADIUS * 1.5);
+        self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
     }
 
     fn handle_key(&mut self, key: Key) {
@@ -731,7 +738,11 @@ impl Game {
         self.effects.lightning(pos);
         self.sfx.extend([Sfx::Explode, Sfx::Thunder, Sfx::LevelUp]);
         let new_pairs = self.curriculum.next_level();
-        self.portals = portal_positions(self.level, screen_width(), screen_height());
+        let (width, height) = (screen_width(), screen_height());
+        self.portals = portal_positions(self.level, width, height);
+        self.obstacles = obstacles_for_level(self.level, width, height, &self.portals);
+        // She may be standing where a new obstacle appeared.
+        self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
         self.banner = Some(Banner {
             title: format!("Taso {}!", self.level),
             subtitle: if new_pairs > 0 {
@@ -823,13 +834,27 @@ impl Game {
         let player = self.player;
         for enemy in &mut self.enemies {
             let speed = enemy.speed();
-            enemy.pos += (player - enemy.pos).normalize_or_zero() * speed * dt;
+            let toward = (player - enemy.pos).normalize_or_zero();
+            // Enemies with an even phase go left around obstacles, the rest
+            // right, so they don't all bunch up on one side.
+            let prefer_left = (enemy.phase as u32).is_multiple_of(2);
+            let dir = steer(
+                enemy.pos,
+                enemy.radius,
+                toward,
+                &self.obstacles,
+                prefer_left,
+            );
+            enemy.pos += dir * speed * dt;
             enemy.age += dt;
             enemy.shown_for += dt;
         }
         self.separate_enemies();
-        for boss in self.enemies.iter_mut().filter(|e| e.is_boss()) {
-            boss.keep_on_screen();
+        for enemy in &mut self.enemies {
+            if enemy.is_boss() {
+                enemy.keep_on_screen();
+            }
+            enemy.pos = push_out(enemy.pos, enemy.radius, &self.obstacles);
         }
 
         let touches = |e: &Enemy| e.pos.distance(player) < PLAYER_RADIUS + e.radius;
@@ -1010,6 +1035,9 @@ impl Game {
         self.draw_new_pairs();
         for &portal in &self.portals {
             draw_portal(portal, time);
+        }
+        for obstacle in &self.obstacles {
+            draw_obstacle(obstacle, time);
         }
 
         for enemy in &self.enemies {

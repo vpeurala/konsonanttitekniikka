@@ -21,6 +21,8 @@ pub enum Stream {
     Gameplay = 3,
     /// Sparks, lightning and other visuals that don't affect play.
     Effects = 4,
+    /// Where each level's obstacles are and what they look like.
+    Obstacles = 5,
 }
 
 /// A small, fast generator (SplitMix64).
