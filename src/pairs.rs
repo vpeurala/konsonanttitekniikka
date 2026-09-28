@@ -74,6 +74,76 @@ pub const PAIRS: &[Pair] = &[
     pair("27", "kaasu"),
     pair("28", "kota"),
     pair("29", "kavio"),
+    pair("30", "liha"),
+    pair("31", "leija"),
+    pair("32", "leka"),
+    pair("33", "luola"),
+    pair("34", "liima"),
+    pair("35", "lapio"),
+    pair("36", "lyyra"),
+    pair("37", "liesi"),
+    pair("38", "luoti"),
+    pair("39", "laiva"),
+    pair("40", "maha"),
+    pair("41", "maja"),
+    pair("42", "muki"),
+    pair("43", "mela"),
+    pair("44", "muumi"),
+    pair("45", "mopo"),
+    pair("46", "muuri"),
+    pair("47", "muusi"),
+    pair("48", "mato"),
+    pair("49", "muovi"),
+    pair("50", "pyyhe"),
+    pair("51", "poiju"),
+    pair("52", "puku"),
+    pair("53", "peili"),
+    pair("54", "piimä"),
+    pair("55", "pipo"),
+    pair("56", "pora"),
+    pair("57", "paasi"),
+    pair("58", "pata"),
+    pair("59", "paavi"),
+    pair("60", "raha"),
+    pair("61", "ryijy"),
+    pair("62", "reki"),
+    pair("63", "railo"),
+    pair("64", "riimu"),
+    pair("65", "rapu"),
+    pair("66", "ruori"),
+    pair("67", "ruusu"),
+    pair("68", "rata"),
+    pair("69", "rovio"),
+    pair("70", "saha"),
+    pair("71", "soija"),
+    pair("72", "sika"),
+    pair("73", "siili"),
+    pair("74", "siima"),
+    pair("75", "siipi"),
+    pair("76", "siru"),
+    pair("77", "susi"),
+    pair("78", "sota"),
+    pair("79", "sauva"),
+    pair("80", "tuohi"),
+    pair("81", "taiji"),
+    pair("82", "tiuku"),
+    pair("83", "tiili"),
+    pair("84", "taimi"),
+    pair("85", "tipu"),
+    pair("86", "terä"),
+    pair("87", "teesi"),
+    pair("88", "toti"),
+    pair("89", "tavi"),
+    pair("90", "vuohi"),
+    pair("91", "vaja"),
+    pair("92", "vaaka"),
+    pair("93", "viulu"),
+    pair("94", "vaimo"),
+    pair("95", "vapa"),
+    pair("96", "vuori"),
+    pair("97", "vaasi"),
+    pair("98", "vouti"),
+    pair("99", "vauva"),
 ];
 
 #[cfg(test)]
@@ -110,6 +180,19 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn every_number_from_0_to_9_and_00_to_99_has_a_pair() {
+        let numbers: HashSet<&str> = PAIRS.iter().map(|p| p.number).collect();
+        let expected: Vec<String> = (0..10)
+            .map(|n| n.to_string())
+            .chain((0..100).map(|n| format!("{n:02}")))
+            .collect();
+        for number in &expected {
+            assert!(numbers.contains(number.as_str()), "missing {number}");
+        }
+        assert_eq!(PAIRS.len(), 110);
     }
 
     #[test]
