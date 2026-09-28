@@ -5,7 +5,9 @@ mod fonts;
 mod game;
 mod icon;
 mod keyboard;
+mod levels;
 mod lifecycle;
+mod long_numbers;
 mod memory;
 mod obstacles;
 mod pairs;
@@ -25,6 +27,7 @@ use macroquad::prelude::*;
 use audio::{Audio, Sfx};
 use game::{Game, GameEvent};
 use keyboard::Keyboard;
+use levels::{LevelAction, LevelSelect};
 use practice::{PracticeAction, PracticeScreen};
 use progress::ProgressScreen;
 use save::SaveData;
@@ -49,6 +52,8 @@ fn window_conf() -> Conf {
 /// What is on screen.
 enum Screen {
     Title,
+    /// Choosing the level to start from.
+    Levels(LevelSelect),
     Game(Box<Game>),
     Practice(Box<PracticeScreen>),
     Progress(ProgressScreen),
@@ -110,10 +115,14 @@ async fn main() {
                 match title.update(&touches.pointers(&view)) {
                     TitleAction::Stay => {}
                     TitleAction::StartGame => {
-                        next = Some(Screen::Game(Box::new(Game::new(
-                            touch_mode,
-                            progress.memory(),
-                        ))));
+                        // With only the first level to start from, there
+                        // is nothing to choose.
+                        let levels = LevelSelect::new(progress.best_level, touch_mode);
+                        next = Some(if levels.len() > 1 {
+                            Screen::Levels(levels)
+                        } else {
+                            Screen::Game(Box::new(Game::new(touch_mode, progress.memory(), 1)))
+                        });
                     }
                     TitleAction::Practice => {
                         let memory = progress.memory();
@@ -127,6 +136,24 @@ async fn main() {
                 }
                 audio.set_music(true);
                 title.draw(&progress);
+                view::mask_outside(title_rect, BLACK);
+            }
+
+            Screen::Levels(levels) => {
+                let view = view::begin(title_rect);
+                match levels.update(&touches.pointers(&view)) {
+                    LevelAction::Stay => {}
+                    LevelAction::Back => next = Some(Screen::Title),
+                    LevelAction::Start(level) => {
+                        next = Some(Screen::Game(Box::new(Game::new(
+                            touch_mode,
+                            progress.memory(),
+                            level,
+                        ))));
+                    }
+                }
+                audio.set_music(true);
+                levels.draw();
                 view::mask_outside(title_rect, BLACK);
             }
 

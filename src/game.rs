@@ -7,6 +7,7 @@ use crate::curriculum::Curriculum;
 use crate::effects::Effects;
 use crate::fonts::{self, Style};
 use crate::keyboard::{Key, Keyboard};
+use crate::long_numbers::{self, Question};
 use crate::memory::Memory;
 use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer};
 use crate::pairs::{self, Pair};
@@ -69,8 +70,11 @@ const COLLISION_PENALTY: f32 = 20.0;
 const FEEDBACK_SECONDS: f32 = 2.5;
 
 const FIRST_LEVEL_POINTS: u32 = 10;
-/// How many more points each level needs than the one before.
+/// How many more points each level needs than the one before...
 const LEVEL_POINTS_INCREASE: u32 = 5;
+/// ...up to this many, so no level drags on. Later levels get harder
+/// through faster spawns, tougher bosses and longer numbers instead.
+const MAX_LEVEL_POINTS: u32 = 40;
 const BANNER_SECONDS: f32 = 2.5;
 /// No new enemies appear for this long after a level starts.
 const LEVEL_BREAK_SECONDS: f32 = 2.0;
@@ -113,7 +117,7 @@ pub fn after_wrong_key(energy: f32) -> f32 {
 
 /// The points needed to summon the boss of `level` (counting from 1).
 pub fn points_to_clear(level: u32) -> u32 {
-    FIRST_LEVEL_POINTS + LEVEL_POINTS_INCREASE * (level - 1)
+    (FIRST_LEVEL_POINTS + LEVEL_POINTS_INCREASE * (level - 1)).min(MAX_LEVEL_POINTS)
 }
 
 /// How many numbers (and so hits) the boss of `level` has.
@@ -154,6 +158,9 @@ const MIN_PORTAL_SPAWN_DISTANCE: f32 = 200.0;
 const PORTAL_PALETTE: [Color; 3] = [VIOLET, SKYBLUE, WHITE];
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
+
+/// Long numbers' shared entry in the count of appearances.
+const LONG_NUMBERS_KEY: &str = "long";
 
 /// What the typed text means given the answers currently on screen.
 #[derive(Debug, PartialEq, Eq)]
@@ -211,9 +218,9 @@ impl Slot {
     }
 }
 
-/// A boss's extra lives: the pairs it shows after its current one.
+/// A boss's extra lives: the numbers it shows after its current one.
 struct BossLives {
-    queue: Vec<Pair>,
+    queue: Vec<Question>,
     total: usize,
     /// Seconds left of the white flash after being hit.
     hit_flash: f32,
@@ -224,14 +231,16 @@ struct BossLives {
 struct Enemy {
     pos: Vec2,
     radius: f32,
-    pair: Pair,
+    question: Question,
+    /// Whether a long number is shown split into its pairs ("20 1").
+    split: bool,
     shows_word: bool,
     label: String,
     label_width: f32,
     /// The answer, as shown in a hint.
     hint: String,
-    /// How many times the current pair had appeared in the game before it
-    /// was shown here.
+    /// How many times the current pair (or, for a long number, any long
+    /// number) had appeared in the game before it was shown here.
     earlier_appearances: u32,
     /// Seconds on screen; sets the speed.
     age: f32,
@@ -244,11 +253,12 @@ struct Enemy {
 
 impl Enemy {
     /// `phase` offsets its animation from other enemies'.
-    fn new(pair: Pair, shows_word: bool, earlier_appearances: u32, phase: f32) -> Self {
+    fn new(question: Question, shows_word: bool, earlier_appearances: u32, phase: f32) -> Self {
         let mut enemy = Enemy {
             pos: Vec2::ZERO,
             radius: ENEMY_RADIUS,
-            pair,
+            question: question.clone(),
+            split: false,
             shows_word,
             label: String::new(),
             label_width: 0.0,
@@ -259,36 +269,39 @@ impl Enemy {
             phase,
             boss: None,
         };
-        enemy.show(pair, earlier_appearances);
+        enemy.show(question, earlier_appearances);
         enemy
     }
 
-    /// A boss showing the numbers of `pairs`, one after another. Its
-    /// `earlier_appearances` are for the first pair.
-    fn boss(pairs: &[Pair], earlier_appearances: u32, phase: f32) -> Self {
-        let mut boss = Enemy::new(pairs[0], false, earlier_appearances, phase);
+    /// A boss showing `numbers`, one after another, long numbers split
+    /// into their pairs if `split`. Its `earlier_appearances` are for the
+    /// first number.
+    fn boss(numbers: &[Question], split: bool, earlier_appearances: u32, phase: f32) -> Self {
+        let mut boss = Enemy::new(numbers[0].clone(), false, 0, phase);
+        boss.split = split;
+        boss.show(numbers[0].clone(), earlier_appearances);
         boss.radius = BOSS_RADIUS;
         boss.boss = Some(BossLives {
-            queue: pairs[1..].to_vec(),
-            total: pairs.len(),
+            queue: numbers[1..].to_vec(),
+            total: numbers.len(),
             hit_flash: 0.0,
             harmless_for: 0.0,
         });
         boss
     }
 
-    /// Switches to showing `pair`.
-    fn show(&mut self, pair: Pair, earlier_appearances: u32) {
+    /// Switches to showing `question`.
+    fn show(&mut self, question: Question, earlier_appearances: u32) {
         let (label, hint) = if self.shows_word {
-            (pair.word.to_uppercase(), pair.number.to_owned())
+            (question.words(), question.number(false))
         } else {
-            (pair.number.to_owned(), pair.word.to_uppercase())
+            (question.number(self.split), question.words())
         };
         self.label_width =
             fonts::measure(&label, Style::Bold, LABEL_FONT_SIZE).width + 2.0 * LABEL_PAD;
         self.label = label;
         self.hint = format!("= {hint}");
-        self.pair = pair;
+        self.question = question;
         self.earlier_appearances = earlier_appearances;
         self.shown_for = 0.0;
     }
@@ -387,9 +400,26 @@ impl Enemy {
 
     fn answer(&self) -> String {
         if self.shows_word {
-            self.pair.number.to_owned()
+            self.question.number(false)
         } else {
-            self.pair.word.to_lowercase()
+            self.question.typed_words()
+        }
+    }
+
+    /// Records a right answer for each pair of the question. A long
+    /// number's time is shared out between its pairs.
+    fn record_answer(&self, memory: &mut Memory) {
+        let pairs = self.question.pairs();
+        let seconds = self.shown_for / pairs.len() as f32;
+        for &pair in pairs {
+            memory.record_answer(pair, seconds, self.shows_hint(), now());
+        }
+    }
+
+    /// Records a miss for each pair of the question.
+    fn record_miss(&self, memory: &mut Memory) {
+        for &pair in self.question.pairs() {
+            memory.record_miss(pair, now());
         }
     }
 }
@@ -493,12 +523,16 @@ pub struct Game {
     touch: bool,
     /// How well she knows each pair; kept across games.
     memory: Memory,
+    /// The level the game started from, where it starts again after a
+    /// game over.
+    start_level: u32,
 }
 
 impl Game {
-    /// A new game, knowing what `memory` says about each pair.
-    pub fn new(touch: bool, memory: Memory) -> Self {
-        Game {
+    /// A new game starting from `start_level`, knowing what `memory` says
+    /// about each pair.
+    pub fn new(touch: bool, memory: Memory, start_level: u32) -> Self {
+        let mut game = Game {
             keyboard: Keyboard::new(),
             player: vec2(ARENA_W / 2.0, ARENA_H / 2.0),
             player_moving: false,
@@ -528,13 +562,39 @@ impl Game {
             paused: false,
             touch,
             memory,
+            start_level: 1,
+        };
+        game.start_at(start_level);
+        game
+    }
+
+    /// Skips ahead to `level`, with every pair of the levels before it
+    /// already met.
+    fn start_at(&mut self, level: u32) {
+        self.start_level = level.max(1);
+        while self.level < self.start_level {
+            self.level += 1;
+            self.curriculum.next_level();
+        }
+        if self.level > 1 {
+            self.portals = portal_positions(self.level, ARENA_W, ARENA_H);
+            self.obstacles =
+                obstacles_for_level(self.level, ARENA_W, ARENA_H, &self.portals);
+            self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
+            self.banner = Some(Banner {
+                title: format!("Taso {}", self.level),
+                subtitle: "Onnea matkaan!".to_owned(),
+                color: GOLD,
+                stars: None,
+                seconds_left: BANNER_SECONDS,
+            });
         }
     }
 
     fn restart(&mut self) {
         let keyboard = std::mem::replace(&mut self.keyboard, Keyboard::new());
         let memory = std::mem::take(&mut self.memory);
-        *self = Game::new(self.touch, Memory::default());
+        *self = Game::new(self.touch, Memory::default(), self.start_level);
         // Reuse the input subscription instead of registering a new one.
         self.keyboard = keyboard;
         // What she has learned carries over to the new game.
@@ -733,14 +793,14 @@ impl Game {
         self.sfx.push(Sfx::Type);
         let (candidates, outcome) = self.outcome(slot);
         if let InputOutcome::Hit(hits) = outcome {
-            let first = self.enemies[candidates[hits[0]].0].pair;
+            let first = self.enemies[candidates[hits[0]].0].question.clone();
             // Candidates are in enemy order, so removing from the back
             // keeps the remaining indices valid.
             for &hit in hits.iter().rev() {
                 self.hit_enemy(candidates[hit].0);
             }
             self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
-            self.show_pair(first, GREEN);
+            self.show_question(&first, GREEN);
             self.slot_mut(slot).clear();
             self.add_points(hits.len() as u32);
         }
@@ -750,18 +810,16 @@ impl Game {
     /// on its last life leave play at once; a boss with lives left moves on
     /// to its next pair.
     fn hit_enemy(&mut self, index: usize) {
-        let enemy = &self.enemies[index];
-        self.memory
-            .record_answer(enemy.pair, enemy.shown_for, enemy.shows_hint(), now());
+        self.enemies[index].record_answer(&mut self.memory);
         let next = self.enemies[index]
             .boss
             .as_mut()
             .and_then(|lives| (!lives.queue.is_empty()).then(|| lives.queue.remove(0)));
         match next {
-            Some(pair) => {
+            Some(question) => {
                 let target_pos = self.enemies[index].pos;
-                let earlier = self.count_appearance(pair);
-                self.enemies[index].show(pair, earlier);
+                let earlier = self.count_appearance(&question);
+                self.enemies[index].show(question, earlier);
                 self.cast_spell(SpellTarget::Boss, target_pos);
             }
             None => {
@@ -772,10 +830,16 @@ impl Game {
         }
     }
 
-    /// Records that `pair` is appearing, returning how many times it had
-    /// appeared before.
-    fn count_appearance(&mut self, pair: Pair) -> u32 {
-        let count = self.appearances.entry(pair.number).or_default();
+    /// Records that `question` is appearing, returning how many times it
+    /// had appeared before. Long numbers are counted together, so the first
+    /// few in a game get an early hint.
+    fn count_appearance(&mut self, question: &Question) -> u32 {
+        let key = if question.is_long() {
+            LONG_NUMBERS_KEY
+        } else {
+            question.first().number
+        };
+        let count = self.appearances.entry(key).or_default();
         *count += 1;
         *count - 1
     }
@@ -798,16 +862,35 @@ impl Game {
         if count == 0 {
             return;
         }
-        let mut pairs = Vec::with_capacity(count);
-        for _ in 0..count {
+        let now = now();
+        let long = long_numbers::long_hits(self.level, count);
+        let easy = long_numbers::easy_long_numbers(self.level);
+        let mut numbers = Vec::with_capacity(count);
+        for _ in long..count {
             let i = self
                 .rng
-                .weighted_index(&available, |p| self.memory.weight(p, now()));
-            pairs.push(available.swap_remove(i));
+                .weighted_index(&available, |p| self.memory.weight(p, now));
+            numbers.push(Question::single(available.swap_remove(i)));
         }
-        let earlier = self.count_appearance(pairs[0]);
+        // The long numbers come last. At first they are made of the pairs
+        // she knows best, later of the ones due for practice.
+        let unlocked = self.curriculum.unlocked().to_vec();
+        for _ in 0..long {
+            let memory = &self.memory;
+            let question = if easy {
+                long_numbers::random_long_number(self.level, &unlocked, &mut self.rng, |p| {
+                    (1.0 - memory.difficulty(p)).powi(3) + 0.01
+                })
+            } else {
+                long_numbers::random_long_number(self.level, &unlocked, &mut self.rng, |p| {
+                    memory.weight(p, now)
+                })
+            };
+            numbers.push(question);
+        }
+        let earlier = self.count_appearance(&numbers[0]);
         let phase = self.rng.range(0.0, 100.0);
-        let mut boss = Enemy::boss(&pairs, earlier, phase);
+        let mut boss = Enemy::boss(&numbers, easy, earlier, phase);
         // The boss is slow, so without a portal it starts just inside the
         // edge.
         boss.pos = match self.portal_spawn_position() {
@@ -819,9 +902,16 @@ impl Game {
 
         self.boss_fight = true;
         self.sfx.push(Sfx::Boss);
+        let subtitle = if long > 0 && self.level == long_numbers::first_long_level() {
+            format!("Tarvitaan {count} osumaa. Viimeinen on pitkä luku!")
+        } else if long > 0 {
+            format!("Tarvitaan {count} osumaa, niistä {long} pitkää lukua")
+        } else {
+            format!("Tarvitaan {count} osumaa")
+        };
         self.banner = Some(Banner {
             title: "Pomo saapuu!".to_owned(),
-            subtitle: format!("Tarvitaan {count} osumaa"),
+            subtitle,
             color: VIOLET,
             stars: None,
             seconds_left: BANNER_SECONDS,
@@ -984,7 +1074,7 @@ impl Game {
                 continue;
             }
             lives.harmless_for = BOSS_HARMLESS_SECONDS;
-            self.memory.record_miss(boss.pair, now());
+            boss.record_miss(&mut self.memory);
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.sfx.push(Sfx::Hurt);
@@ -1001,14 +1091,14 @@ impl Game {
             .partition(|e| !e.is_boss() && touches(e));
         self.enemies = remaining;
         for enemy in &collided {
-            self.memory.record_miss(enemy.pair, now());
+            enemy.record_miss(&mut self.memory);
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.sfx.extend([Sfx::Explode, Sfx::Hurt]);
             self.effects
                 .explode(enemy.pos, enemy.radius, &COLLISION_PALETTE);
             // Show the pair so a collision still teaches something.
-            self.show_pair(enemy.pair, YELLOW);
+            self.show_question(&enemy.question, YELLOW);
         }
         if hurt {
             self.number_typed.clear();
@@ -1041,9 +1131,9 @@ impl Game {
         }
     }
 
-    fn show_pair(&mut self, pair: Pair, color: Color) {
+    fn show_question(&mut self, question: &Question, color: Color) {
         self.feedback = Some(Feedback {
-            text: format!("{} = {}", pair.word.to_uppercase(), pair.number),
+            text: format!("{} = {}", question.words(), question.number(false)),
             color,
             seconds_left: FEEDBACK_SECONDS,
         });
@@ -1056,7 +1146,12 @@ impl Game {
             SpellTarget::Doomed(enemy) => Some(enemy),
             SpellTarget::Boss => None,
         });
-        let on_screen: Vec<Pair> = self.enemies.iter().chain(doomed).map(|e| e.pair).collect();
+        let on_screen: Vec<Pair> = self
+            .enemies
+            .iter()
+            .chain(doomed)
+            .flat_map(|e| e.question.pairs().iter().copied())
+            .collect();
         self.curriculum
             .unlocked()
             .iter()
@@ -1090,10 +1185,11 @@ impl Game {
         let pair = pool[self
             .rng
             .weighted_index(pool, |p| self.memory.weight(p, now))];
-        let earlier = self.count_appearance(pair);
+        let question = Question::single(pair);
+        let earlier = self.count_appearance(&question);
         let shows_word = self.rng.chance(0.5);
         let phase = self.rng.range(0.0, 100.0);
-        let mut enemy = Enemy::new(pair, shows_word, earlier, phase);
+        let mut enemy = Enemy::new(question, shows_word, earlier, phase);
         let portal = if self.rng.chance(PORTAL_SPAWN_SHARE) {
             self.portal_spawn_position()
         } else {
@@ -1318,6 +1414,9 @@ impl Game {
         const FONT_SIZE: u16 = 18;
         let new = self.curriculum.new_pairs();
         if new.is_empty() {
+            if long_numbers::easy_long_numbers(self.level) {
+                draw_long_number_tip();
+            }
             return;
         }
         let x = ARENA_W - WIDTH - 16.0;
@@ -1406,6 +1505,35 @@ impl Game {
             );
             x += width + GAP;
         }
+    }
+}
+
+/// Explains long numbers down the right edge, on the first levels with
+/// them, where the panel of new pairs would be.
+fn draw_long_number_tip() {
+    const WIDTH: f32 = 150.0;
+    const ROW: f32 = 24.0;
+    const FONT_SIZE: u16 = 18;
+    let Some(example) = Question::for_number("201") else {
+        return;
+    };
+    let rows = [
+        ("Kaksi numeroa".to_owned(), WHITE),
+        ("kerrallaan:".to_owned(), WHITE),
+        (example.number(false), WHITE),
+        (format!("= {}", example.number(true)), WHITE),
+        (format!("= {}", example.words()), LIME),
+    ];
+    let x = ARENA_W - WIDTH - 16.0;
+    let y = 100.0;
+    let height = 40.0 + ROW * rows.len() as f32;
+    draw_rectangle(x, y, WIDTH, height, Color::new(0.0, 0.0, 0.0, 0.55));
+    draw_rectangle_lines(x, y, WIDTH, height, 2.0, GOLD);
+    let cx = x + WIDTH / 2.0;
+    fonts::draw_centered("Pitkät luvut", cx, y + 18.0, FONT_SIZE, GOLD, Style::Heading);
+    for (i, (text, color)) in rows.iter().enumerate() {
+        let row_y = y + 44.0 + ROW * i as f32;
+        fonts::draw_centered(text, cx, row_y - 5.0, FONT_SIZE, *color, Style::Bold);
     }
 }
 
@@ -1546,10 +1674,13 @@ mod tests {
     }
 
     #[test]
-    fn each_level_needs_more_points_than_the_last() {
+    fn each_level_needs_more_points_than_the_last_up_to_a_limit() {
         for level in 1..50 {
-            assert!(points_to_clear(level + 1) > points_to_clear(level));
+            let (this, next) = (points_to_clear(level), points_to_clear(level + 1));
+            assert!(next > this || next == MAX_LEVEL_POINTS);
         }
+        assert_eq!(points_to_clear(7), MAX_LEVEL_POINTS);
+        assert_eq!(points_to_clear(100), MAX_LEVEL_POINTS);
     }
 
     #[test]
