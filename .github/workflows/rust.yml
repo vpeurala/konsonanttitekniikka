@@ -16,6 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    # macroquad's audio and window code needs these Linux libraries.
+    - name: Install system libraries
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev
     - name: Build
       run: cargo build --verbose
     - name: Run tests
