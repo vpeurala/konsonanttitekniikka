@@ -1,5 +1,5 @@
 [package]
-name = "konsonanttitekniikka"
+name = "lukuloitsu"
 version = "0.1.0"
 edition = "2024"
 
@@ -13,8 +13,10 @@ opt-level = 3
 
 # Android packaging, used by `cargo quad-apk` (see scripts/android.sh).
 [package.metadata.android]
-package_name = "fi.villepeurala.konsonanttitekniikka"
-label = "Konsonanttitekniikka"
+# Android loads the game's library by the last part of this name, so it
+# must match the crate name.
+package_name = "fi.lukuloitsu.lukuloitsu"
+label = "Lukuloitsu"
 android_version = 33
 target_sdk_version = 33
 min_sdk_version = 26

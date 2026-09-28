@@ -23,7 +23,8 @@ const DIM: Color = Color::new(0.6, 0.6, 0.65, 1.0);
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 
 const EXPLANATION_BEFORE_TABLE: &[&str] = &[
-    "Konsonanttitekniikalla muistat minkä tahansa luvun.",
+    "Lukuloitsussa opit konsonanttitekniikan,",
+    "jolla muistat minkä tahansa luvun.",
     "Jokainen numero vastaa yhtä konsonanttia:",
 ];
 
@@ -181,8 +182,8 @@ impl TitleScreen {
     }
 }
 
-const LOGO_TEXT: &str = "Konsonanttitekniikka";
-const LOGO_SIZE: u16 = 68;
+const LOGO_TEXT: &str = "Lukuloitsu";
+const LOGO_SIZE: u16 = 100;
 const LOGO_SHADOW: Color = Color::new(0.0, 0.0, 0.0, 0.45);
 const LOGO_OUTLINE: Color = Color::new(0.28, 0.1, 0.03, 1.0);
 const LOGO_FILL: Color = Color::new(1.0, 0.5, 0.1, 1.0);
@@ -216,9 +217,13 @@ fn draw_logo(cx: f32, y: f32, time: f32) {
     };
 
     draw_all(5.0, 7.0, LOGO_SHADOW);
-    for i in 0..16 {
-        let a = i as f32 / 16.0 * std::f32::consts::TAU;
-        draw_all(a.cos() * 4.5, a.sin() * 4.5, LOGO_OUTLINE);
+    // Many copies around each letter, at two distances, make a smooth
+    // outline even at large sizes.
+    for radius in [3.0, 6.0] {
+        for i in 0..32 {
+            let a = i as f32 / 32.0 * std::f32::consts::TAU;
+            draw_all(a.cos() * radius, a.sin() * radius, LOGO_OUTLINE);
+        }
     }
     draw_all(0.0, 0.0, LOGO_FILL);
 

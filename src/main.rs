@@ -27,7 +27,7 @@ use view::{ARENA_H, ARENA_W};
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "Konsonanttitekniikka".to_owned(),
+        window_title: "Lukuloitsu".to_owned(),
         window_width: 800,
         window_height: 600,
         high_dpi: true,

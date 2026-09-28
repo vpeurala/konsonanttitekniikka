@@ -7,8 +7,8 @@ set -euo pipefail
 
 DEVICE="${1:-iPhone 17}"
 TARGET=aarch64-apple-ios-sim
-NAME=Konsonanttitekniikka
-BUNDLE_ID=fi.villepeurala.konsonanttitekniikka
+NAME=Lukuloitsu
+BUNDLE_ID=fi.lukuloitsu.lukuloitsu
 
 cd "$(dirname "$0")/.."
 
@@ -17,7 +17,7 @@ cargo build --target "$TARGET"
 APP="target/$TARGET/debug/$NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP"
-cp "target/$TARGET/debug/konsonanttitekniikka" "$APP/"
+cp "target/$TARGET/debug/lukuloitsu" "$APP/"
 cp ios/Info.plist "$APP/"
 
 # Compile the app icon (rendered by `cargo run -- --render-icons`) and add

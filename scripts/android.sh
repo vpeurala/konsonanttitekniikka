@@ -15,13 +15,13 @@ export NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
 export JAVA_HOME="$HOME/.sdkman/candidates/java/8.0.504+1-zulu"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"
 
-PACKAGE=fi.villepeurala.konsonanttitekniikka
+PACKAGE=fi.lukuloitsu.lukuloitsu
 
 cargo quad-apk build "$@"
 
 PROFILE=debug
 [[ " $* " == *" --release "* ]] && PROFILE=release
-APK="target/android-artifacts/$PROFILE/apk/konsonanttitekniikka.apk"
+APK="target/android-artifacts/$PROFILE/apk/lukuloitsu.apk"
 
 # -d picks the phone connected over USB, even if emulators are listed.
 adb -d install -r "$APK"

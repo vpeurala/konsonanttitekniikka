@@ -5,10 +5,10 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>fi.villepeurala.konsonanttitekniikka</string>
+    <string>fi.lukuloitsu.lukuloitsu</string>
     <key>CFBundleName</key>
-    <string>Konsonanttitekniikka</string>
+    <string>Lukuloitsu</string>
     <key>CFBundleDisplayName</key>
-    <string>Konsonanttitekniikka</string>
+    <string>Lukuloitsu</string>
 </dict>
 </plist>
