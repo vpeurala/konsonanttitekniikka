@@ -1373,7 +1373,7 @@ fn draw_label(enemy: &Enemy) {
 }
 
 /// Draws text centered horizontally and vertically on (x, y).
-fn draw_centered_text(text: &str, x: f32, y: f32, font_size: u16, color: Color) {
+pub fn draw_centered_text(text: &str, x: f32, y: f32, font_size: u16, color: Color) {
     let size = measure_text(text, None, font_size, 1.0);
     draw_text(
         text,
