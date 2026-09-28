@@ -4,6 +4,7 @@ mod effects;
 mod game;
 mod keyboard;
 mod pairs;
+mod portals;
 mod sprites;
 
 use macroquad::prelude::*;

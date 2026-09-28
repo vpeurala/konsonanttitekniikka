@@ -7,7 +7,8 @@ use crate::curriculum::Curriculum;
 use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
 use crate::pairs::{self, Pair};
-use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster, girl_hand};
+use crate::portals::portal_positions;
+use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster, draw_portal, girl_hand};
 
 const PLAYER_SPEED: f32 = 260.0;
 const PLAYER_RADIUS: f32 = 16.0;
@@ -126,6 +127,13 @@ const COLLISION_PALETTE: [Color; 3] = [RED, MAROON, ORANGE];
 /// How often a new monster uses one of the level's new pairs, when one is
 /// free, so new pairs get extra practice.
 const NEW_PAIR_SHARE: f32 = 0.5;
+
+/// How often a new monster comes out of a portal rather than a screen
+/// edge.
+const PORTAL_SPAWN_SHARE: f32 = 0.75;
+/// Monsters don't come out of a portal closer than this to the player.
+const MIN_PORTAL_SPAWN_DISTANCE: f32 = 200.0;
+const PORTAL_PALETTE: [Color; 3] = [VIOLET, SKYBLUE, WHITE];
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 
@@ -422,6 +430,8 @@ pub struct Game {
     sfx: Vec<Sfx>,
     effects: Effects,
     curriculum: Curriculum,
+    /// The current level's portals.
+    portals: Vec<Vec2>,
 }
 
 impl Game {
@@ -449,6 +459,7 @@ impl Game {
             sfx: Vec::new(),
             effects: Effects::default(),
             curriculum: Curriculum::new(),
+            portals: portal_positions(1, screen_width(), screen_height()),
         }
     }
 
@@ -678,8 +689,12 @@ impl Game {
         }
         let earlier = self.count_appearance(pairs[0]);
         let mut boss = Enemy::boss(&pairs, earlier);
-        // The boss is slow, so it starts just inside the edge.
-        boss.pos = self.spawn_position(&boss);
+        // The boss is slow, so without a portal it starts just inside the
+        // edge.
+        boss.pos = match self.portal_spawn_position() {
+            Some(pos) => pos,
+            None => self.spawn_position(&boss),
+        };
         boss.keep_on_screen();
         self.enemies.push(boss);
 
@@ -694,19 +709,23 @@ impl Game {
     }
 
     /// Starts the next level with a lightning strike at `pos`, where the
-    /// boss fell. Every monster on screen slows back down.
+    /// boss fell. Any monsters left on screen explode with it, so the next
+    /// level starts from a clear slate.
     fn complete_level(&mut self, pos: Vec2) {
         self.level += 1;
         self.level_points = 0;
         self.level_time = 0.0;
         self.boss_fight = false;
         self.spawn_timer = LEVEL_BREAK_SECONDS;
-        for enemy in &mut self.enemies {
-            enemy.age = 0.0;
+        for enemy in self.enemies.drain(..) {
+            self.effects.explode(enemy.pos, enemy.radius, &KILL_PALETTE);
         }
+        self.number_typed.clear();
+        self.word_typed.clear();
         self.effects.lightning(pos);
-        self.sfx.extend([Sfx::Thunder, Sfx::LevelUp]);
+        self.sfx.extend([Sfx::Explode, Sfx::Thunder, Sfx::LevelUp]);
         let new_pairs = self.curriculum.next_level();
+        self.portals = portal_positions(self.level, screen_width(), screen_height());
         self.banner = Some(Banner {
             title: format!("Taso {}!", self.level),
             subtitle: if new_pairs > 0 {
@@ -927,8 +946,33 @@ impl Game {
         let pair = pool[rand::gen_range(0, pool.len())];
         let earlier = self.count_appearance(pair);
         let mut enemy = Enemy::new(pair, rand::gen_range(0, 2) == 0, earlier);
-        enemy.pos = self.spawn_position(&enemy);
+        let portal = if rand::gen_range(0.0, 1.0) < PORTAL_SPAWN_SHARE {
+            self.portal_spawn_position()
+        } else {
+            None
+        };
+        enemy.pos = match portal {
+            Some(pos) => pos,
+            None => self.spawn_position(&enemy),
+        };
         self.enemies.push(enemy);
+    }
+
+    /// A random portal far enough from the player to spawn from, if any,
+    /// with a burst of sparks as something comes through.
+    fn portal_spawn_position(&mut self) -> Option<Vec2> {
+        let usable: Vec<Vec2> = self
+            .portals
+            .iter()
+            .filter(|p| p.distance(self.player) >= MIN_PORTAL_SPAWN_DISTANCE)
+            .copied()
+            .collect();
+        if usable.is_empty() {
+            return None;
+        }
+        let pos = usable[rand::gen_range(0, usable.len())];
+        self.effects.explode(pos, 24.0, &PORTAL_PALETTE);
+        Some(pos)
     }
 
     /// A random point just outside a screen edge, away from the player and
@@ -960,6 +1004,9 @@ impl Game {
         let time = get_time() as f32;
         // Under everything else, so monsters are never hidden behind it.
         self.draw_new_pairs();
+        for &portal in &self.portals {
+            draw_portal(portal, time);
+        }
 
         for enemy in &self.enemies {
             enemy.draw_body(time, self.player);

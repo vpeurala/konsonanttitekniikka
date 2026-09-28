@@ -403,3 +403,48 @@ pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
         );
     }
 }
+
+const PORTAL_GLOW: Color = Color::new(0.5, 0.2, 0.9, 0.18);
+const PORTAL_RIM: Color = Color::new(0.6, 0.4, 1.0, 0.9);
+const PORTAL_CORE: Color = Color::new(0.03, 0.0, 0.08, 1.0);
+const PORTAL_ARM: [Color; 2] = [
+    Color::new(0.4, 0.8, 1.0, 1.0),
+    Color::new(0.8, 0.4, 1.0, 1.0),
+];
+
+/// A swirling vortex lying flat on the ground, centered on `pos`.
+pub fn draw_portal(pos: Vec2, time: f32) {
+    const RADIUS: f32 = 30.0;
+    /// Seen at an angle, so squashed vertically.
+    const TILT: f32 = 0.55;
+    const ARMS: usize = 3;
+    const DOTS: usize = 14;
+
+    let pulse = 1.0 + 0.06 * (time * 3.0).sin();
+    let r = RADIUS * pulse;
+    draw_ellipse(pos.x, pos.y, r * 1.6, r * 1.6 * TILT, 0.0, PORTAL_GLOW);
+    draw_ellipse(pos.x, pos.y, r, r * TILT, 0.0, PORTAL_CORE);
+    draw_ellipse_lines(pos.x, pos.y, r, r * TILT, 0.0, 2.5, PORTAL_RIM);
+
+    // Spiral arms of dots, turning inward and shrinking toward the middle.
+    for arm in 0..ARMS {
+        let offset = arm as f32 / ARMS as f32 * std::f32::consts::TAU;
+        for dot in 0..DOTS {
+            let along = dot as f32 / DOTS as f32;
+            let angle = offset + along * 4.0 - time * 2.5;
+            let dist = r * (1.0 - along) * 0.95;
+            let p = pos + vec2(angle.cos() * dist, angle.sin() * dist * TILT);
+            let color = PORTAL_ARM[(arm + dot) % 2];
+            let size = 2.8 * (1.0 - along) + 0.8;
+            draw_circle(
+                p.x,
+                p.y,
+                size,
+                Color {
+                    a: 1.0 - along * 0.6,
+                    ..color
+                },
+            );
+        }
+    }
+}
