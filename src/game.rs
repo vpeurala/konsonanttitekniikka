@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use macroquad::prelude::*;
 
 use crate::audio::Sfx;
+use crate::curriculum::Curriculum;
 use crate::effects::Effects;
 use crate::keyboard::{Key, Keyboard};
-use crate::pairs::{self, PAIRS, Pair};
+use crate::pairs::{self, Pair};
 use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster, girl_hand};
 
 const PLAYER_SPEED: f32 = 260.0;
@@ -121,6 +122,10 @@ const CAST_SECONDS: f32 = 0.35;
 const KILL_PALETTE: [Color; 4] = [ORANGE, YELLOW, GOLD, WHITE];
 const SPELL_PALETTE: [Color; 4] = [PINK, MAGENTA, VIOLET, WHITE];
 const COLLISION_PALETTE: [Color; 3] = [RED, MAROON, ORANGE];
+
+/// How often a new monster uses one of the level's new pairs, when one is
+/// free, so new pairs get extra practice.
+const NEW_PAIR_SHARE: f32 = 0.5;
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 
@@ -303,7 +308,13 @@ impl Enemy {
     fn keep_on_screen(&mut self) {
         let top = self.radius * 1.6 + 16.0;
         let bottom = self.label_offset() + LABEL_HEIGHT / 2.0 + self.hint_space();
-        let half_width = self.radius.max(self.label_width / 2.0);
+        // A boss's wings reach well past its body.
+        let body_half_width = if self.is_boss() {
+            self.radius * 1.7
+        } else {
+            self.radius
+        };
+        let half_width = body_half_width.max(self.label_width / 2.0);
         self.pos.x = self
             .pos
             .x
@@ -410,6 +421,7 @@ pub struct Game {
     /// Sound effects triggered since the last `take_sfx`.
     sfx: Vec<Sfx>,
     effects: Effects,
+    curriculum: Curriculum,
 }
 
 impl Game {
@@ -436,6 +448,7 @@ impl Game {
             feedback: None,
             sfx: Vec::new(),
             effects: Effects::default(),
+            curriculum: Curriculum::new(),
         }
     }
 
@@ -693,9 +706,14 @@ impl Game {
         }
         self.effects.lightning(pos);
         self.sfx.extend([Sfx::Thunder, Sfx::LevelUp]);
+        let new_pairs = self.curriculum.next_level();
         self.banner = Some(Banner {
             title: format!("Taso {}!", self.level),
-            subtitle: "Hienoa!".to_owned(),
+            subtitle: if new_pairs > 0 {
+                format!("Hienoa! {new_pairs} uutta paria")
+            } else {
+                "Hienoa!".to_owned()
+            },
             color: GOLD,
             seconds_left: BANNER_SECONDS,
         });
@@ -870,15 +888,16 @@ impl Game {
         });
     }
 
-    /// The pairs not currently on screen, including those of enemies still
-    /// waiting for a spell to hit them.
+    /// The unlocked pairs not currently on screen, including those of
+    /// enemies still waiting for a spell to hit them.
     fn available_pairs(&self) -> Vec<Pair> {
         let doomed = self.spells.iter().filter_map(|s| match &s.target {
             SpellTarget::Doomed(enemy) => Some(enemy),
             SpellTarget::Boss => None,
         });
         let on_screen: Vec<Pair> = self.enemies.iter().chain(doomed).map(|e| e.pair).collect();
-        PAIRS
+        self.curriculum
+            .unlocked()
             .iter()
             .filter(|p| !on_screen.contains(p))
             .copied()
@@ -895,7 +914,17 @@ impl Game {
         if available.is_empty() {
             return;
         }
-        let pair = available[rand::gen_range(0, available.len())];
+        let new: Vec<Pair> = available
+            .iter()
+            .filter(|p| self.curriculum.is_new(p))
+            .copied()
+            .collect();
+        let pool = if !new.is_empty() && rand::gen_range(0.0, 1.0) < NEW_PAIR_SHARE {
+            &new
+        } else {
+            &available
+        };
+        let pair = pool[rand::gen_range(0, pool.len())];
         let earlier = self.count_appearance(pair);
         let mut enemy = Enemy::new(pair, rand::gen_range(0, 2) == 0, earlier);
         enemy.pos = self.spawn_position(&enemy);
@@ -929,6 +958,8 @@ impl Game {
     pub fn draw(&self) {
         clear_background(BACKGROUND);
         let time = get_time() as f32;
+        // Under everything else, so monsters are never hidden behind it.
+        self.draw_new_pairs();
 
         for enemy in &self.enemies {
             enemy.draw_body(time, self.player);
@@ -1049,6 +1080,43 @@ impl Game {
         let (cx, bottom) = (screen_width() / 2.0, screen_height());
         if let Some(feedback) = &self.feedback {
             draw_centered_text(&feedback.text, cx, bottom - 30.0, 32, feedback.color);
+        }
+    }
+
+    /// Lists the pairs introduced on this level down the right edge. The
+    /// panel is gone once a level brings nothing new.
+    fn draw_new_pairs(&self) {
+        const WIDTH: f32 = 150.0;
+        const ROW: f32 = 24.0;
+        const FONT_SIZE: u16 = 22;
+        let new = self.curriculum.new_pairs();
+        if new.is_empty() {
+            return;
+        }
+        let x = screen_width() - WIDTH - 16.0;
+        let y = 100.0;
+        let height = 40.0 + ROW * new.len() as f32;
+        draw_rectangle(x, y, WIDTH, height, Color::new(0.0, 0.0, 0.0, 0.55));
+        draw_rectangle_lines(x, y, WIDTH, height, 2.0, GOLD);
+        draw_centered_text("Uudet parit", x + WIDTH / 2.0, y + 18.0, FONT_SIZE, GOLD);
+        for (i, pair) in new.iter().enumerate() {
+            let row_y = y + 44.0 + ROW * i as f32;
+            let number = measure_text(pair.number, None, FONT_SIZE, 1.0);
+            // Numbers are right-aligned so the words line up.
+            draw_text(
+                pair.number,
+                x + 40.0 - number.width,
+                row_y,
+                FONT_SIZE as f32,
+                WHITE,
+            );
+            draw_text(
+                pair.word.to_uppercase(),
+                x + 56.0,
+                row_y,
+                FONT_SIZE as f32,
+                LIME,
+            );
         }
     }
 

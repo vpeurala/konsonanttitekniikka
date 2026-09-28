@@ -1,4 +1,5 @@
 mod audio;
+mod curriculum;
 mod effects;
 mod game;
 mod keyboard;

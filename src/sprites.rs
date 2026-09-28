@@ -271,28 +271,135 @@ pub fn draw_cyclops(pos: Vec2, radius: f32, time: f32, phase: f32, look_at: Vec2
     }
 }
 
-const HORN: Color = Color::new(0.93, 0.88, 0.75, 1.0);
 const BOSS_AURA: Color = Color::new(0.7, 0.0, 0.15, 0.25);
+const BOSS_BODY: Color = Color::new(0.5, 0.03, 0.1, 1.0);
+const BOSS_EDGE: Color = Color::new(0.2, 0.0, 0.04, 1.0);
+const BOSS_WING: Color = Color::new(0.2, 0.02, 0.12, 0.95);
+const BOSS_BONE: Color = Color::new(0.08, 0.0, 0.04, 1.0);
+const BOSS_EYE: Color = Color::new(0.5, 1.0, 0.3, 1.0);
+const BOSS_EYE_GLOW: Color = Color::new(0.3, 1.0, 0.2, 0.3);
+const CROWN: Color = Color::new(1.0, 0.8, 0.15, 1.0);
+const CROWN_SHADE: Color = Color::new(0.75, 0.5, 0.05, 1.0);
+const JEWEL: Color = Color::new(0.9, 0.05, 0.2, 1.0);
 
-/// A big horned spiky monster in a pulsing red aura.
+/// The level boss: a crowned, three-eyed demon on flapping bat wings, in
+/// a pulsing red aura.
 pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
-    let pulse = 1.0 + 0.1 * ((time + phase) * 4.0).sin();
-    draw_circle(pos.x, pos.y, radius * 1.6 * pulse, BOSS_AURA);
+    let t = time + phase;
+    let r = radius;
+    // It hovers, bobbing up and down with its wingbeats.
+    let flap = (t * 6.0).sin();
+    let pos = pos + vec2(0.0, flap * r * 0.06);
+    let (x, y) = (pos.x, pos.y);
 
-    // Curved horns, drawn behind the body as two stacked triangles each.
-    for side in [-1.0, 1.0] {
-        let root = pos + vec2(side * radius * 0.45, -radius * 0.7);
-        let bend = root + vec2(side * radius * 0.45, -radius * 0.55);
-        let tip = bend + vec2(-side * radius * 0.05, -radius * 0.45);
-        let half = radius * 0.18;
-        draw_triangle(root - vec2(half, 0.0), root + vec2(half, 0.0), bend, HORN);
-        draw_triangle(
-            bend - vec2(half * 0.6, 0.0),
-            bend + vec2(half * 0.6, 0.0),
-            tip,
-            HORN,
-        );
+    let pulse = 1.0 + 0.1 * (t * 4.0).sin();
+    draw_circle(x, y, r * 1.7 * pulse, BOSS_AURA);
+    draw_ellipse(x, y + r * 1.25, r * 0.7, 5.0, 0.0, SHADOW);
+
+    // Bat wings: a fan of bony fingers with membrane between them.
+    for side in [-1.0f32, 1.0] {
+        let root = pos + vec2(side * r * 0.6, -r * 0.15);
+        let fingers = [(-0.9, 1.35), (-0.35, 1.55), (0.2, 1.15)];
+        let tips: Vec<Vec2> = fingers
+            .iter()
+            .map(|&(angle, length)| {
+                let angle = angle - flap * 0.35;
+                root + vec2(side * angle.cos(), angle.sin()) * r * length
+            })
+            .collect();
+        for pair in tips.windows(2) {
+            draw_triangle(root, pair[0], pair[1], BOSS_WING);
+        }
+        for tip in &tips {
+            draw_line(root.x, root.y, tip.x, tip.y, 2.5, BOSS_BONE);
+            draw_circle(tip.x, tip.y, 2.5, BOSS_BONE);
+        }
     }
 
-    draw_monster(pos, radius, time, phase);
+    // Body: a round, gently rippling mass.
+    const SEGMENTS: usize = 28;
+    let point = |i: usize, scale: f32| {
+        let angle = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
+        let ripple = 1.0 + 0.04 * (angle * 5.0 + t * 2.0).sin();
+        pos + Vec2::from_angle(angle) * r * ripple * scale
+    };
+    for (scale, color) in [(1.08, BOSS_EDGE), (1.0, BOSS_BODY)] {
+        for i in 0..SEGMENTS {
+            draw_triangle(pos, point(i, scale), point(i + 1, scale), color);
+        }
+    }
+
+    // A golden crown with five spikes and a jewel.
+    let band_w = r * 1.1;
+    let band_h = r * 0.24;
+    let band_top = y - r * 0.98;
+    const SPIKES: usize = 5;
+    let spike_w = band_w / SPIKES as f32;
+    for i in 0..SPIKES {
+        let left = x - band_w / 2.0 + i as f32 * spike_w;
+        let height = if i == SPIKES / 2 { r * 0.42 } else { r * 0.3 };
+        let tip = vec2(left + spike_w / 2.0, band_top - height);
+        draw_triangle(
+            vec2(left, band_top),
+            vec2(left + spike_w, band_top),
+            tip,
+            CROWN,
+        );
+        draw_circle(tip.x, tip.y, r * 0.05, CROWN);
+    }
+    draw_rectangle(x - band_w / 2.0, band_top, band_w, band_h, CROWN);
+    draw_rectangle(
+        x - band_w / 2.0,
+        band_top + band_h * 0.7,
+        band_w,
+        band_h * 0.3,
+        CROWN_SHADE,
+    );
+    draw_circle(x, band_top + band_h / 2.0, r * 0.09, JEWEL);
+
+    // Three glowing eyes: two below and one on the forehead.
+    let flicker = 0.85 + 0.15 * (t * 11.0).sin();
+    let eyes = [
+        (vec2(x - r * 0.38, y - r * 0.12), r * 0.17),
+        (vec2(x + r * 0.38, y - r * 0.12), r * 0.17),
+        (vec2(x, y - r * 0.5), r * 0.13),
+    ];
+    for (eye, size) in eyes {
+        draw_circle(eye.x, eye.y, size * 1.9, BOSS_EYE_GLOW);
+        draw_circle(
+            eye.x,
+            eye.y,
+            size,
+            Color {
+                a: flicker,
+                ..BOSS_EYE
+            },
+        );
+        draw_ellipse(eye.x, eye.y, size * 0.25, size * 0.85, 0.0, BLACK);
+    }
+
+    // A wide black maw with two long fangs and a row of small teeth.
+    let mouth_y = y + r * 0.42;
+    let mouth_w = r * 0.95;
+    draw_ellipse(x, mouth_y, mouth_w / 2.0, r * 0.2, 0.0, BLACK);
+    const TEETH: usize = 7;
+    let tooth_w = mouth_w * 0.7 / TEETH as f32;
+    for i in 0..TEETH {
+        let left = x - mouth_w * 0.35 + i as f32 * tooth_w;
+        draw_triangle(
+            vec2(left, mouth_y - r * 0.12),
+            vec2(left + tooth_w, mouth_y - r * 0.12),
+            vec2(left + tooth_w / 2.0, mouth_y),
+            WHITE,
+        );
+    }
+    for side in [-1.0, 1.0] {
+        let base = x + side * mouth_w * 0.32;
+        draw_triangle(
+            vec2(base - r * 0.07, mouth_y - r * 0.14),
+            vec2(base + r * 0.07, mouth_y - r * 0.14),
+            vec2(base, mouth_y + r * 0.35),
+            WHITE,
+        );
+    }
 }
