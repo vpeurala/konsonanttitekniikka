@@ -389,8 +389,7 @@ fn play(voice: Voice, freq: f32, seconds: f32) -> Vec<f32> {
             let level = if t < voice.attack {
                 t / voice.attack
             } else {
-                voice.sustain
-                    + (1.0 - voice.sustain) * (-(t - voice.attack) / voice.decay).exp()
+                voice.sustain + (1.0 - voice.sustain) * (-(t - voice.attack) / voice.decay).exp()
             };
             let released = if t < seconds {
                 1.0
@@ -502,7 +501,11 @@ pub fn music() -> Vec<f32> {
 
     let mut section_start = 0.0;
     for section in &SECTIONS {
-        let chords: Vec<Chord> = section.chords.split_whitespace().map(Chord::named).collect();
+        let chords: Vec<Chord> = section
+            .chords
+            .split_whitespace()
+            .map(Chord::named)
+            .collect();
         let chord_at = |beat: f32| chords[((beat / 4.0) as usize).min(chords.len() - 1)];
         let bar_count = chords.len();
 

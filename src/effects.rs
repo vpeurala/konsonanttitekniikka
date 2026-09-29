@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 
 use crate::rng::{Rng, Stream};
-use crate::view;
+use crate::view::View;
 
 const PARTICLES_PER_EXPLOSION: usize = 40;
 const RING_SECONDS: f32 = 0.35;
@@ -216,12 +216,12 @@ impl Effects {
 
     /// Whitens the whole screen right after a lightning strike. Drawn on
     /// top of everything else.
-    pub fn draw_flash(&self) {
+    pub fn draw_flash(&self, view: View) {
         if let Some(age) = self.lightning_age
             && age < FLASH_SECONDS
         {
             let alpha = 0.7 * (1.0 - age / FLASH_SECONDS).powi(2);
-            let screen = view::current().visible();
+            let screen = view.visible();
             draw_rectangle(
                 screen.x,
                 screen.y,

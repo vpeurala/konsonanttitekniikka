@@ -4,14 +4,15 @@
 
 use macroquad::prelude::*;
 
+use crate::fonts::draw_centered_text;
 use crate::fonts::{self, Style};
-use crate::game::draw_centered_text;
+use crate::frame::Frame;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
 use crate::pictures::draw_picture;
 use crate::save::SaveData;
 use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
 use crate::touch::Pointer;
-use crate::view::{self, ARENA_H, ARENA_W};
+use crate::view::{ARENA_H, ARENA_W, View};
 
 /// Pixels scrolled per second while an arrow key is held.
 const KEY_SCROLL_SPEED: f32 = 500.0;
@@ -91,14 +92,14 @@ impl TitleScreen {
         }
     }
 
-    pub fn update(&mut self, pointers: &[Pointer]) -> TitleAction {
-        if is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Space) {
+    pub fn update(&mut self, frame: &Frame, pointers: &[Pointer]) -> TitleAction {
+        if frame.pressed(KeyCode::Enter) || frame.pressed(KeyCode::Space) {
             return TitleAction::StartGame;
         }
-        if is_key_pressed(KeyCode::H) {
+        if frame.pressed(KeyCode::H) {
             return TitleAction::Practice;
         }
-        if is_key_pressed(KeyCode::E) {
+        if frame.pressed(KeyCode::E) {
             return TitleAction::Progress;
         }
         // Dragging scrolls the list; a tap on a menu button picks it.
@@ -134,28 +135,28 @@ impl TitleScreen {
             }
         }
 
-        let dt = get_frame_time();
+        let dt = frame.dt;
         let page = ARENA_H - FOOTER_HEIGHT;
-        if is_key_down(KeyCode::Down) {
+        if frame.down(KeyCode::Down) {
             self.scroll += KEY_SCROLL_SPEED * dt;
         }
-        if is_key_down(KeyCode::Up) {
+        if frame.down(KeyCode::Up) {
             self.scroll -= KEY_SCROLL_SPEED * dt;
         }
-        if is_key_pressed(KeyCode::PageDown) {
+        if frame.pressed(KeyCode::PageDown) {
             self.scroll += page * 0.9;
         }
-        if is_key_pressed(KeyCode::PageUp) {
+        if frame.pressed(KeyCode::PageUp) {
             self.scroll -= page * 0.9;
         }
-        if is_key_pressed(KeyCode::Home) {
+        if frame.pressed(KeyCode::Home) {
             self.scroll = 0.0;
         }
-        if is_key_pressed(KeyCode::End) {
+        if frame.pressed(KeyCode::End) {
             self.scroll = f32::INFINITY;
         }
         // The wheel reports how far the content should move down.
-        self.scroll -= mouse_wheel().1;
+        self.scroll -= frame.wheel;
 
         self.scroll = self.scroll.clamp(0.0, self.max_scroll());
         TitleAction::Stay
@@ -165,13 +166,13 @@ impl TitleScreen {
         (content_height() - (ARENA_H - FOOTER_HEIGHT)).max(0.0)
     }
 
-    pub fn draw(&self, progress: &SaveData) {
+    pub fn draw(&self, progress: &SaveData, view: View) {
         clear_background(BACKGROUND);
         let time = get_time() as f32;
         let cx = ARENA_W / 2.0;
         let mut y = 70.0 - self.scroll;
 
-        draw_logo(cx, y, time);
+        draw_logo(cx, y, time, view);
         y += 90.0;
         draw_cast(cx, y, time);
         y += 90.0;
@@ -260,7 +261,7 @@ const LOGO_SHINE: Color = Color::new(1.0, 0.97, 0.8, 1.0);
 /// The game's name as a logo: chunky letters with a dark outline and a
 /// drop shadow, an orange fill with a glossy golden top, bobbing in a
 /// gentle wave. Centered on (cx, y).
-fn draw_logo(cx: f32, y: f32, time: f32) {
+fn draw_logo(cx: f32, y: f32, time: f32, view: View) {
     let measure = |text: &str| fonts::measure(text, Style::Heading, LOGO_SIZE);
     let whole = measure(LOGO_TEXT);
     let left = cx - whole.width / 2.0;
@@ -300,6 +301,7 @@ fn draw_logo(cx: f32, y: f32, time: f32) {
     let top = baseline - whole.offset_y - 8.0;
     let gloss_bottom = baseline - x_height * 0.5;
     with_clip(
+        view,
         left - 10.0,
         top,
         whole.width + 20.0,
@@ -310,6 +312,7 @@ fn draw_logo(cx: f32, y: f32, time: f32) {
     );
     let shine_bottom = baseline - x_height * 0.85;
     with_clip(
+        view,
         left - 10.0,
         top,
         whole.width + 20.0,
@@ -321,10 +324,9 @@ fn draw_logo(cx: f32, y: f32, time: f32) {
 }
 
 /// Runs `draw` with drawing clipped to the given screen rectangle.
-fn with_clip(x: f32, y: f32, w: f32, h: f32, draw: impl FnOnce()) {
+fn with_clip(view: View, x: f32, y: f32, w: f32, h: f32, draw: impl FnOnce()) {
     // Clipping works in physical pixels, so convert from virtual units.
     let dpi = macroquad::miniquad::window::dpi_scale();
-    let view = view::current();
     let top_left = view.to_screen(vec2(x, y)) * dpi;
     let bottom_right = view.to_screen(vec2(x + w, y + h)) * dpi;
     let size = (bottom_right - top_left).max(Vec2::ZERO);

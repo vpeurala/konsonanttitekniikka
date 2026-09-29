@@ -24,10 +24,13 @@ code fits together, and pitfalls already found the hard way.
 
 ## Checking your work
 
-- `cargo test` and `cargo clippy --all-targets`, both warning-free.
-- For web changes also run `cargo clippy --target wasm32-unknown-unknown`.
-- GitHub Actions (`.github/workflows/rust.yml`) builds and tests every push on
-  Ubuntu; it installs ALSA, X11 and OpenGL libraries first.
+- `cargo test`, `cargo clippy --all-targets -- -D warnings` and
+  `cargo fmt --check`; CI runs all three, so keep them clean.
+- For web changes also run
+  `cargo clippy --target wasm32-unknown-unknown -- -D warnings`.
+- GitHub Actions (`.github/workflows/rust.yml`) checks formatting, lints (also
+  the web build) and tests every push on Ubuntu; it installs ALSA, X11 and
+  OpenGL libraries first.
 - To see a screen, temporarily make `main` draw it and call
   `get_screen_data().export_png(path)`, then restore `src/main.rs`. Put
   screenshots, rendered music and other scratch files outside the repository.
@@ -38,19 +41,43 @@ code fits together, and pitfalls already found the hard way.
 - A hidden browser preview pane gets frames only in bursts. The game reads a
   long gap between frames as the player being away and pauses itself,
   discarding that frame's keys, so keyboard tests there are unreliable.
-  Practice mode doesn't auto-pause.
+  Practice mode doesn't auto-pause. The browser tool's `type` action sends
+  no physical key codes, which the game reads; use its `key` action, one key
+  at a time.
 - The Android phone (a moto g15) is reached with `adb -d`, which picks the
   USB device even when emulators are listed.
 
 ## How the code fits together
 
-- `main.rs`: the screens (title, level choice, game, practice, progress),
-  saving, music and analytics events.
-- `game.rs`: the game itself. Monsters show a number or a word; typed digits
+**Pure core, impure shell.** Side effects live only in the outermost layer.
+`main.rs` is the shell: each frame it reads input into a `Frame`
+(`frame.rs`, the one place that asks the window and the clock), passes it
+to `App::update` (`app.rs`), performs the `Effect`s that come back (sounds,
+saving, statistics, quitting), and calls `App::draw`. Everything between is
+a pure state machine that takes input as arguments and reports what it
+wants done as return values, so it is tested by running made-up frames
+through it (see `src/app/tests.rs` and `src/game/tests.rs`). Keep it that
+way: don't call `is_key_pressed`, `get_frame_time`, `date::now` or measure
+text inside the core; add a field to `Frame` or `game::Input` instead.
+Drawing (`draw` methods, `game/render.rs`, sprites, pictures) reads state
+and never changes it.
+
+- `main.rs`: the shell, described above, and the `--render-*` commands.
+- `app.rs`: which screen is showing (title, level choice, game, practice,
+  progress), progress and saving, and the `Effect`s.
+- `frame.rs`: `Frame`, one frame of input, and `Inputs::read`, which makes
+  it.
+- `game/`: the game itself. Monsters show a number or a word; typed digits
   go to the number slot and letters to the word slot, each answering the
-  monsters showing the other kind. Backspace empties both slots. Reports
-  `GameEvent`s (started, level completed, game over) for saving and
-  analytics.
+  monsters showing the other kind. Backspace empties both slots.
+  `Game::update(&Input) -> Outputs` is the only way in; `Outputs` carry
+  sound effects and `GameEvent`s (started, level completed, game over) for
+  saving and analytics. A frame is advanced in steps of at most 1/30 s and
+  never more than 0.25 s in all, so a slow frame can't skip past a hit.
+  Text width is injected (`TextWidth`), because only the shell knows the
+  loaded font. Split into `rules.rs` (numbers and pure rules), `answer.rs`
+  (matching what was typed), `enemy.rs`, `spawn.rs`, `combat.rs` (spells,
+  collisions, movement) and `render.rs` (the only file that draws).
 - `pairs.rs`: the 110 pairs and which characters count as answers.
 - `curriculum.rs`: which pairs each level introduces. Level 1 has 0–9, every
   later level adds 5, so all 110 are met by level 21.
@@ -77,7 +104,8 @@ code fits together, and pitfalls already found the hard way.
   Ä and Ö work on any layout.
 - `view.rs`: a fixed 800×600 virtual arena, scaled to fit the window. In touch
   mode the content also includes the keypad panels at negative x and beyond
-  800.
+  800. `View::fit` is pure; `view::begin` sets the camera and is for
+  drawing only.
 - `rng.rs`: seeded randomness in separate streams, so every game introduces
   the same pairs in the same order.
 - `audio.rs`, `music.rs`: all sounds are synthesized at startup. The music is
@@ -85,7 +113,8 @@ code fits together, and pitfalls already found the hard way.
 - `pictures.rs`, `sprites.rs`, `effects.rs`, `obstacles.rs`, `portals.rs`,
   `icon.rs`: everything drawn is code; there are no image assets besides the
   fonts in `assets/`.
-- `lifecycle.rs`: notices when the app was away, so the game pauses itself.
+- `lifecycle.rs`: notices when the app was away, so the game pauses itself
+  (`Frame::away`).
 - `web.rs`, `analytics.rs`: the browser version's link to the page.
 
 ## Platforms

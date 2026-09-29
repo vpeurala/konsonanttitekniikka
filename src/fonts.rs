@@ -79,3 +79,13 @@ pub fn draw_centered(text: &str, x: f32, y: f32, size: u16, color: Color, style:
         style,
     );
 }
+
+/// Draws ordinary text centered on (x, y).
+pub fn draw_centered_text(text: &str, x: f32, y: f32, size: u16, color: Color) {
+    draw_centered(text, x, y, size, color, Style::Body);
+}
+
+/// The width of `text` in bold, the font of the game's labels.
+pub fn bold_width(text: &str, size: u16) -> f32 {
+    measure(text, Style::Bold, size).width
+}

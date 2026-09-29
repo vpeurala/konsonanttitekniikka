@@ -3,8 +3,9 @@
 
 use macroquad::prelude::*;
 
+use crate::fonts::draw_centered_text;
 use crate::fonts::{self, Style};
-use crate::game::draw_centered_text;
+use crate::frame::Frame;
 use crate::memory::Memory;
 use crate::pairs::{PAIRS, Pair};
 use crate::save::SaveData;
@@ -59,13 +60,13 @@ pub struct ProgressScreen;
 
 impl ProgressScreen {
     /// Returns true when the player wants to go back to the title.
-    pub fn update(&mut self, pointers: &[Pointer]) -> bool {
+    pub fn update(&mut self, frame: &Frame, pointers: &[Pointer]) -> bool {
         let tapped = pointers.iter().any(|p| p.phase == TouchPhase::Ended);
         tapped
-            || is_key_pressed(KeyCode::Escape)
-            || is_key_pressed(KeyCode::Enter)
-            || is_key_pressed(KeyCode::Space)
-            || is_key_pressed(KeyCode::Backspace)
+            || frame.pressed(KeyCode::Escape)
+            || frame.pressed(KeyCode::Enter)
+            || frame.pressed(KeyCode::Space)
+            || frame.pressed(KeyCode::Backspace)
     }
 
     pub fn draw(&self, data: &SaveData, touch: bool) {

@@ -6,8 +6,10 @@ use macroquad::prelude::*;
 
 use crate::audio::Sfx;
 use crate::curriculum::Curriculum;
+use crate::fonts::draw_centered_text;
 use crate::fonts::{self, Style};
-use crate::game::{InputOutcome, draw_centered_text, resolve_input};
+use crate::frame::Frame;
+use crate::game::{InputOutcome, resolve_input};
 use crate::keyboard::Key;
 use crate::memory::Memory;
 use crate::pairs::{self, Pair};
@@ -68,7 +70,7 @@ pub struct PracticeScreen {
 
 impl PracticeScreen {
     /// Practice with the pairs unlocked up to `best_level`.
-    pub fn new(best_level: u32, memory: &Memory, touch: bool) -> Self {
+    pub fn new(best_level: u32, memory: &Memory, touch: bool, now: f64) -> Self {
         let pool = unlocked_pairs(best_level);
         let mut screen = PracticeScreen {
             pair: pool[0],
@@ -84,12 +86,11 @@ impl PracticeScreen {
             sfx: Vec::new(),
             touch,
         };
-        screen.next_card(memory);
+        screen.next_card(memory, now);
         screen
     }
 
-    fn next_card(&mut self, memory: &Memory) {
-        let now = macroquad::miniquad::date::now();
+    fn next_card(&mut self, memory: &Memory, now: f64) {
         let previous = self.pair;
         // Weighted like the game: hard and overdue pairs come up more, and
         // never the same pair twice in a row when there is a choice.
@@ -126,26 +127,27 @@ impl PracticeScreen {
     /// whether the player asked to go back.
     pub fn update(
         &mut self,
+        frame: &Frame,
         keys: &[Key],
         taps: usize,
         back: bool,
-        dt: f32,
         memory: &mut Memory,
     ) -> PracticeAction {
-        if back || is_key_pressed(KeyCode::Escape) {
+        if back || frame.pressed(KeyCode::Escape) {
             return PracticeAction::Back;
         }
+        let (dt, now) = (frame.dt, frame.now);
         self.shown_for += dt;
-        let skip = taps > 0 || is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter);
+        let skip = taps > 0 || frame.any_pressed(&[KeyCode::Space, KeyCode::Enter]);
 
         match self.state {
             State::Asking => {
                 if skip {
-                    self.reveal(memory);
+                    self.reveal(memory, now);
                     return PracticeAction::Stay;
                 }
                 for &key in keys {
-                    self.type_key(key, memory);
+                    self.type_key(key, memory, now);
                     if self.state != State::Asking {
                         break;
                     }
@@ -154,7 +156,7 @@ impl PracticeScreen {
             State::Correct(seconds) | State::Revealed(seconds) => {
                 let left = seconds - dt;
                 if left <= 0.0 || skip {
-                    self.next_card(memory);
+                    self.next_card(memory, now);
                 } else if let State::Correct(_) = self.state {
                     self.state = State::Correct(left);
                 } else {
@@ -165,7 +167,7 @@ impl PracticeScreen {
         PracticeAction::Stay
     }
 
-    fn type_key(&mut self, key: Key, memory: &mut Memory) {
+    fn type_key(&mut self, key: Key, memory: &mut Memory, now: f64) {
         let wants_digits = self.shows_word;
         match key {
             Key::Backspace => {
@@ -178,14 +180,13 @@ impl PracticeScreen {
                 let answer = self.answer();
                 match resolve_input(&self.typed, [answer.as_str()]) {
                     InputOutcome::Hit(_) => {
-                        let now = macroquad::miniquad::date::now();
                         memory.record_answer(self.pair, self.shown_for, self.hint, now);
                         self.correct += 1;
                         self.answered += 1;
                         self.state = State::Correct(CORRECT_SECONDS);
                         self.sfx.push(Sfx::Cast);
                     }
-                    InputOutcome::DeadEnd => self.reveal(memory),
+                    InputOutcome::DeadEnd => self.reveal(memory, now),
                     InputOutcome::Pending => {}
                 }
             }
@@ -194,8 +195,8 @@ impl PracticeScreen {
     }
 
     /// Shows the answer after a wrong answer or giving up.
-    fn reveal(&mut self, memory: &mut Memory) {
-        memory.record_miss(self.pair, macroquad::miniquad::date::now());
+    fn reveal(&mut self, memory: &mut Memory, now: f64) {
+        memory.record_miss(self.pair, now);
         self.answered += 1;
         self.state = State::Revealed(REVEALED_SECONDS);
         self.sfx.push(Sfx::Wrong);

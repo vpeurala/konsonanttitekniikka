@@ -10,7 +10,7 @@ use macroquad::prelude::*;
 use crate::fonts::{self, Style};
 use crate::keyboard::Key;
 use crate::pairs::{DIGIT_CONSONANTS, VOWELS, is_answer_char};
-use crate::view::{ARENA_H, ARENA_W, View};
+use crate::view::{ARENA_H, ARENA_W};
 
 /// A key's size, and the gaps around keys and panel edges.
 const KEY: f32 = 60.0;
@@ -45,7 +45,7 @@ pub fn enabled() -> bool {
         || std::env::var_os("LUKULOITSU_TOUCH").is_some()
 }
 
-/// A finger or the mouse, in virtual units.
+/// A finger or the mouse.
 #[derive(Debug, Clone, Copy)]
 pub struct Pointer {
     pub id: u64,
@@ -80,22 +80,23 @@ impl TouchReader {
     }
 
     /// The touches since the previous call, in order, and the mouse acting
-    /// as one more finger. Must be called every frame.
-    pub fn pointers(&self, view: &View) -> Vec<Pointer> {
+    /// as one more finger, at positions in screen points. Must be called
+    /// every frame.
+    pub fn read(&self) -> Vec<Pointer> {
         let mut collector = TouchCollector(Vec::new());
         repeat_all_miniquad_input(&mut collector, self.subscriber);
-        // Touches arrive in physical pixels; the view works in points.
+        // Touches arrive in physical pixels.
         let dpi = miniquad::window::dpi_scale();
         let mut pointers: Vec<Pointer> = collector
             .0
             .into_iter()
             .map(|(phase, id, pos)| Pointer {
                 id,
-                pos: view.to_virtual(pos / dpi),
+                pos: pos / dpi,
                 phase,
             })
             .collect();
-        pointers.extend(mouse_pointer(view));
+        pointers.extend(mouse_pointer());
         pointers
     }
 }
@@ -103,7 +104,7 @@ impl TouchReader {
 /// The mouse as a finger, for trying touch controls on a computer. A
 /// click quick enough to press and release within one frame, as a
 /// browser's synthetic clicks are, still counts as both.
-fn mouse_pointer(view: &View) -> Vec<Pointer> {
+fn mouse_pointer() -> Vec<Pointer> {
     let pressed = is_mouse_button_pressed(MouseButton::Left);
     let released = is_mouse_button_released(MouseButton::Left);
     let phases = match (pressed, released) {
@@ -113,7 +114,7 @@ fn mouse_pointer(view: &View) -> Vec<Pointer> {
         _ if is_mouse_button_down(MouseButton::Left) => vec![TouchPhase::Moved],
         _ => Vec::new(),
     };
-    let pos = view.to_virtual(mouse_position().into());
+    let pos = Vec2::from(mouse_position());
     phases
         .into_iter()
         .map(|phase| Pointer {

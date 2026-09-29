@@ -101,14 +101,6 @@ impl Audio {
     pub fn set_music_on(&mut self, on: bool) {
         self.music_on = on;
     }
-
-    pub fn music_on(&self) -> bool {
-        self.music_on
-    }
-
-    pub fn toggle_music(&mut self) {
-        self.music_on = !self.music_on;
-    }
 }
 
 async fn load(samples: &[f32]) -> Sound {

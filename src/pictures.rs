@@ -1083,7 +1083,14 @@ fn muumio(c: &Canvas, time: f32) {
         }
         c.circle(hx, hy, 0.09, wrap);
         for finger in [-0.06, 0.0, 0.06] {
-            c.line(hx, hy + finger, hx + 0.12 * side, hy + finger * 1.5, 0.035, wrap);
+            c.line(
+                hx,
+                hy + finger,
+                hx + 0.12 * side,
+                hy + finger * 1.5,
+                0.035,
+                wrap,
+            );
         }
     }
 
@@ -1104,7 +1111,14 @@ fn muumio(c: &Canvas, time: f32) {
     c.ellipse(hx, hy, rx, ry, 0.0, wrap);
     for dy in [-0.17f32, -0.08, 0.1, 0.19] {
         let half = rx * (1.0 - (dy / ry).powi(2)).max(0.0).sqrt();
-        c.line(hx - half, hy + dy - 0.02, hx + half, hy + dy + 0.02, 0.022, seam);
+        c.line(
+            hx - half,
+            hy + dy - 0.02,
+            hx + half,
+            hy + dy + 0.02,
+            0.022,
+            seam,
+        );
     }
     c.rect(hx - 0.18, hy - 0.05, 0.36, 0.09, gap);
     // Eyes that glow and dim.

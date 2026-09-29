@@ -4,8 +4,9 @@
 
 use macroquad::prelude::*;
 
+use crate::fonts::draw_centered_text;
 use crate::fonts::{self, Style};
-use crate::game::draw_centered_text;
+use crate::frame::Frame;
 use crate::long_numbers::first_long_level;
 use crate::practice::unlocked_pairs;
 use crate::touch::Pointer;
@@ -94,24 +95,24 @@ impl LevelSelect {
         )
     }
 
-    pub fn update(&mut self, pointers: &[Pointer]) -> LevelAction {
-        if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Backspace) {
+    pub fn update(&mut self, frame: &Frame, pointers: &[Pointer]) -> LevelAction {
+        if frame.pressed(KeyCode::Escape) || frame.pressed(KeyCode::Backspace) {
             return LevelAction::Back;
         }
-        if is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Space) {
+        if frame.pressed(KeyCode::Enter) || frame.pressed(KeyCode::Space) {
             return LevelAction::Start(self.levels[self.selected]);
         }
         let last = self.levels.len() - 1;
-        if is_key_pressed(KeyCode::Left) {
+        if frame.pressed(KeyCode::Left) {
             self.selected = self.selected.saturating_sub(1);
         }
-        if is_key_pressed(KeyCode::Right) {
+        if frame.pressed(KeyCode::Right) {
             self.selected = (self.selected + 1).min(last);
         }
-        if is_key_pressed(KeyCode::Up) {
+        if frame.pressed(KeyCode::Up) {
             self.selected = self.selected.saturating_sub(COLUMNS);
         }
-        if is_key_pressed(KeyCode::Down) && self.selected + COLUMNS <= last {
+        if frame.pressed(KeyCode::Down) && self.selected + COLUMNS <= last {
             self.selected += COLUMNS;
         }
         let Some(tap) = pointers.iter().find(|p| p.phase == TouchPhase::Ended) else {

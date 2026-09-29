@@ -19,7 +19,14 @@ jobs:
     # macroquad's audio and window code needs these Linux libraries.
     - name: Install system libraries
       run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev
-    - name: Build
-      run: cargo build --verbose
+    - name: Check formatting
+      run: cargo fmt --check
+    - name: Lint
+      run: cargo clippy --all-targets -- -D warnings
+    # The web build is the game's main home, so it is linted too.
+    - name: Lint the web build
+      run: |
+        rustup target add wasm32-unknown-unknown
+        cargo clippy --target wasm32-unknown-unknown -- -D warnings
     - name: Run tests
       run: cargo test --verbose

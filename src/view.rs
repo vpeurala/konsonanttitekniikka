@@ -4,8 +4,6 @@
 //! without distorting it, centering it with empty bands where the aspect
 //! ratios differ.
 
-use std::sync::Mutex;
-
 use macroquad::prelude::*;
 
 pub const ARENA_W: f32 = 800.0;
@@ -18,9 +16,24 @@ pub struct View {
     origin: Vec2,
     /// Screen points per virtual unit.
     scale: f32,
+    /// The size of the screen, in screen points.
+    screen: Vec2,
 }
 
 impl View {
+    /// The view that scales `content`, a rectangle in virtual units, to
+    /// fit a screen of the given size and centers it.
+    pub fn fit(content: Rect, screen: Vec2) -> View {
+        let scale = (screen.x / content.w).min(screen.y / content.h);
+        let visible = screen / scale;
+        let origin = content.point() - (visible - content.size()) / 2.0;
+        View {
+            origin,
+            scale,
+            screen,
+        }
+    }
+
     pub fn to_virtual(self, screen: Vec2) -> Vec2 {
         screen / self.scale + self.origin
     }
@@ -32,37 +45,31 @@ impl View {
     /// Everything visible on screen, in virtual units, including the bands
     /// around the content.
     pub fn visible(self) -> Rect {
-        let size = vec2(screen_width(), screen_height()) / self.scale;
+        let size = self.screen / self.scale;
         Rect::new(self.origin.x, self.origin.y, size.x, size.y)
     }
 }
 
-static CURRENT: Mutex<Option<View>> = Mutex::new(None);
-
 /// Starts drawing `content`, a rectangle in virtual units, scaled to fit
 /// and centered on the screen. Returns the mapping for this frame.
 pub fn begin(content: Rect) -> View {
-    let screen = vec2(screen_width(), screen_height());
-    let scale = (screen.x / content.w).min(screen.y / content.h);
-    let visible = screen / scale;
-    let origin = content.point() - (visible - content.size()) / 2.0;
+    let view = View::fit(content, vec2(screen_width(), screen_height()));
+    let visible = view.visible();
     // Like `Camera2D::from_display_rect`, but with y pointing down, as on
     // the screen.
     set_camera(&Camera2D {
-        target: origin + visible / 2.0,
-        zoom: vec2(2.0 / visible.x, 2.0 / visible.y),
+        target: visible.center(),
+        zoom: vec2(2.0 / visible.w, 2.0 / visible.h),
         ..Default::default()
     });
-    let view = View { origin, scale };
-    *CURRENT.lock().unwrap() = Some(view);
     view
 }
 
 /// Paints over everything outside the content, so things partly off the
 /// arena, like monsters coming in from an edge, don't show in the bands
 /// around it.
-pub fn mask_outside(content: Rect, color: Color) {
-    let screen = current().visible();
+pub fn mask_outside(view: View, content: Rect, color: Color) {
+    let screen = view.visible();
     let (left, top) = (screen.x, screen.y);
     let (right, bottom) = (screen.x + screen.w, screen.y + screen.h);
     let (c_left, c_top) = (content.x, content.y);
@@ -73,35 +80,19 @@ pub fn mask_outside(content: Rect, color: Color) {
     draw_rectangle(c_right, c_top, right - c_right, content.h, color);
 }
 
-/// The view set up by the latest `begin`.
-pub fn current() -> View {
-    CURRENT
-        .lock()
-        .unwrap()
-        .expect("view::begin should run first")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn view(screen: Vec2, content: Vec2) -> View {
-        let scale = (screen.x / content.x).min(screen.y / content.y);
-        View {
-            origin: -(screen / scale - content) / 2.0,
-            scale,
-        }
+        View::fit(Rect::new(0.0, 0.0, content.x, content.y), screen)
     }
 
     #[test]
     fn content_left_of_zero_is_centered_too() {
-        // As `begin` computes it, for content spanning -100..700.
+        // Content spanning -100..700.
         let content = Rect::new(-100.0, 0.0, 800.0, 600.0);
-        let screen = vec2(1600.0, 600.0);
-        let scale = (screen.x / content.w).min(screen.y / content.h);
-        let visible = screen / scale;
-        let origin = content.point() - (visible - content.size()) / 2.0;
-        let v = View { origin, scale };
+        let v = View::fit(content, vec2(1600.0, 600.0));
         let left = v.to_virtual(vec2(0.0, 0.0)).x;
         let right = v.to_virtual(vec2(1600.0, 0.0)).x;
         assert!(((-100.0 - left) - (right - 700.0)).abs() < 0.001);
@@ -128,5 +119,14 @@ mod tests {
         let v = view(vec2(844.0, 390.0), vec2(1130.0, 600.0));
         let p = vec2(300.0, 200.0);
         assert!(v.to_screen(v.to_virtual(p)).distance(p) < 0.001);
+    }
+
+    #[test]
+    fn the_visible_area_covers_the_content_and_the_bands() {
+        let v = view(vec2(1600.0, 600.0), vec2(800.0, 600.0));
+        let visible = v.visible();
+        assert!((visible.w - 1600.0).abs() < 0.001);
+        assert!((visible.h - 600.0).abs() < 0.001);
+        assert!(visible.x < 0.0, "there are bands on both sides");
     }
 }

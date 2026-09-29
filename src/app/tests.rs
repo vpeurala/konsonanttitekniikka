@@ -1,0 +1,261 @@
+//! Running the whole app frame by frame, with made-up input.
+
+use super::*;
+use macroquad::prelude::vec2;
+
+const START: f64 = 1_800_000_000.0;
+const FRAME: f32 = 1.0 / 60.0;
+
+fn width(text: &str, size: u16) -> f32 {
+    text.chars().count() as f32 * f32::from(size)
+}
+
+fn app_with(progress: SaveData, can_quit: bool) -> App {
+    App::new(progress, false, can_quit, width, START)
+}
+
+fn app() -> App {
+    app_with(SaveData::default(), true)
+}
+
+/// A player who has reached `level`, so there are levels to choose from.
+fn veteran(level: u32) -> App {
+    app_with(
+        SaveData {
+            best_level: level,
+            ..SaveData::default()
+        },
+        true,
+    )
+}
+
+fn frame() -> Frame {
+    Frame {
+        dt: FRAME,
+        now: START,
+        screen: vec2(800.0, 600.0),
+        ..Frame::default()
+    }
+}
+
+fn press(key: KeyCode) -> Frame {
+    Frame {
+        pressed: vec![key],
+        ..frame()
+    }
+}
+
+/// Plays `seconds` of quiet frames, starting at `from`, returning the
+/// effects.
+fn idle(app: &mut App, from: f64, seconds: f32) -> Vec<Effect> {
+    let mut effects = Vec::new();
+    for i in 0..(seconds / FRAME).round() as usize {
+        effects.extend(app.update(&Frame {
+            now: from + f64::from(i as f32 * FRAME),
+            ..frame()
+        }));
+    }
+    effects
+}
+
+fn counted(effects: &[Effect]) -> Vec<&str> {
+    effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::Count { path, .. } => Some(path.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn saves(effects: &[Effect]) -> usize {
+    effects
+        .iter()
+        .filter(|e| matches!(e, Effect::Save(_)))
+        .count()
+}
+
+fn on_title(app: &App) -> bool {
+    matches!(app.screen, Screen::Title)
+}
+
+#[test]
+fn the_app_starts_at_the_title_screen_with_music_wanted() {
+    let app = app();
+    assert!(on_title(&app));
+    assert!(app.wants_music());
+    assert!(app.music_on());
+}
+
+#[test]
+fn a_new_player_goes_straight_into_a_game() {
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    assert!(matches!(app.screen, Screen::Game(_)));
+    let effects = idle(&mut app, START, 0.1);
+    assert_eq!(counted(&effects), vec!["peli-alkoi/taso-1"]);
+}
+
+#[test]
+fn a_returning_player_chooses_the_level_first() {
+    let mut app = veteran(12);
+    app.update(&press(KeyCode::Enter));
+    assert!(matches!(app.screen, Screen::Levels(_)));
+    app.update(&press(KeyCode::Enter));
+    assert!(matches!(app.screen, Screen::Game(_)));
+}
+
+#[test]
+fn escape_goes_back_from_the_level_choice() {
+    let mut app = veteran(12);
+    app.update(&press(KeyCode::Enter));
+    app.update(&press(KeyCode::Escape));
+    assert!(on_title(&app));
+}
+
+#[test]
+fn escape_quits_from_the_title_screen_only_where_apps_can_quit() {
+    assert!(
+        app()
+            .update(&press(KeyCode::Escape))
+            .contains(&Effect::Quit)
+    );
+    let mut web = app_with(SaveData::default(), false);
+    assert!(!web.update(&press(KeyCode::Escape)).contains(&Effect::Quit));
+}
+
+#[test]
+fn escape_leaves_a_game_for_the_title_and_saves() {
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    let effects = app.update(&press(KeyCode::Escape));
+    assert!(on_title(&app));
+    assert_eq!(saves(&effects), 1);
+    assert!(
+        !effects.contains(&Effect::Quit),
+        "Esc in a game doesn't quit"
+    );
+}
+
+#[test]
+fn practice_is_counted_and_left_with_a_save() {
+    let mut app = app();
+    let effects = app.update(&press(KeyCode::H));
+    assert!(matches!(app.screen, Screen::Practice(_)));
+    assert_eq!(counted(&effects), vec!["harjoittelu"]);
+    let effects = app.update(&press(KeyCode::Escape));
+    assert!(on_title(&app));
+    assert_eq!(saves(&effects), 1);
+}
+
+#[test]
+fn the_progress_screen_is_counted_and_left_with_a_key() {
+    let mut app = app();
+    let effects = app.update(&press(KeyCode::E));
+    assert!(matches!(app.screen, Screen::Progress(_)));
+    assert_eq!(counted(&effects), vec!["edistyminen"]);
+    app.update(&press(KeyCode::Escape));
+    assert!(on_title(&app));
+}
+
+#[test]
+fn tab_switches_the_music_and_saves_the_choice() {
+    let mut app = app();
+    let effects = app.update(&press(KeyCode::Tab));
+    assert!(!app.music_on());
+    let saved = effects.iter().find_map(|e| match e {
+        Effect::Save(data) => Some(data),
+        _ => None,
+    });
+    assert_eq!(saved.map(|d| d.music_on), Some(false));
+    app.update(&press(KeyCode::Tab));
+    assert!(app.music_on());
+}
+
+#[test]
+fn a_game_wants_music_only_while_it_is_going() {
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    idle(&mut app, START, 0.1);
+    assert!(app.wants_music());
+    app.update(&press(KeyCode::Space));
+    assert!(!app.wants_music(), "paused");
+    app.update(&press(KeyCode::Space));
+    assert!(app.wants_music());
+    app.update(&Frame {
+        away: true,
+        ..frame()
+    });
+    assert!(!app.wants_music(), "coming back from away pauses");
+}
+
+#[test]
+fn a_game_is_saved_now_and_then_but_not_every_frame() {
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    let quiet = idle(&mut app, START + 0.1, 4.0);
+    assert_eq!(saves(&quiet), 0);
+    let later = idle(&mut app, START + 5.5, 1.0);
+    assert_eq!(saves(&later), 1);
+    let soon_after = idle(&mut app, START + 6.6, 1.0);
+    assert_eq!(saves(&soon_after), 0);
+}
+
+#[test]
+fn a_finished_level_is_counted_remembered_and_saved() {
+    let mut progress = SaveData::default();
+    let mut effects = Vec::new();
+    let worth_saving = record_event(
+        &mut progress,
+        GameEvent::LevelCompleted { level: 1, stars: 2 },
+        &mut effects,
+    );
+    assert!(worth_saving);
+    assert_eq!(counted(&effects), vec!["taso-lapaisty/1"]);
+    assert_eq!(progress.stars.get(&1), Some(&2));
+    assert!(progress.best_level >= 2);
+}
+
+#[test]
+fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
+    let mut progress = SaveData::default();
+    let mut effects = Vec::new();
+    assert!(!record_event(
+        &mut progress,
+        GameEvent::Started { level: 5 },
+        &mut effects
+    ));
+    assert!(!record_event(
+        &mut progress,
+        GameEvent::Over { level: 7 },
+        &mut effects
+    ));
+    assert_eq!(
+        counted(&effects),
+        vec!["peli-alkoi/taso-5", "peli-paattyi/taso-7"]
+    );
+    assert_eq!(progress, SaveData::default());
+}
+
+#[test]
+fn sound_effects_are_passed_on() {
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    // Typing with nothing on screen makes a click.
+    let effects = app.update(&Frame {
+        typed: vec![crate::keyboard::Key::Char('1')],
+        ..frame()
+    });
+    assert!(effects.contains(&Effect::Play(Sfx::Type)));
+}
+
+#[test]
+fn the_same_frames_give_the_same_effects() {
+    let run = || {
+        let mut app = app();
+        let mut all = app.update(&press(KeyCode::Enter));
+        all.extend(idle(&mut app, START, 3.0));
+        format!("{all:?}")
+    };
+    assert_eq!(run(), run());
+}
