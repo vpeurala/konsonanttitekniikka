@@ -50,7 +50,7 @@ jobs:
         cargo llvm-cov --lcov --output-path lcov.info
         --ignore-filename-regex 'src/(main|fonts|icon|pictures|sprites|analytics)\.rs|src/game/render\.rs|src/booklet/images\.rs'
     - name: Upload to Codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
       with:
         files: lcov.info
         token: ${{ secrets.CODECOV_TOKEN }}
