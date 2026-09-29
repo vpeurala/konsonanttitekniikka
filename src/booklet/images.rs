@@ -41,7 +41,7 @@ fn render(size: u32, world: f32, draw: impl FnOnce()) -> Vec<u8> {
             &flipped,
             u32::from(image.width),
             u32::from(image.height),
-            image::ColorType::Rgba8,
+            image::ExtendedColorType::Rgba8,
         )
         .expect("a picture should encode as PNG");
     png

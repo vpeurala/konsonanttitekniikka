@@ -9,7 +9,8 @@ homepage = "https://lukuloitsu.fi"
 
 [dependencies]
 macroquad = { version = "0.4.16", features = ["audio"] }
-# Already a dependency of macroquad; the booklet uses it to encode pictures.
+# The booklet uses it to encode pictures. macroquad has its own, older copy,
+# so the two are built side by side (about 1% more web download).
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 # Optimize dependencies even in debug builds so the game runs smoothly,
