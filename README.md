@@ -18,6 +18,8 @@ for Windows from the [releases](https://github.com/vpeurala/lukuloitsu.fi/releas
 (where the printable PDF booklet is too), or build it for macOS, Android or iOS.
 The game itself is in Finnish.
 
+![The title screen](docs/screenshots/title.png)
+
 ## The idea
 
 Every digit stands for one consonant:
@@ -47,6 +49,11 @@ odd digit left over at the end: 201 is KOHO JÄÄ, and 1377 is JOULU SUSI.
 Pairs you know less well come up more often, and every pair comes back when it
 is due for review (spaced repetition). Progress is saved on the device, or in
 the browser's local storage on the web.
+
+| | |
+|---|---|
+| ![Playing a level](docs/screenshots/game.png) | ![The progress map](docs/screenshots/progress.png) |
+| Playing: type the matching word or number to cast a spell. | The progress map: every pair coloured by how well you know it. |
 
 On a computer you type on the keyboard (Ä and Ö work on any keyboard layout)
 and move with the arrow keys. On a phone or tablet the game shows an on-screen
@@ -97,7 +104,10 @@ slightly patched copy of its platform layer, miniquad, is in `vendor/`; see
 Every push to `main` is built and tested by GitHub Actions and published to
 lukuloitsu.fi by Netlify. The site counts visits and game events anonymously,
 without cookies, with [GoatCounter](https://www.goatcounter.com); the apps send
-nothing.
+nothing. The game says so itself at the end of its title screen, and
+[web/tietosuoja.html](web/tietosuoja.html) (lukuloitsu.fi/tietosuoja) tells
+it in more detail, in Finnish. Dependencies are kept fresh by Dependabot and
+checked against the RustSec advisory database by `cargo audit` in CI.
 
 Made by Ville Peurala.
 

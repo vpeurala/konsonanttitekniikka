@@ -39,6 +39,15 @@ const EXPLANATION_AFTER_TABLE: &[&str] = &[
     "ennen kuin hirviö saa sinut kiinni! Liiku nuolinäppäimillä.",
 ];
 
+/// The last thing on the screen: what the game does and doesn't do with
+/// the player's information. The page has the details.
+const PRIVACY_NOTE: &[&str] = &[
+    "Peli ei käytä evästeitä eikä kysy nimeäsi tai muita tietoja.",
+    "Edistymisesi tallentuu vain omalle laitteellesi.",
+    "Verkkosivu laskee nimettömästi käyntejä ja pelitapahtumia.",
+    "Lisää: lukuloitsu.fi/tietosuoja",
+];
+
 /// A finger movement shorter than this is a tap, not a drag.
 const TAP_SLOP: f32 = 12.0;
 
@@ -200,6 +209,15 @@ impl TitleScreen {
         fonts::draw_centered("Kaikki parit", cx, y, 36, TITLE_COLOR, Style::Heading);
         y += 40.0;
         draw_pair_table(y, time);
+        y += PAIR_ROW_HEIGHT * pair_rows().len() as f32;
+
+        y += 30.0;
+        fonts::draw_centered("Tietosuoja", cx, y, 28, TITLE_COLOR, Style::Heading);
+        y += 40.0;
+        for line in PRIVACY_NOTE {
+            draw_text(line, SIDE_MARGIN, y, 20.0, DIM);
+            y += 28.0;
+        }
 
         self.draw_scrollbar();
         draw_footer(self.touch);
@@ -447,6 +465,9 @@ fn content_height() -> f32 {
         + 30.0
         + 40.0
         + PAIR_ROW_HEIGHT * pair_rows().len() as f32
+        + 30.0
+        + 40.0
+        + 28.0 * PRIVACY_NOTE.len() as f32
         + 20.0
 }
 

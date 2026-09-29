@@ -57,6 +57,10 @@ code fits together, and pitfalls already found the hard way.
   Practice mode doesn't auto-pause. The browser tool's `type` action sends
   no physical key codes, which the game reads; use its `key` action, one key
   at a time.
+- `.github/workflows/audit.yml` runs `cargo audit` on Cargo.lock changes and
+  weekly; Dependabot (`.github/dependabot.yml`) opens update pull requests.
+  Two advisories are known and only warn (ttf-parser is unmaintained,
+  macroquad has soundness notes); a real vulnerability fails the job.
 - The Android phone (a moto g15) is reached with `adb -d`, which picks the
   USB device even when emulators are listed.
 
@@ -181,6 +185,12 @@ so it can be tested without a screen; do the same for new layouts.
   reports code 39 (not 222, which miniquad doesn't know), and its quad_net
   plugin declares a variable strict mode requires. Keep those fixes if the
   bundle is ever replaced.
+- `web/tietosuoja.html` is the privacy page (Finnish) and `web/og.png` the
+  preview image for shared links (1200×630, a crop of the title screen; the
+  `og:` tags in `index.html` point at lukuloitsu.fi). `docs/screenshots` has
+  the README's pictures. Keep the privacy page, the note at the end of the
+  title screen (`PRIVACY_NOTE` in `title.rs`) and the README's statistics
+  paragraph in agreement when analytics or saving change.
 - `web/index.html` has a script before the bundle that suspends all sound
   while the page is hidden; a hidden page gets no frames, so the game can't
   stop its own music. It also shows "Ladataan…" until the game is ready and

@@ -18,7 +18,7 @@ CARGO_PROFILE_RELEASE_LTO=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 \
 OUT=target/web
 rm -rf "$OUT"
 mkdir -p "$OUT"
-cp web/index.html web/lukuloitsu.js web/mq_js_bundle.js "$OUT/"
+cp web/index.html web/tietosuoja.html web/og.png web/lukuloitsu.js web/mq_js_bundle.js "$OUT/"
 cp target/wasm32-unknown-unknown/release/lukuloitsu.wasm "$OUT/"
 cp android/res/mipmap-xxxhdpi/ic_launcher.png "$OUT/icon.png"
 echo "Built $OUT"
