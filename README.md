@@ -1,6 +1,7 @@
 # Lukuloitsu
 
 [![CI](https://github.com/vpeurala/lukuloitsu.fi/actions/workflows/rust.yml/badge.svg)](https://github.com/vpeurala/lukuloitsu.fi/actions/workflows/rust.yml)
+[![Coverage](https://codecov.io/gh/vpeurala/lukuloitsu.fi/graph/badge.svg)](https://codecov.io/gh/vpeurala/lukuloitsu.fi)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Play at lukuloitsu.fi](https://img.shields.io/badge/play-lukuloitsu.fi-brightgreen.svg)](https://lukuloitsu.fi)
 [![Latest tag](https://img.shields.io/github/v/tag/vpeurala/lukuloitsu.fi)](https://github.com/vpeurala/lukuloitsu.fi/tags)
@@ -74,7 +75,11 @@ Two extra commands:
 - `cargo run --release -- --render-music music.wav` writes the background music
   to a file.
 
-Run the tests with `cargo test`.
+Run the tests with `cargo test`. To measure test coverage, install
+[cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) and run
+`cargo llvm-cov --summary-only`. CI reports coverage to
+[Codecov](https://codecov.io/gh/vpeurala/lukuloitsu.fi) and leaves out the
+files that only draw (see `.github/workflows/rust.yml`).
 
 ## How it's made
 
