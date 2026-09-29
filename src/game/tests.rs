@@ -2,6 +2,7 @@
 //! its outputs are checked.
 
 use super::*;
+use crate::long_numbers;
 use crate::pairs::PAIRS;
 
 const START: f64 = 1_800_000_000.0;
@@ -583,4 +584,81 @@ fn enemies_keep_their_ids_when_others_leave() {
     // Hitting one that is already gone does nothing.
     game.hit_enemy(ids[0]);
     assert_eq!(game.enemies.len(), 2);
+}
+
+/// Plays like a perfect typist who never moves: each frame, types the
+/// answer to the first monster on screen. Stops after `max_seconds` or
+/// once `done` says so; returns everything that happened.
+fn autoplay(game: &mut Game, max_seconds: f32, done: impl Fn(&Game) -> bool) -> Log {
+    let mut log = Log::default();
+    for _ in 0..(max_seconds / FRAME) as usize {
+        let input = match game.enemies.first() {
+            Some(enemy) => typing(&enemy.answer()),
+            None => frame(),
+        };
+        log.add(game.update(&input));
+        if done(game) {
+            break;
+        }
+    }
+    log
+}
+
+fn completed_levels(log: &Log) -> Vec<u32> {
+    log.events
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::LevelCompleted { level, .. } => Some(*level),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_perfect_typist_plays_through_the_first_levels() {
+    let mut game = game();
+    let mut log = autoplay(&mut game, 600.0, |g| g.level == 5);
+    log.add(std::mem::take(&mut game.out));
+
+    assert_eq!(game.level, 5, "four levels are cleared within ten minutes");
+    assert_eq!(completed_levels(&log), [1, 2, 3, 4]);
+    assert_eq!(log.events.first(), Some(&GameEvent::Started { level: 1 }));
+    assert!(
+        !log.events
+            .iter()
+            .any(|e| matches!(e, GameEvent::Over { .. })),
+        "a perfect typist never loses"
+    );
+    assert_eq!(game.energy, MAX_ENERGY);
+    assert!(log.sfx.contains(&Sfx::Boss), "every level ends in a boss");
+    // Each level introduces pairs, and the typist met the level's pairs.
+    assert!(game.appearances.len() > 5);
+}
+
+#[test]
+fn the_first_long_number_level_can_be_cleared() {
+    let start = long_numbers::first_long_level();
+    let mut game = game_from(start);
+    let log = autoplay(&mut game, 600.0, |g| g.level > start);
+
+    assert_eq!(completed_levels(&log), [start]);
+    assert!(
+        game.appearances.contains_key(&Appearance::Long),
+        "the boss showed a long number"
+    );
+}
+
+#[test]
+fn a_typist_who_never_types_loses_on_the_first_level() {
+    let mut game = game();
+    let log = idle(&mut game, 300.0);
+
+    assert!(game.is_over());
+    let overs = log
+        .events
+        .iter()
+        .filter(|e| matches!(e, GameEvent::Over { level: 1 }))
+        .count();
+    assert_eq!(overs, 1, "game over is reported exactly once");
+    assert!(completed_levels(&log).is_empty());
 }
