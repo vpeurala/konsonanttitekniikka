@@ -11,6 +11,11 @@ code fits together, and pitfalls already found the hard way.
 - **The pair list in `src/pairs.rs` is authoritative.** Never "fix" a word,
   even if it looks odd; change a pair only when the user asks (44 became
   MUUMIO that way). Every pair has a picture in `src/pictures.rs`.
+- **Licenses.** The code is MIT OR Apache-2.0 (`LICENSE-MIT`,
+  `LICENSE-APACHE`); the fonts are under the SIL Open Font License; the word
+  list is CC BY-NC-SA 4.0, and the name and icon are not licensed (the README
+  explains all of it). Don't put anything under a different license, and keep
+  the README's License section true when adding assets or dependencies.
 - **The players are children and teens.** Keep the learning curve gentle and
   the content friendly; prefer privacy-friendly choices (no cookies, no
   tracking of individuals).
@@ -30,7 +35,10 @@ code fits together, and pitfalls already found the hard way.
   `cargo clippy --target wasm32-unknown-unknown -- -D warnings`.
 - GitHub Actions (`.github/workflows/rust.yml`) checks formatting, lints (also
   the web build) and tests every push on Ubuntu; it installs ALSA, X11 and
-  OpenGL libraries first.
+  OpenGL libraries first. Two more jobs there measure test coverage with
+  `cargo llvm-cov` and send it to Codecov (files that only draw are left
+  out, see the comment in the workflow; `cargo llvm-cov --summary-only`
+  shows it locally), and build the Windows executable.
 - To see a screen, temporarily make `main` draw it and call
   `get_screen_data().export_png(path)`, then restore `src/main.rs`. Put
   screenshots, rendered music and other scratch files outside the repository.
@@ -192,6 +200,30 @@ so it can be tested without a screen; do the same for new layouts.
   After renaming the project folder, run `cargo clean -p lukuloitsu`, or the
   build script keeps the old path.
 - Saves go to `~/Library/Application Support/Lukuloitsu/save.txt`.
+
+### Windows
+
+- `cargo run --release` builds it on Windows. From a Mac, install the target
+  and MinGW (`rustup target add x86_64-pc-windows-gnu`,
+  `brew install mingw-w64`) and run
+  `cargo build --release --target x86_64-pc-windows-gnu`.
+- The executable is unsigned, so Chrome and SmartScreen warn about it
+  (`.github/release-notes.md` tells players what to click). Free signing
+  through SignPath Foundation needs every component under an OSI-approved
+  license, which the CC BY-NC-SA word list isn't.
+- On the one Windows machine tried, neither the executable nor the web
+  version made any sound. It is unresolved and probably not the game's fault
+  (a muted device or a virtual machine without audio, say).
+
+### Releases
+
+- A release is a version tag: bump `version` in `Cargo.toml` (which updates
+  `Cargo.lock`) and in `ios/Info.plist`, commit, then
+  `git tag -a X.Y.Z -m "Lukuloitsu X.Y"` and push the tag. Tags have no `v`.
+  `.github/workflows/release.yml` builds the Windows executable and attaches
+  a zip with it and the licenses to a GitHub Release, using
+  `.github/release-notes.md` as the text. It can also be started by hand
+  for an existing tag.
 
 ### Shared
 

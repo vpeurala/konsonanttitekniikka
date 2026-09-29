@@ -2,7 +2,10 @@
 name = "lukuloitsu"
 version = "0.3.0"
 edition = "2024"
+description = "A game for learning the Finnish consonant technique, a way to remember numbers"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/vpeurala/lukuloitsu.fi"
+homepage = "https://lukuloitsu.fi"
 
 [dependencies]
 macroquad = { version = "0.4.16", features = ["audio"] }
