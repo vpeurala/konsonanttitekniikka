@@ -166,9 +166,8 @@ impl TitleScreen {
         (content_height() - (ARENA_H - FOOTER_HEIGHT)).max(0.0)
     }
 
-    pub fn draw(&self, progress: &SaveData, view: View) {
+    pub fn draw(&self, progress: &SaveData, view: View, time: f32) {
         clear_background(BACKGROUND);
-        let time = get_time() as f32;
         let cx = ARENA_W / 2.0;
         let mut y = 70.0 - self.scroll;
 

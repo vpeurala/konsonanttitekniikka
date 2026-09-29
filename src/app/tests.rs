@@ -307,3 +307,10 @@ fn the_progress_screen_shows_what_was_learned_without_saving_first() {
     assert_eq!(app.memory.records().count(), 1, "kept live in the app");
     assert!(app.progress.pairs.is_empty(), "not converted every frame");
 }
+
+#[test]
+fn menu_animations_follow_the_frames_shown() {
+    let mut app = app();
+    idle(&mut app, START, 2.0);
+    assert!((app.time - 2.0).abs() < 0.01, "{}", app.time);
+}

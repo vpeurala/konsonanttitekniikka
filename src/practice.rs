@@ -202,9 +202,8 @@ impl PracticeScreen {
         self.sfx.push(Sfx::Wrong);
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&self, time: f32) {
         clear_background(BACKGROUND);
-        let time = get_time() as f32;
         let cx = ARENA_W / 2.0;
         fonts::draw_centered("Harjoittele", cx, 40.0, 44, GOLD, Style::Heading);
         let score = format!("Oikein {} / {}", self.correct, self.answered);

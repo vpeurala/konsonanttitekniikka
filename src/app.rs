@@ -69,6 +69,10 @@ pub struct App {
     touch_mode: bool,
     /// A web page can't be quit, only left.
     can_quit: bool,
+    /// Seconds of frames shown so far, which the menu screens' animations
+    /// follow. Summed from frame times, not read from the clock, so drawing
+    /// depends only on state.
+    time: f64,
     /// When progress was last saved, in seconds since 1970.
     last_save: f64,
 }
@@ -90,6 +94,7 @@ impl App {
             progress,
             touch_mode,
             can_quit,
+            time: 0.0,
             last_save: now,
         }
     }
@@ -111,6 +116,7 @@ impl App {
     /// Plays one frame, returning what should be done about it.
     pub fn update(&mut self, frame: &Frame) -> Vec<Effect> {
         let mut effects = Vec::new();
+        self.time += f64::from(frame.dt);
         // Esc leaves the game or a menu screen, and quits from the title.
         let escape = frame.pressed(KeyCode::Escape);
         if frame.pressed(KeyCode::Tab) {
@@ -264,7 +270,7 @@ impl App {
         match &self.screen {
             Screen::Title => {
                 let view = view::begin(menu_rect());
-                self.title.draw(&self.progress, view);
+                self.title.draw(&self.progress, view, self.time as f32);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Levels(levels) => {
@@ -280,7 +286,7 @@ impl App {
             Screen::Practice(practice) => {
                 let content = touch::content_rect(self.touch_mode);
                 let view = view::begin(content);
-                practice.draw();
+                practice.draw(self.time as f32);
                 if self.touch_mode {
                     self.controls.draw(self.music_on(), false, false);
                 }
