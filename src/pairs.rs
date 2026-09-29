@@ -34,16 +34,16 @@ pub fn is_answer_char(c: char) -> bool {
 }
 
 pub const PAIRS: &[Pair] = &[
-    pair("0", "Hai"),
-    pair("1", "Jää"),
-    pair("2", "Kuu"),
-    pair("3", "Luu"),
-    pair("4", "Maa"),
-    pair("5", "Puu"),
-    pair("6", "Rae"),
-    pair("7", "Suu"),
-    pair("8", "Täi"),
-    pair("9", "Vyö"),
+    pair("0", "hai"),
+    pair("1", "jää"),
+    pair("2", "kuu"),
+    pair("3", "luu"),
+    pair("4", "maa"),
+    pair("5", "puu"),
+    pair("6", "rae"),
+    pair("7", "suu"),
+    pair("8", "täi"),
+    pair("9", "vyö"),
     pair("00", "hiha"),
     pair("01", "häjy"),
     pair("02", "hauki"),
@@ -154,8 +154,7 @@ mod tests {
     /// Decodes a word into its number by mapping each digit consonant to
     /// its digit and ignoring every other letter.
     fn decode(word: &str) -> String {
-        word.to_lowercase()
-            .chars()
+        word.chars()
             .filter_map(|c| DIGIT_CONSONANTS.iter().position(|&d| d == c))
             .map(|digit| char::from_digit(digit as u32, 10).unwrap())
             .collect()
@@ -171,7 +170,7 @@ mod tests {
     #[test]
     fn words_use_only_digit_consonants_and_vowels() {
         for p in PAIRS {
-            for c in p.word.to_lowercase().chars() {
+            for c in p.word.chars() {
                 assert!(
                     DIGIT_CONSONANTS.contains(&c) || VOWELS.contains(&c),
                     "{} = {} contains '{c}'",
@@ -204,14 +203,17 @@ mod tests {
     }
 
     #[test]
-    fn words_are_unique_ignoring_case() {
+    fn words_are_lowercase() {
+        for p in PAIRS {
+            assert_eq!(p.word, p.word.to_lowercase(), "{} = {}", p.number, p.word);
+        }
+    }
+
+    #[test]
+    fn words_are_unique() {
         let mut seen = HashSet::new();
         for p in PAIRS {
-            assert!(
-                seen.insert(p.word.to_lowercase()),
-                "duplicate word {}",
-                p.word
-            );
+            assert!(seen.insert(p.word), "duplicate word {}", p.word);
         }
     }
 }
