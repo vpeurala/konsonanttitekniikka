@@ -9,6 +9,7 @@
 
 mod answer;
 mod combat;
+mod display;
 mod enemy;
 mod metrics;
 mod render;
@@ -21,7 +22,6 @@ use macroquad::prelude::{Color, GOLD, GREEN, RED, Vec2, vec2};
 
 use crate::audio::Sfx;
 use crate::curriculum::Curriculum;
-use crate::effects::Effects;
 use crate::keyboard::Key;
 use crate::long_numbers::Question;
 use crate::memory::Memory;
@@ -34,6 +34,7 @@ use crate::view::{ARENA_H, ARENA_W};
 pub use answer::{InputOutcome, resolve_input};
 use answer::{Slot, Typed};
 use combat::Spell;
+use display::Display;
 use enemy::{Enemy, EnemyId};
 use rules::*;
 
@@ -98,22 +99,6 @@ enum Appearance {
     Long,
 }
 
-struct Feedback {
-    text: String,
-    color: Color,
-    seconds_left: f32,
-}
-
-/// A big message in the middle of the screen, like "Taso 2!".
-struct Banner {
-    title: String,
-    subtitle: String,
-    color: Color,
-    /// Stars earned, shown under a level-up banner.
-    stars: Option<u8>,
-    seconds_left: f32,
-}
-
 /// What was typed or tapped since the game last advanced. A frame can be
 /// shorter than a step, so these wait for the step that acts on them.
 #[derive(Debug, Default)]
@@ -143,20 +128,17 @@ pub struct Game {
     /// How many times each pair has appeared in this game.
     appearances: HashMap<Appearance, u32>,
     spells: Vec<Spell>,
-    /// Where she is casting toward, and for how much longer.
-    cast: Option<(Vec2, f32)>,
     typed: Typed,
     energy: f32,
     score: u32,
     level: u32,
     /// How the current level is going.
     stage: Stage,
-    banner: Option<Banner>,
     spawn_timer: f32,
-    feedback: Option<Feedback>,
     /// What to tell the outside world, until `update` hands it over.
     out: Outputs,
-    effects: Effects,
+    /// What is shown without affecting play.
+    display: Display,
     /// Every gameplay decision's randomness, the same in every game.
     rng: Rng,
     curriculum: Curriculum,
@@ -195,17 +177,14 @@ impl Game {
             next_enemy_id: 0,
             appearances: HashMap::new(),
             spells: Vec::new(),
-            cast: None,
             typed: Typed::default(),
             energy: MAX_ENERGY,
             score: 0,
             level: 1,
             stage: Stage::default(),
-            banner: None,
             spawn_timer: 1.0,
-            feedback: None,
             out: Outputs::default(),
-            effects: Effects::default(),
+            display: Display::default(),
             rng: Rng::new(Stream::Gameplay, 0),
             curriculum: Curriculum::new(),
             portals: portal_positions(1, ARENA_W, ARENA_H),
@@ -238,13 +217,12 @@ impl Game {
             self.portals = portal_positions(self.level, ARENA_W, ARENA_H);
             self.obstacles = obstacles_for_level(self.level, ARENA_W, ARENA_H, &self.portals);
             self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
-            self.banner = Some(Banner {
-                title: format!("Taso {}", self.level),
-                subtitle: "Onnea matkaan!".to_owned(),
-                color: GOLD,
-                stars: None,
-                seconds_left: BANNER_SECONDS,
-            });
+            self.display.announce(
+                format!("Taso {}", self.level),
+                "Onnea matkaan!".to_owned(),
+                GOLD,
+                None,
+            );
         }
     }
 
@@ -313,7 +291,7 @@ impl Game {
     /// tapped (`acts`) if there is anything new.
     fn advance(&mut self, dt: f32, input: &Input, acts: Option<Pending>) {
         self.play_time += f64::from(dt);
-        self.effects.update(dt);
+        self.display.update_motion(dt);
         self.update_spells(dt);
 
         if self.is_over() {
@@ -324,12 +302,7 @@ impl Game {
         }
 
         self.stage.time += dt;
-        if let Some(banner) = &mut self.banner {
-            banner.seconds_left -= dt;
-            if banner.seconds_left <= 0.0 {
-                self.banner = None;
-            }
-        }
+        self.display.update_messages(dt);
 
         self.move_player(dt, input.arrows, input.stick);
         for key in acts.into_iter().flat_map(|a| a.keys) {
@@ -346,13 +319,6 @@ impl Game {
             if self.spawn_timer <= 0.0 {
                 self.spawn_timer = spawn_interval(self.stage.time);
                 self.spawn_enemy();
-            }
-        }
-
-        if let Some(feedback) = &mut self.feedback {
-            feedback.seconds_left -= dt;
-            if feedback.seconds_left <= 0.0 {
-                self.feedback = None;
             }
         }
     }
@@ -426,11 +392,10 @@ impl Game {
         if self.is_dead_end(slot) {
             self.energy = after_wrong_key(self.energy);
             self.out.sfx.push(Sfx::Wrong);
-            self.feedback = Some(Feedback {
-                text: format!("Väärin: {}", self.typed.get(slot).to_uppercase()),
-                color: RED,
-                seconds_left: FEEDBACK_SECONDS,
-            });
+            self.display.say(
+                format!("Väärin: {}", self.typed.get(slot).to_uppercase()),
+                RED,
+            );
             self.typed.get_mut(slot).clear();
             return;
         }
@@ -495,10 +460,12 @@ impl Game {
         self.stage.boss_fight = false;
         self.spawn_timer = LEVEL_BREAK_SECONDS;
         for enemy in self.enemies.drain(..) {
-            self.effects.explode(enemy.pos, enemy.radius, &KILL_PALETTE);
+            self.display
+                .effects
+                .explode(enemy.pos, enemy.radius, &KILL_PALETTE);
         }
         self.clear_typed();
-        self.effects.lightning(pos);
+        self.display.effects.lightning(pos);
         self.out
             .sfx
             .extend([Sfx::Explode, Sfx::Thunder, Sfx::LevelUp]);
@@ -507,25 +474,20 @@ impl Game {
         self.obstacles = obstacles_for_level(self.level, ARENA_W, ARENA_H, &self.portals);
         // She may be standing where a new obstacle appeared.
         self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
-        self.banner = Some(Banner {
-            title: format!("Taso {}!", self.level),
-            subtitle: if new_pairs > 0 {
-                format!("Hienoa! {new_pairs} uutta paria")
-            } else {
-                "Hienoa!".to_owned()
-            },
-            color: GOLD,
-            stars: Some(stars),
-            seconds_left: BANNER_SECONDS,
-        });
+        let subtitle = if new_pairs > 0 {
+            format!("Hienoa! {new_pairs} uutta paria")
+        } else {
+            "Hienoa!".to_owned()
+        };
+        self.display
+            .announce(format!("Taso {}!", self.level), subtitle, GOLD, Some(stars));
     }
 
     fn show_question(&mut self, question: &Question, color: Color) {
-        self.feedback = Some(Feedback {
-            text: format!("{} = {}", question.words(), question.number(false)),
+        self.display.say(
+            format!("{} = {}", question.words(), question.number(false)),
             color,
-            seconds_left: FEEDBACK_SECONDS,
-        });
+        );
     }
 }
 

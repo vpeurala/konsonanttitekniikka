@@ -65,7 +65,7 @@ impl Game {
 
     fn cast_spell(&mut self, target: SpellTarget, target_pos: Vec2) {
         self.out.sfx.push(Sfx::Cast);
-        self.cast = Some((target_pos, CAST_SECONDS));
+        self.display.cast_toward(target_pos);
         self.spells.push(Spell {
             pos: girl_hand(self.player, target_pos),
             target,
@@ -74,12 +74,6 @@ impl Game {
     }
 
     pub(super) fn update_spells(&mut self, dt: f32) {
-        if let Some((_, seconds_left)) = &mut self.cast {
-            *seconds_left -= dt;
-            if *seconds_left <= 0.0 {
-                self.cast = None;
-            }
-        }
         for enemy in &mut self.enemies {
             if let Some(lives) = &mut enemy.boss {
                 lives.hit_flash = (lives.hit_flash - dt).max(0.0);
@@ -88,7 +82,7 @@ impl Game {
 
         let step = SPELL_SPEED * dt;
         let player = self.player;
-        let effects = &mut self.effects;
+        let effects = &mut self.display.effects;
         let sfx = &mut self.out.sfx;
         let enemies = &mut self.enemies;
         let mut boss_fell_at = None;
@@ -183,8 +177,11 @@ impl Game {
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.out.sfx.push(Sfx::Hurt);
-            self.effects
-                .explode((boss.pos + player) / 2.0, ENEMY_RADIUS, &COLLISION_PALETTE);
+            self.display.effects.explode(
+                (boss.pos + player) / 2.0,
+                ENEMY_RADIUS,
+                &COLLISION_PALETTE,
+            );
             boss.pos += (boss.pos - player).normalize_or_zero() * BOSS_COLLISION_KNOCKBACK;
             boss.keep_on_screen();
             boss.age = 0.0;
@@ -200,7 +197,8 @@ impl Game {
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.out.sfx.extend([Sfx::Explode, Sfx::Hurt]);
-            self.effects
+            self.display
+                .effects
                 .explode(enemy.pos, enemy.radius, &COLLISION_PALETTE);
             // Show the pair so a collision still teaches something.
             self.show_question(&enemy.question, YELLOW);

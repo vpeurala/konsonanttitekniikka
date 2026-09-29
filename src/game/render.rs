@@ -133,12 +133,12 @@ impl Game {
             self.player,
             time,
             self.player_moving,
-            self.cast.map(|(toward, _)| toward),
+            self.display.cast.map(|(toward, _)| toward),
         );
         for enemy in &self.enemies {
             draw_label(enemy);
         }
-        draw_effects(&self.effects);
+        draw_effects(&self.display.effects);
         if !self.is_over() {
             self.draw_slots();
         }
@@ -147,7 +147,7 @@ impl Game {
         }
 
         self.draw_hud();
-        draw_flash(&self.effects, view);
+        draw_flash(&self.display.effects, view);
 
         if self.is_over() {
             draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.7));
@@ -171,7 +171,7 @@ impl Game {
                 "Jatka välilyönnillä"
             };
             draw_centered_text(hint, cx, cy + 35.0, 28, LIGHTGRAY);
-        } else if let Some(banner) = &self.banner {
+        } else if let Some(banner) = &self.display.banner {
             let alpha = (banner.seconds_left / 0.5).min(1.0);
             let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 3.0);
             fonts::draw_centered(
@@ -252,7 +252,7 @@ impl Game {
         draw_text(&level, right - size.width, 74.0, 18.0, LIGHTGRAY);
 
         let (cx, bottom) = (ARENA_W / 2.0, ARENA_H);
-        if let Some(feedback) = &self.feedback {
+        if let Some(feedback) = &self.display.feedback {
             fonts::draw_centered(
                 &feedback.text,
                 cx,

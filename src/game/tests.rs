@@ -192,7 +192,7 @@ fn a_monster_reaching_her_hurts_and_teaches() {
         game.typed.get(Slot::Number).is_empty(),
         "what she typed is dropped"
     );
-    let feedback = game.feedback.as_ref().expect("the pair is shown");
+    let feedback = game.display.feedback.as_ref().expect("the pair is shown");
     assert!(feedback.text.contains(PAIRS[0].number));
     assert!(game.memory().record(&PAIRS[0]).is_some());
 }
@@ -377,7 +377,7 @@ fn beating_the_boss_completes_the_level() {
     );
     assert!(log.sfx.contains(&Sfx::LevelUp));
     assert_eq!(
-        game.banner.as_ref().map(|b| b.title.as_str()),
+        game.display.banner.as_ref().map(|b| b.title.as_str()),
         Some("Taso 2!")
     );
 }

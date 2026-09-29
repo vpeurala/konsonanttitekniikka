@@ -2,9 +2,9 @@
 
 use macroquad::prelude::{VIOLET, Vec2, vec2};
 
+use super::Game;
 use super::enemy::Enemy;
 use super::rules::*;
-use super::{Banner, Game};
 use crate::audio::Sfx;
 use crate::long_numbers::{self, Question};
 use crate::pairs::Pair;
@@ -84,7 +84,7 @@ impl Game {
             return None;
         }
         let pos = *self.rng.pick(&usable);
-        self.effects.explode(pos, 24.0, &PORTAL_PALETTE);
+        self.display.effects.explode(pos, 24.0, &PORTAL_PALETTE);
         Some(pos)
     }
 
@@ -165,13 +165,8 @@ impl Game {
         } else {
             format!("Tarvitaan {count} osumaa")
         };
-        self.banner = Some(Banner {
-            title: "Pomo saapuu!".to_owned(),
-            subtitle,
-            color: VIOLET,
-            stars: None,
-            seconds_left: BANNER_SECONDS,
-        });
+        self.display
+            .announce("Pomo saapuu!".to_owned(), subtitle, VIOLET, None);
     }
 }
 

@@ -82,9 +82,11 @@ so it can be tested without a screen; do the same for new layouts.
   fast one can't lose a key.
   Label widths come from a fixed table of Nunito Bold's letter widths
   (`metrics.rs`), not from measuring text, so the simulation never depends
-  on the font machinery. Split into `rules.rs` (numbers and pure rules), `answer.rs`
-  (matching what was typed), `enemy.rs`, `metrics.rs`, `spawn.rs`, `combat.rs` (spells,
-  collisions, movement) and `render.rs` (the only file that draws).
+  on the font machinery. Split into `rules.rs` (numbers and pure rules),
+  `answer.rs` (matching what was typed), `display.rs` (sparks, banners and
+  messages, which the rules tell to show but never read), `enemy.rs`,
+  `metrics.rs`, `spawn.rs`, `combat.rs` (spells, collisions, movement) and
+  `render.rs` (the only file that draws).
 - `pairs.rs`: the 110 pairs and which characters count as answers. Each
   `Pair` carries a `PairId`, its position in `PAIRS`, which memory, the
   game's appearance counts and the pictures are keyed by; `pairs::find`
