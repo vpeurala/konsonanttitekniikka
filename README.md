@@ -1,0 +1,82 @@
+# Lukuloitsu
+
+A game for learning the Finnish **consonant technique** (*konsonanttitekniikka*),
+the Finnish version of the Major system: a way to remember any number by
+turning its digits into words.
+
+Play it in the browser at **[lukuloitsu.fi](https://lukuloitsu.fi)**, or build it
+for macOS, Android or iOS. The game itself is in Finnish.
+
+## The idea
+
+Every digit stands for one consonant:
+
+| 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|
+| H | J | K | L | M | P | R | S | T | V |
+
+Vowels are only filler, and other letters aren't used. So 22 is KEKO, 44 is
+MUUMIO, 77 is SUSI. The game teaches 110 fixed number–word pairs, for 0–9 and
+00–99, each with its own picture.
+
+Longer numbers are read two digits at a time, with a single-digit word for an
+odd digit left over at the end: 201 is KOHO JÄÄ, and 1377 is JOULU SUSI.
+
+## How it plays
+
+- **Pelaa** (Play): monsters carry numbers or words toward the heroine. Type
+  the matching word or number to cast a spell at them. Each level brings a few
+  new pairs and ends with a boss. Once every pair has been met, the bosses
+  start carrying long numbers. A game can start from every fifth level
+  reached.
+- **Harjoittele** (Practice): calm flash cards, no monsters.
+- **Edistyminen** (Progress): all 110 pairs coloured by how well you know them,
+  with stars earned and days played in a row.
+
+Pairs you know less well come up more often, and every pair comes back when it
+is due for review (spaced repetition). Progress is saved on the device, or in
+the browser's local storage on the web.
+
+On a computer you type on the keyboard (Ä and Ö work on any keyboard layout)
+and move with the arrow keys. On a phone or tablet the game shows an on-screen
+keyboard and a joystick; hold the device sideways.
+
+## Building
+
+You need [Rust](https://rustup.rs) (stable). Everything else, including the
+pictures, music and sounds, is drawn or synthesized by the code at startup.
+
+```bash
+cargo run --release
+```
+
+| Platform | How |
+|---|---|
+| macOS (or Linux, Windows) | `cargo run --release` |
+| Web | `scripts/web.sh` builds into `target/web`; `scripts/web.sh --serve` also serves it at http://localhost:8000 |
+| Android | `scripts/android.sh` builds, installs and starts it on a phone connected over USB. Needs the Android SDK and NDK, Java 8 and `cargo-quad-apk` (install with `scripts/install-cargo-quad-apk.sh`); see the script for details. |
+| iOS Simulator | `scripts/ios-sim.sh` (needs Xcode) |
+
+On Linux, building needs the ALSA, X11 and OpenGL development libraries, for
+example `libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev` on Ubuntu.
+
+Two extra commands:
+
+- `cargo run -- --render-icons` regenerates the app icons for Android and iOS.
+- `cargo run --release -- --render-music music.wav` writes the background music
+  to a file.
+
+Run the tests with `cargo test`.
+
+## How it's made
+
+Lukuloitsu is written in Rust with [macroquad](https://macroquad.rs). A
+slightly patched copy of its platform layer, miniquad, is in `vendor/`; see
+[vendor/README.md](vendor/README.md).
+
+Every push to `main` is built and tested by GitHub Actions and published to
+lukuloitsu.fi by Netlify. The site counts visits and game events anonymously,
+without cookies, with [GoatCounter](https://www.goatcounter.com); the apps send
+nothing.
+
+Made by Ville Peurala.
