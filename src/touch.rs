@@ -9,7 +9,7 @@ use macroquad::prelude::*;
 
 use crate::fonts::{self, Style};
 use crate::keyboard::Key;
-use crate::pairs::{DIGIT_CONSONANTS, VOWELS};
+use crate::pairs::{DIGIT_CONSONANTS, VOWELS, is_answer_char};
 use crate::view::{ARENA_H, ARENA_W, View};
 
 /// A key's size, and the gaps around keys and panel edges.
@@ -145,6 +145,9 @@ pub struct TouchInput {
 enum Label {
     Char(char),
     Backspace,
+    /// A key of the full keyboard the game never uses, shown greyed out so
+    /// the layout looks familiar, but doing nothing.
+    Unused(char),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,10 +165,10 @@ struct KeySpec {
     row: f32,
 }
 
-/// The keys in their places on a Finnish QWERTY keyboard, split between
-/// the hands, with gaps (`.`) for letters the game never uses.
-const LEFT_ROWS: [&str; 4] = ["12345", "..ert", "as...", "...v."];
-const RIGHT_ROWS: [&str; 4] = ["67890<", "yuiop.", "hjklöä", ".m...."];
+/// A whole Finnish QWERTY keyboard, split between the hands. Keys the game
+/// never uses are greyed out.
+const LEFT_ROWS: [&str; 4] = ["12345", "qwert", "asdfg", "zxcvb"];
+const RIGHT_ROWS: [&str; 4] = ["67890<", "yuiopå", "hjklöä", "nm,.-"];
 
 fn keypad() -> Vec<KeySpec> {
     let mut keys = Vec::new();
@@ -173,10 +176,10 @@ fn keypad() -> Vec<KeySpec> {
         for (row, chars) in rows.iter().enumerate() {
             for (col, c) in chars.chars().enumerate() {
                 let label = match c {
-                    '.' => continue,
                     // Backspace sits right of 0, as on a real keyboard.
                     '<' => Label::Backspace,
-                    c => Label::Char(c),
+                    c if is_answer_char(c) => Label::Char(c),
+                    c => Label::Unused(c),
                 };
                 keys.push(KeySpec {
                     label,
@@ -264,11 +267,16 @@ impl TouchControls {
                     }
                 }
                 TouchPhase::Started => {
-                    if let Some(i) = keys.iter().position(|k| key_rect(k).contains(p.pos)) {
-                        input.keys.push(match keys[i].label {
+                    let pressed = keys.iter().enumerate().find_map(|(i, k)| {
+                        let key = match k.label {
                             Label::Char(c) => Key::Char(c),
                             Label::Backspace => Key::Backspace,
-                        });
+                            Label::Unused(_) => return None,
+                        };
+                        key_rect(k).contains(p.pos).then_some((i, key))
+                    });
+                    if let Some((i, key)) = pressed {
+                        input.keys.push(key);
                         self.flashes.push((i, PRESS_FLASH_SECONDS));
                     }
                     for button in [Button::Pause, Button::Music] {
@@ -407,6 +415,10 @@ fn key_colors(label: &Label) -> (Color, Color) {
         ),
         Label::Char(_) => (Color::new(0.2, 0.12, 0.3, 1.0), VIOLET),
         Label::Backspace => (Color::new(0.25, 0.25, 0.3, 1.0), LIGHTGRAY),
+        Label::Unused(_) => (
+            Color::new(0.1, 0.1, 0.12, 1.0),
+            Color::new(0.2, 0.2, 0.24, 1.0),
+        ),
     }
 }
 
@@ -435,6 +447,11 @@ fn draw_key(key: &KeySpec, rect: Rect, pressed: bool, font_size: u16) {
                     Style::Bold,
                 );
             }
+        }
+        Label::Unused(ch) => {
+            let text = ch.to_uppercase().to_string();
+            let dim = Color::new(0.32, 0.32, 0.37, 1.0);
+            fonts::draw_centered(&text, c.x, c.y, font_size, dim, Style::Bold);
         }
         Label::Backspace => {
             // A left-pointing arrow with a cross.
@@ -487,7 +504,6 @@ fn draw_button(rect: Rect, icon: impl FnOnce(Rect)) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pairs::is_answer_char;
 
     #[test]
     fn the_keypad_has_every_answer_character_once() {
@@ -495,7 +511,7 @@ mod tests {
             .iter()
             .filter_map(|k| match k.label {
                 Label::Char(c) => Some(c),
-                Label::Backspace => None,
+                Label::Backspace | Label::Unused(_) => None,
             })
             .collect();
         let expected: Vec<char> = "0123456789hjklmprstvaeiouyäö".chars().collect();
@@ -507,8 +523,8 @@ mod tests {
     }
 
     #[test]
-    fn letters_keep_their_qwerty_order_within_each_row() {
-        let qwerty = ["1234567890", "qwertyuiopå", "asdfghjklöä", "zxcvbnm"];
+    fn the_keys_follow_a_finnish_keyboard_row_by_row() {
+        let qwerty = ["1234567890", "qwertyuiopå", "asdfghjklöä", "zxcvbnm,.-"];
         let keys = keypad();
         for (row, order) in qwerty.iter().enumerate() {
             // Positions along the row, left panel first.
@@ -516,7 +532,7 @@ mod tests {
                 .iter()
                 .filter(|k| k.row == row as f32)
                 .filter_map(|k| match k.label {
-                    Label::Char(c) => {
+                    Label::Char(c) | Label::Unused(c) => {
                         let x = if k.side == Side::Left {
                             k.col
                         } else {
@@ -528,11 +544,9 @@ mod tests {
                 })
                 .collect();
             placed.sort_by(|a, b| a.0.total_cmp(&b.0));
-            let indexes: Vec<usize> = placed
-                .iter()
-                .map(|(_, c)| order.chars().position(|o| o == *c).unwrap())
-                .collect();
-            assert!(indexes.is_sorted(), "row {row}: {placed:?}");
+            // Every key of the row, in order, as on a real keyboard.
+            let row_keys: String = placed.iter().map(|(_, c)| c).collect();
+            assert_eq!(&row_keys, order, "row {row}");
         }
     }
 
@@ -553,6 +567,22 @@ mod tests {
             0.016,
         );
         assert_eq!(input.keys, vec![Key::Char('k')]);
+    }
+
+    #[test]
+    fn greyed_out_keys_do_nothing() {
+        let mut controls = TouchControls::default();
+        let keys = keypad();
+        let q = keys
+            .iter()
+            .find(|k| matches!(k.label, Label::Unused('q')))
+            .unwrap();
+        let input = controls.update(
+            &[touch(1, key_rect(q).center(), TouchPhase::Started)],
+            0.016,
+        );
+        assert!(input.keys.is_empty());
+        assert!(controls.flashes.is_empty());
     }
 
     #[test]
