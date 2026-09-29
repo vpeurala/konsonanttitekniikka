@@ -109,7 +109,7 @@ fn monsters_never_appear_close_to_the_player() {
 fn typing_a_monsters_answer_casts_a_spell_and_scores() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer();
+    let answer = game.enemies[0].answer().to_owned();
     let mut log = Log::default();
     log.add(game.update(&typing(&answer)));
     assert!(game.enemies.is_empty(), "the monster is out of play");
@@ -126,7 +126,7 @@ fn a_right_answer_is_remembered() {
     let mut game = game();
     with_monster(&mut game);
     let pair = game.enemies[0].question.first();
-    let answer = game.enemies[0].answer();
+    let answer = game.enemies[0].answer().to_owned();
     game.update(&typing(&answer));
     assert_eq!(game.memory().record(&pair).map(|r| r.times_seen), Some(1));
 }
@@ -237,7 +237,7 @@ fn nothing_moves_after_the_game_is_over() {
 fn enter_starts_over_and_keeps_what_she_learned() {
     let mut game = game_from(3);
     with_monster(&mut game);
-    let answer = game.enemies[0].answer();
+    let answer = game.enemies[0].answer().to_owned();
     game.update(&typing(&answer));
     let learned = game.memory().records().count();
     assert_eq!(learned, 1);
@@ -276,7 +276,7 @@ fn pausing_stops_time_and_drops_typing() {
     assert!(game.is_paused());
     let (time, pos) = (game.stage.time, game.enemies[0].pos);
     let animation = game.play_time;
-    let answer = game.enemies[0].answer();
+    let answer = game.enemies[0].answer().to_owned();
     play(&mut game, 1.0, &typing(&answer));
     assert_eq!(game.stage.time, time);
     assert_eq!(game.play_time, animation, "animations freeze too");
@@ -354,7 +354,7 @@ fn beating_the_boss_completes_the_level() {
     let mut log = Log::default();
     for _ in 0..boss_hits(1) {
         assert_eq!(game.enemies.len(), 1, "the boss stays until its last hit");
-        let answer = game.enemies[0].answer();
+        let answer = game.enemies[0].answer().to_owned();
         log.add(game.update(&typing(&answer)));
     }
     assert!(game.enemies.is_empty());
@@ -389,7 +389,7 @@ fn stars_depend_on_the_energy_left() {
     game.add_points(points_to_clear(1));
     let mut log = Log::default();
     for _ in 0..boss_hits(1) {
-        let answer = game.enemies[0].answer();
+        let answer = game.enemies[0].answer().to_owned();
         log.add(game.update(&typing(&answer)));
     }
     log.append(idle(&mut game, 1.5));
@@ -538,7 +538,7 @@ fn a_stall_does_not_make_the_game_jump_ahead() {
 fn a_fast_spell_still_lands_in_a_long_frame() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer();
+    let answer = game.enemies[0].answer().to_owned();
     game.update(&typing(&answer));
     let log = play(
         &mut game,
@@ -581,7 +581,7 @@ fn autoplay(game: &mut Game, max_seconds: f32, done: impl Fn(&Game) -> bool) -> 
     let mut log = Log::default();
     for _ in 0..(max_seconds / FRAME) as usize {
         let input = match game.enemies.first() {
-            Some(enemy) => typing(&enemy.answer()),
+            Some(enemy) => typing(enemy.answer()),
             None => frame(),
         };
         log.add(game.update(&input));
@@ -684,7 +684,7 @@ fn a_game_plays_out_the_same_at_any_frame_rate() {
 fn typing_on_a_frame_too_short_for_a_step_is_not_lost() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer();
+    let answer = game.enemies[0].answer().to_owned();
     // A frame at 1000 fps is a fraction of a step.
     let short = |input: Input| Input { dt: 0.001, ..input };
     for c in answer.chars() {

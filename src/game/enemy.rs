@@ -49,6 +49,8 @@ pub(super) struct Enemy {
     pub shows_word: bool,
     pub label: String,
     pub label_width: f32,
+    /// What has to be typed to answer it.
+    answer: String,
     /// The answer, as shown in a hint.
     pub hint: String,
     pub hint_width: f32,
@@ -76,6 +78,7 @@ impl Enemy {
             shows_word,
             label: String::new(),
             label_width: 0.0,
+            answer: String::new(),
             hint: String::new(),
             hint_width: 0.0,
             earlier_appearances: 0,
@@ -114,6 +117,11 @@ impl Enemy {
         };
         self.label_width = text_width(&label, LABEL_FONT_SIZE) + 2.0 * LABEL_PAD;
         self.label = label;
+        self.answer = if self.shows_word {
+            question.number(false)
+        } else {
+            question.typed_words()
+        };
         self.hint = format!("= {hint}");
         self.hint_width = text_width(&self.hint, HINT_FONT_SIZE);
         self.question = question;
@@ -194,12 +202,8 @@ impl Enemy {
         }
     }
 
-    pub fn answer(&self) -> String {
-        if self.shows_word {
-            self.question.number(false)
-        } else {
-            self.question.typed_words()
-        }
+    pub fn answer(&self) -> &str {
+        &self.answer
     }
 
     /// Records a right answer for each pair of the question, at time

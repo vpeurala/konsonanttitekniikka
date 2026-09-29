@@ -366,24 +366,21 @@ impl Game {
         self.enemies.push(enemy);
     }
 
-    /// The enemies this slot can answer, with their answers.
-    fn candidates(&self, slot: Slot) -> Vec<(EnemyId, String)> {
-        self.enemies
-            .iter()
-            .filter(|e| e.answer_slot() == slot)
-            .map(|e| (e.id, e.answer()))
-            .collect()
+    /// The enemies this slot can answer.
+    fn candidates(&self, slot: Slot) -> impl Iterator<Item = &Enemy> + Clone {
+        self.enemies.iter().filter(move |e| e.answer_slot() == slot)
     }
 
-    fn outcome(&self, slot: Slot) -> (Vec<(EnemyId, String)>, InputOutcome) {
-        let candidates = self.candidates(slot);
-        let answers = candidates.iter().map(|(_, answer)| answer.as_str());
-        let outcome = resolve_input(self.typed.get(slot), answers);
-        (candidates, outcome)
+    /// What the slot's text means for the enemies it can answer.
+    fn outcome(&self, slot: Slot) -> InputOutcome {
+        resolve_input(
+            self.typed.get(slot),
+            self.candidates(slot).map(Enemy::answer),
+        )
     }
 
     fn is_dead_end(&self, slot: Slot) -> bool {
-        self.outcome(slot).1 == InputOutcome::DeadEnd
+        self.outcome(slot) == InputOutcome::DeadEnd
     }
 
     /// A dead-end slot is only shown in red at first. Typing past it costs
@@ -402,9 +399,13 @@ impl Game {
 
         self.typed.get_mut(slot).push(c);
         self.out.sfx.push(Sfx::Type);
-        let (candidates, outcome) = self.outcome(slot);
-        if let InputOutcome::Hit(hits) = outcome {
-            let ids: Vec<EnemyId> = hits.iter().map(|&hit| candidates[hit].0).collect();
+        if let InputOutcome::Hit(hits) = self.outcome(slot) {
+            let ids: Vec<EnemyId> = self
+                .candidates(slot)
+                .enumerate()
+                .filter(|(i, _)| hits.contains(i))
+                .map(|(_, e)| e.id)
+                .collect();
             let first = self
                 .enemy(ids[0])
                 .map(|e| e.question.clone())
