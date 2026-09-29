@@ -47,7 +47,7 @@ impl Game {
         let next = self.enemies[index]
             .boss
             .as_mut()
-            .and_then(|lives| (!lives.queue.is_empty()).then(|| lives.queue.remove(0)));
+            .and_then(|lives| lives.queue.pop_front());
         match next {
             Some(question) => {
                 let target_pos = self.enemies[index].pos;

@@ -1,5 +1,7 @@
 //! Monsters and bosses: what they ask, how they move, where they may be.
 
+use std::collections::VecDeque;
+
 use macroquad::prelude::{Vec2, vec2};
 
 use super::answer::Slot;
@@ -22,7 +24,7 @@ pub(super) const HINT_SPACE: f32 = 28.0;
 
 /// A boss's extra lives: the numbers it shows after its current one.
 pub(super) struct BossLives {
-    pub queue: Vec<Question>,
+    pub queue: VecDeque<Question>,
     pub total: usize,
     /// Seconds left of the white flash after being hit.
     pub hit_flash: f32,
@@ -95,7 +97,7 @@ impl Enemy {
         boss.show(numbers[0].clone(), earlier_appearances);
         boss.radius = BOSS_RADIUS;
         boss.boss = Some(BossLives {
-            queue: numbers[1..].to_vec(),
+            queue: numbers[1..].iter().cloned().collect(),
             total: numbers.len(),
             hit_flash: 0.0,
             harmless_for: 0.0,
