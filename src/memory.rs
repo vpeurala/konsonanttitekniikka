@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::pairs::{PAIRS, Pair};
+use crate::pairs::{self, Pair, PairId};
 
 /// Answering this soon after a pair appears shows she knows it.
 const FAST_SECONDS: f32 = 3.0;
@@ -21,11 +21,21 @@ const UNSEEN_DIFFICULTY: f32 = 0.5;
 const MIN_WEIGHT: f32 = 1.0;
 const MAX_WEIGHT: f32 = 6.0;
 
+/// An answer at least this good counts towards a pair's streak.
+const GOOD_QUALITY: f32 = 0.75;
+
 const HOUR: f64 = 3600.0;
+const DAY: f64 = 24.0 * HOUR;
 /// How long until a pair is due again: from this for an unknown pair...
 const SHORTEST_INTERVAL: f64 = 5.0 * HOUR;
-/// ...up to this for a learned one.
-const LONGEST_INTERVAL: f64 = 6.0 * 24.0 * HOUR;
+/// ...up to this for one that is learned...
+const LEARNED_INTERVAL: f64 = 6.0 * DAY;
+/// ...and up to this for one answered well again and again.
+const LONGEST_INTERVAL: f64 = 21.0 * DAY;
+/// A learned pair's interval starts to grow after this many good answers
+/// in a row, and then by this factor with each one more.
+const STREAK_BEFORE_GROWTH: u32 = 5;
+const STREAK_GROWTH: f64 = 1.5;
 
 /// How good an answer was, from 0 (no better than not answering) to 1
 /// (answered at once, without a hint).
@@ -38,10 +48,15 @@ pub fn answer_quality(seconds: f32, with_hint: bool) -> f32 {
     }
 }
 
-/// How long after being seen a pair of this difficulty is due again.
-pub fn review_interval(difficulty: f32) -> f64 {
+/// How long after being seen a pair of this difficulty is due again, if it
+/// has been answered well `streak` times in a row. The difficulty sets the
+/// interval up to `LEARNED_INTERVAL`; a long streak stretches it further,
+/// up to `LONGEST_INTERVAL`.
+pub fn review_interval(difficulty: f32, streak: u32) -> f64 {
     let learned = f64::from(1.0 - difficulty.clamp(0.0, 1.0));
-    SHORTEST_INTERVAL * (LONGEST_INTERVAL / SHORTEST_INTERVAL).powf(learned)
+    let interval = SHORTEST_INTERVAL * (LEARNED_INTERVAL / SHORTEST_INTERVAL).powf(learned);
+    let growth = STREAK_GROWTH.powf(f64::from(streak.saturating_sub(STREAK_BEFORE_GROWTH)));
+    (interval * growth).min(LONGEST_INTERVAL)
 }
 
 /// What is known about one pair.
@@ -53,13 +68,16 @@ pub struct PairRecord {
     pub last_seen: f64,
     /// How many times it has been answered or missed.
     pub times_seen: u32,
+    /// How many times in a row it has been answered well, quickly and
+    /// without a hint. Any miss, slow answer or hint starts it over.
+    pub streak: u32,
 }
 
 /// Each pair's record, kept across games and, through saving, across
 /// launches of the app.
 #[derive(Debug, Default, Clone)]
 pub struct Memory {
-    records: HashMap<&'static str, PairRecord>,
+    records: HashMap<PairId, PairRecord>,
 }
 
 impl Memory {
@@ -68,15 +86,18 @@ impl Memory {
     pub fn from_records(records: impl IntoIterator<Item = (String, PairRecord)>) -> Self {
         let mut memory = Memory::default();
         for (number, record) in records {
-            if let Some(pair) = PAIRS.iter().find(|p| p.number == number) {
-                memory.records.insert(pair.number, record);
+            if let Some(pair) = pairs::find(&number) {
+                memory.records.insert(pair.id, record);
             }
         }
         memory
     }
 
+    /// Every record, by the number of its pair.
     pub fn records(&self) -> impl Iterator<Item = (&'static str, &PairRecord)> {
-        self.records.iter().map(|(n, r)| (*n, r))
+        self.records
+            .iter()
+            .map(|(id, r)| (pairs::get(*id).number, r))
     }
 
     /// Records that `pair` was answered `seconds` after it appeared, at
@@ -91,18 +112,24 @@ impl Memory {
     }
 
     fn update(&mut self, pair: Pair, quality: f32, now: f64) {
-        let record = self.records.entry(pair.number).or_insert(PairRecord {
+        let record = self.records.entry(pair.id).or_insert(PairRecord {
             difficulty: UNSEEN_DIFFICULTY,
             last_seen: now,
             times_seen: 0,
+            streak: 0,
         });
         record.difficulty += ((1.0 - quality) - record.difficulty) * LEARNING_RATE;
         record.last_seen = now;
-        record.times_seen += 1;
+        record.times_seen = record.times_seen.saturating_add(1);
+        record.streak = if quality >= GOOD_QUALITY {
+            record.streak.saturating_add(1)
+        } else {
+            0
+        };
     }
 
     pub fn record(&self, pair: &Pair) -> Option<&PairRecord> {
-        self.records.get(pair.number)
+        self.records.get(&pair.id)
     }
 
     pub fn difficulty(&self, pair: &Pair) -> f32 {
@@ -118,7 +145,8 @@ impl Memory {
         let Some(record) = self.record(pair) else {
             return base;
         };
-        let due = ((now - record.last_seen) / review_interval(record.difficulty)) as f32;
+        let due =
+            ((now - record.last_seen) / review_interval(record.difficulty, record.streak)) as f32;
         // Half weight right after being seen, full when due, up to double
         // when long overdue.
         base * (0.5 + 0.75 * due.clamp(0.0, 2.0))
@@ -128,6 +156,7 @@ impl Memory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pairs::PAIRS;
 
     const NOW: f64 = 1_800_000_000.0;
 
@@ -169,10 +198,68 @@ mod tests {
 
     #[test]
     fn learned_pairs_wait_longer_before_they_are_due() {
-        assert!(review_interval(0.0) > review_interval(0.5));
-        assert!(review_interval(0.5) > review_interval(1.0));
-        assert!((review_interval(1.0) - SHORTEST_INTERVAL).abs() < 1.0);
-        assert!((review_interval(0.0) - LONGEST_INTERVAL).abs() < 1.0);
+        assert!(review_interval(0.0, 0) > review_interval(0.5, 0));
+        assert!(review_interval(0.5, 0) > review_interval(1.0, 0));
+        assert!((review_interval(1.0, 0) - SHORTEST_INTERVAL).abs() < 1.0);
+        assert!((review_interval(0.0, 0) - LEARNED_INTERVAL).abs() < 1.0);
+    }
+
+    #[test]
+    fn a_long_streak_stretches_the_interval_up_to_three_weeks() {
+        let plain = review_interval(0.0, 0);
+        assert_eq!(review_interval(0.0, STREAK_BEFORE_GROWTH), plain);
+        let mut previous = plain;
+        for streak in STREAK_BEFORE_GROWTH + 1..STREAK_BEFORE_GROWTH + 4 {
+            let interval = review_interval(0.0, streak);
+            assert!(interval > previous || interval == LONGEST_INTERVAL);
+            previous = interval;
+        }
+        assert_eq!(review_interval(0.0, 1000), LONGEST_INTERVAL);
+        assert_eq!(review_interval(0.0, u32::MAX), LONGEST_INTERVAL);
+    }
+
+    #[test]
+    fn a_streak_never_stretches_a_pair_that_is_not_learned() {
+        // Only a small stretch is possible for a hard pair: it is still due
+        // far sooner than an easy one with the same streak.
+        assert!(review_interval(1.0, 8) < review_interval(0.0, 8));
+        assert!(review_interval(1.0, 0) == SHORTEST_INTERVAL);
+    }
+
+    #[test]
+    fn good_answers_in_a_row_build_a_streak_and_anything_else_ends_it() {
+        let pair = PAIRS[4];
+        let mut memory = Memory::default();
+        for expected in 1..=4 {
+            memory.record_answer(pair, 1.0, false, NOW);
+            assert_eq!(memory.record(&pair).unwrap().streak, expected);
+        }
+        // A hint, a slow answer and a miss each start over.
+        memory.record_answer(pair, 1.0, true, NOW);
+        assert_eq!(memory.record(&pair).unwrap().streak, 0);
+        memory.record_answer(pair, 1.0, false, NOW);
+        memory.record_answer(pair, SLOW_SECONDS, false, NOW);
+        assert_eq!(memory.record(&pair).unwrap().streak, 0);
+        memory.record_answer(pair, 1.0, false, NOW);
+        memory.record_miss(pair, NOW);
+        assert_eq!(memory.record(&pair).unwrap().streak, 0);
+    }
+
+    #[test]
+    fn a_pair_with_a_long_streak_comes_back_less_often() {
+        let pair = PAIRS[6];
+        let mut steady = Memory::default();
+        let mut shaky = Memory::default();
+        for _ in 0..10 {
+            steady.record_answer(pair, 1.0, false, NOW);
+        }
+        for i in 0..10 {
+            // The same answers, but one slow one near the end.
+            let seconds = if i == 8 { SLOW_SECONDS } else { 1.0 };
+            shaky.record_answer(pair, seconds, false, NOW);
+        }
+        let later = NOW + 10.0 * DAY;
+        assert!(steady.weight(&pair, later) < shaky.weight(&pair, later));
     }
 
     #[test]
@@ -180,7 +267,7 @@ mod tests {
         let pair = PAIRS[3];
         let mut memory = Memory::default();
         memory.record_answer(pair, 5.0, false, NOW);
-        let interval = review_interval(memory.difficulty(&pair));
+        let interval = review_interval(memory.difficulty(&pair), 0);
         let fresh = memory.weight(&pair, NOW);
         let due = memory.weight(&pair, NOW + interval);
         let overdue = memory.weight(&pair, NOW + 10.0 * interval);

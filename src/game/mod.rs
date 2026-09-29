@@ -25,7 +25,7 @@ use crate::keyboard::Key;
 use crate::long_numbers::Question;
 use crate::memory::Memory;
 use crate::obstacles::{Obstacle, obstacles_for_level, push_out};
-use crate::pairs;
+use crate::pairs::{self, PairId};
 use crate::portals::portal_positions;
 use crate::rng::{Rng, Stream};
 use crate::view::{ARENA_H, ARENA_W};
@@ -98,7 +98,7 @@ const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 /// numbers together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Appearance {
-    Pair(&'static str),
+    Pair(PairId),
     Long,
 }
 
@@ -438,7 +438,7 @@ impl Game {
         let key = if question.is_long() {
             Appearance::Long
         } else {
-            Appearance::Pair(question.first().number)
+            Appearance::Pair(question.first().id)
         };
         let count = self.appearances.entry(key).or_default();
         *count += 1;

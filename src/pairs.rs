@@ -9,17 +9,26 @@
 //!
 //! Vowels are filler. No other letters appear in the words.
 
+/// Which of the pairs it is: its position in `PAIRS`. Small, cheap to
+/// compare and hash, and it can't name a pair that doesn't exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PairId(u8);
+
+impl PairId {
+    /// The position in `PAIRS`.
+    pub fn index(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
 /// A number and the word that encodes it.
 ///
 /// Numbers are strings because "0" and "00" are distinct pairs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pair {
+    pub id: PairId,
     pub number: &'static str,
     pub word: &'static str,
-}
-
-const fn pair(number: &'static str, word: &'static str) -> Pair {
-    Pair { number, word }
 }
 
 /// The consonant that encodes each digit, indexed by digit.
@@ -33,118 +42,155 @@ pub fn is_answer_char(c: char) -> bool {
     c.is_ascii_digit() || DIGIT_CONSONANTS.contains(&c) || VOWELS.contains(&c)
 }
 
-pub const PAIRS: &[Pair] = &[
-    pair("0", "hai"),
-    pair("1", "jää"),
-    pair("2", "kuu"),
-    pair("3", "luu"),
-    pair("4", "maa"),
-    pair("5", "puu"),
-    pair("6", "rae"),
-    pair("7", "suu"),
-    pair("8", "täi"),
-    pair("9", "vyö"),
-    pair("00", "hiha"),
-    pair("01", "häjy"),
-    pair("02", "hauki"),
-    pair("03", "huilu"),
-    pair("04", "haamu"),
-    pair("05", "huopa"),
-    pair("06", "hiiri"),
-    pair("07", "hius"),
-    pair("08", "hauta"),
-    pair("09", "haavi"),
-    pair("10", "jauho"),
-    pair("11", "jojo"),
-    pair("12", "joki"),
-    pair("13", "joulu"),
-    pair("14", "juomu"),
-    pair("15", "jopo"),
-    pair("16", "juuri"),
-    pair("17", "jousi"),
-    pair("18", "jeti"),
-    pair("19", "jyvä"),
-    pair("20", "koho"),
-    pair("21", "koju"),
-    pair("22", "keko"),
-    pair("23", "kela"),
-    pair("24", "kuomu"),
-    pair("25", "kupu"),
-    pair("26", "koira"),
-    pair("27", "kaasu"),
-    pair("28", "kota"),
-    pair("29", "kavio"),
-    pair("30", "liha"),
-    pair("31", "leija"),
-    pair("32", "leka"),
-    pair("33", "luola"),
-    pair("34", "liima"),
-    pair("35", "lapio"),
-    pair("36", "lyyra"),
-    pair("37", "liesi"),
-    pair("38", "luoti"),
-    pair("39", "laiva"),
-    pair("40", "maha"),
-    pair("41", "maja"),
-    pair("42", "muki"),
-    pair("43", "mela"),
-    pair("44", "muumio"),
-    pair("45", "mopo"),
-    pair("46", "muuri"),
-    pair("47", "muusi"),
-    pair("48", "mato"),
-    pair("49", "muovi"),
-    pair("50", "pyyhe"),
-    pair("51", "poiju"),
-    pair("52", "puku"),
-    pair("53", "peili"),
-    pair("54", "piimä"),
-    pair("55", "pipo"),
-    pair("56", "pora"),
-    pair("57", "paasi"),
-    pair("58", "pata"),
-    pair("59", "paavi"),
-    pair("60", "raha"),
-    pair("61", "ryijy"),
-    pair("62", "reki"),
-    pair("63", "railo"),
-    pair("64", "riimu"),
-    pair("65", "rapu"),
-    pair("66", "ruori"),
-    pair("67", "ruusu"),
-    pair("68", "rata"),
-    pair("69", "rovio"),
-    pair("70", "saha"),
-    pair("71", "soija"),
-    pair("72", "sika"),
-    pair("73", "siili"),
-    pair("74", "siima"),
-    pair("75", "siipi"),
-    pair("76", "siru"),
-    pair("77", "susi"),
-    pair("78", "sota"),
-    pair("79", "sauva"),
-    pair("80", "tuohi"),
-    pair("81", "taiji"),
-    pair("82", "tiuku"),
-    pair("83", "tiili"),
-    pair("84", "taimi"),
-    pair("85", "tipu"),
-    pair("86", "terä"),
-    pair("87", "teesi"),
-    pair("88", "toti"),
-    pair("89", "tavi"),
-    pair("90", "vuohi"),
-    pair("91", "vaja"),
-    pair("92", "vaaka"),
-    pair("93", "viulu"),
-    pair("94", "vaimo"),
-    pair("95", "vapa"),
-    pair("96", "vuori"),
-    pair("97", "vaasi"),
-    pair("98", "vouti"),
-    pair("99", "vauva"),
+/// The pair for `number`, like "22", if there is one.
+pub fn find(number: &str) -> Option<Pair> {
+    PAIRS.iter().find(|p| p.number == number).copied()
+}
+
+/// The pair with this id.
+pub fn get(id: PairId) -> Pair {
+    PAIRS[id.index()]
+}
+
+/// How many pairs there are: 0-9 and 00-99.
+pub const PAIR_COUNT: usize = 110;
+
+/// The pairs as (number, word), in the order they are numbered by.
+const WORDS: [(&str, &str); PAIR_COUNT] = [
+    ("0", "hai"),
+    ("1", "jää"),
+    ("2", "kuu"),
+    ("3", "luu"),
+    ("4", "maa"),
+    ("5", "puu"),
+    ("6", "rae"),
+    ("7", "suu"),
+    ("8", "täi"),
+    ("9", "vyö"),
+    ("00", "hiha"),
+    ("01", "häjy"),
+    ("02", "hauki"),
+    ("03", "huilu"),
+    ("04", "haamu"),
+    ("05", "huopa"),
+    ("06", "hiiri"),
+    ("07", "hius"),
+    ("08", "hauta"),
+    ("09", "haavi"),
+    ("10", "jauho"),
+    ("11", "jojo"),
+    ("12", "joki"),
+    ("13", "joulu"),
+    ("14", "juomu"),
+    ("15", "jopo"),
+    ("16", "juuri"),
+    ("17", "jousi"),
+    ("18", "jeti"),
+    ("19", "jyvä"),
+    ("20", "koho"),
+    ("21", "koju"),
+    ("22", "keko"),
+    ("23", "kela"),
+    ("24", "kuomu"),
+    ("25", "kupu"),
+    ("26", "koira"),
+    ("27", "kaasu"),
+    ("28", "kota"),
+    ("29", "kavio"),
+    ("30", "liha"),
+    ("31", "leija"),
+    ("32", "leka"),
+    ("33", "luola"),
+    ("34", "liima"),
+    ("35", "lapio"),
+    ("36", "lyyra"),
+    ("37", "liesi"),
+    ("38", "luoti"),
+    ("39", "laiva"),
+    ("40", "maha"),
+    ("41", "maja"),
+    ("42", "muki"),
+    ("43", "mela"),
+    ("44", "muumio"),
+    ("45", "mopo"),
+    ("46", "muuri"),
+    ("47", "muusi"),
+    ("48", "mato"),
+    ("49", "muovi"),
+    ("50", "pyyhe"),
+    ("51", "poiju"),
+    ("52", "puku"),
+    ("53", "peili"),
+    ("54", "piimä"),
+    ("55", "pipo"),
+    ("56", "pora"),
+    ("57", "paasi"),
+    ("58", "pata"),
+    ("59", "paavi"),
+    ("60", "raha"),
+    ("61", "ryijy"),
+    ("62", "reki"),
+    ("63", "railo"),
+    ("64", "riimu"),
+    ("65", "rapu"),
+    ("66", "ruori"),
+    ("67", "ruusu"),
+    ("68", "rata"),
+    ("69", "rovio"),
+    ("70", "saha"),
+    ("71", "soija"),
+    ("72", "sika"),
+    ("73", "siili"),
+    ("74", "siima"),
+    ("75", "siipi"),
+    ("76", "siru"),
+    ("77", "susi"),
+    ("78", "sota"),
+    ("79", "sauva"),
+    ("80", "tuohi"),
+    ("81", "taiji"),
+    ("82", "tiuku"),
+    ("83", "tiili"),
+    ("84", "taimi"),
+    ("85", "tipu"),
+    ("86", "terä"),
+    ("87", "teesi"),
+    ("88", "toti"),
+    ("89", "tavi"),
+    ("90", "vuohi"),
+    ("91", "vaja"),
+    ("92", "vaaka"),
+    ("93", "viulu"),
+    ("94", "vaimo"),
+    ("95", "vapa"),
+    ("96", "vuori"),
+    ("97", "vaasi"),
+    ("98", "vouti"),
+    ("99", "vauva"),
 ];
+
+const fn build() -> [Pair; PAIR_COUNT] {
+    let mut pairs = [Pair {
+        id: PairId(0),
+        number: "",
+        word: "",
+    }; PAIR_COUNT];
+    let mut i = 0;
+    while i < PAIR_COUNT {
+        pairs[i] = Pair {
+            id: PairId(i as u8),
+            number: WORDS[i].0,
+            word: WORDS[i].1,
+        };
+        i += 1;
+    }
+    pairs
+}
+
+const TABLE: [Pair; PAIR_COUNT] = build();
+
+/// Every pair, in the order of their ids.
+pub const PAIRS: &[Pair] = &TABLE;
 
 #[cfg(test)]
 mod tests {
@@ -214,6 +260,30 @@ mod tests {
         let mut seen = HashSet::new();
         for p in PAIRS {
             assert!(seen.insert(p.word), "duplicate word {}", p.word);
+        }
+    }
+
+    #[test]
+    fn a_pair_is_found_by_its_number() {
+        assert_eq!(find("22").map(|p| p.word), Some("keko"));
+        assert_eq!(find("0").map(|p| p.word), Some("hai"));
+        assert_eq!(find("00").map(|p| p.word), Some("hiha"));
+        assert_eq!(find("100"), None);
+        assert_eq!(find(""), None);
+    }
+
+    #[test]
+    fn ids_are_the_positions_in_the_table() {
+        for (i, pair) in PAIRS.iter().enumerate() {
+            assert_eq!(pair.id.index(), i);
+            assert_eq!(get(pair.id), *pair);
+        }
+    }
+
+    #[test]
+    fn a_pair_found_by_number_has_the_matching_id() {
+        for pair in PAIRS {
+            assert_eq!(find(pair.number).map(|p| p.id), Some(pair.id));
         }
     }
 }

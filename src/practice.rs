@@ -240,7 +240,7 @@ impl PracticeScreen {
         let show_picture = self.shows_word || answered;
         let prompt_y = if show_picture { 250.0 } else { 200.0 };
         if show_picture {
-            draw_picture(self.pair.number, vec2(cx, 160.0), 110.0, time);
+            draw_picture(self.pair, vec2(cx, 160.0), 110.0, time);
         }
         fonts::draw_centered(&prompt, cx, prompt_y + 20.0, 64, WHITE, Style::Heading);
 

@@ -16,8 +16,10 @@ use crate::view::{ARENA_H, ARENA_W};
 
 /// A pair counts as learned once its difficulty is below this.
 const LEARNED: f32 = 0.25;
-/// ...and as nearly learned below this.
+/// The colour is pure yellow here; a pair is "nearly" learned around it.
 const NEARLY: f32 = 0.5;
+/// Halfway between yellow and red: past this a pair still needs practice.
+const PRACTISE: f32 = 0.75;
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 const UNSEEN: Color = Color::new(0.2, 0.2, 0.26, 1.0);
@@ -44,6 +46,19 @@ pub fn mastery_color(difficulty: f32) -> Color {
         lerp(GREEN, YELLOW, d / NEARLY)
     } else {
         lerp(YELLOW, RED, (d - NEARLY) / (1.0 - NEARLY))
+    }
+}
+
+/// How well a pair is known as a number of dots, so the map can be read
+/// without telling colours apart: 3 for learned, 2 for nearly, 1 for a pair
+/// that needs practice.
+pub fn mastery_tier(difficulty: f32) -> u8 {
+    if difficulty < LEARNED {
+        3
+    } else if difficulty < PRACTISE {
+        2
+    } else {
+        1
     }
 }
 
@@ -130,11 +145,16 @@ impl ProgressScreen {
 }
 
 fn draw_cell(pair: &Pair, memory: &Memory, rect: Rect) {
-    let (fill, text) = match memory.record(pair) {
-        Some(record) => (mastery_color(record.difficulty), BLACK),
-        None => (UNSEEN, Color::new(0.6, 0.6, 0.65, 1.0)),
+    let (fill, text, tier) = match memory.record(pair) {
+        Some(record) => (
+            mastery_color(record.difficulty),
+            BLACK,
+            Some(mastery_tier(record.difficulty)),
+        ),
+        None => (UNSEEN, Color::new(0.6, 0.6, 0.65, 1.0), None),
     };
     draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
+    draw_meter(vec2(rect.right() - 11.5, rect.y + 7.5), tier, text);
     let c = rect.center();
     fonts::draw_centered(pair.number, c.x, c.y - 7.0, 16, text, Style::Bold);
     fonts::draw_centered(
@@ -147,18 +167,40 @@ fn draw_cell(pair: &Pair, memory: &Memory, rect: Rect) {
     );
 }
 
+/// Three dots in a row, centred on `center`: as many filled, from the left,
+/// as `tier` says, the rest empty. Nothing is filled for a pair not yet
+/// seen.
+fn draw_meter(center: Vec2, tier: Option<u8>, color: Color) {
+    const SPACING: f32 = 6.5;
+    const RADIUS: f32 = 2.4;
+    for i in 0..3u8 {
+        let x = center.x + (f32::from(i) - 1.0) * SPACING;
+        if tier.is_some_and(|tier| i < tier) {
+            draw_circle(x, center.y, RADIUS, color);
+        } else {
+            draw_circle_lines(x, center.y, RADIUS, 1.2, color);
+        }
+    }
+}
+
 fn draw_legend(y: f32) {
     let items = [
-        (UNSEEN, "Ei vielä nähty"),
-        (RED, "Harjoittele"),
-        (YELLOW, "Melkein"),
-        (GREEN, "Osaat"),
+        (UNSEEN, None, "Ei vielä nähty"),
+        (RED, Some(1), "Harjoittele"),
+        (YELLOW, Some(2), "Melkein"),
+        (GREEN, Some(3), "Osaat"),
     ];
     let mut x = MARGIN;
-    for (color, label) in items {
-        draw_rectangle(x, y - 8.0, 16.0, 16.0, color);
-        fonts::draw(label, x + 22.0, y + 6.0, 18, WHITE, Style::Body);
-        x += 26.0 + fonts::measure(label, Style::Body, 18).width + 26.0;
+    for (color, tier, label) in items {
+        draw_rectangle(x, y - 10.0, 34.0, 20.0, color);
+        let dots = if tier.is_some() {
+            BLACK
+        } else {
+            Color::new(0.6, 0.6, 0.65, 1.0)
+        };
+        draw_meter(vec2(x + 17.0, y), tier, dots);
+        fonts::draw(label, x + 40.0, y + 6.0, 18, WHITE, Style::Body);
+        x += 44.0 + fonts::measure(label, Style::Body, 18).width + 18.0;
     }
 }
 
@@ -185,5 +227,34 @@ mod tests {
         }
         memory.record_miss(PAIRS[1], 0.0);
         assert_eq!(learned_count(&memory), 1);
+    }
+
+    #[test]
+    fn dots_run_from_one_for_hard_pairs_to_three_for_learned_ones() {
+        assert_eq!(mastery_tier(0.0), 3);
+        assert_eq!(mastery_tier(NEARLY), 2);
+        assert_eq!(mastery_tier(1.0), 1);
+        for i in 0..100 {
+            let d = i as f32 / 100.0;
+            assert!(
+                mastery_tier(d + 0.01) <= mastery_tier(d),
+                "harder means fewer dots"
+            );
+        }
+    }
+
+    #[test]
+    fn three_dots_means_learned() {
+        for i in 0..=100 {
+            let d = i as f32 / 100.0;
+            assert_eq!(mastery_tier(d) == 3, d < LEARNED, "{d}");
+        }
+    }
+
+    #[test]
+    fn each_legend_colour_has_the_dots_of_its_tier() {
+        assert_eq!(mastery_tier(0.0), 3, "green");
+        assert_eq!(mastery_tier(NEARLY), 2, "yellow");
+        assert_eq!(mastery_tier(1.0), 1, "red");
     }
 }

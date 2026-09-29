@@ -421,7 +421,7 @@ fn draw_pair_table(y: f32, time: f32) {
             let column = last_digit.unwrap_or(0) as f32;
             let x = SIDE_MARGIN + cell * (column + 0.5);
             let size = cell - PICTURE_MARGIN;
-            draw_picture(pair.number, vec2(x, row_y + size / 2.0), size, time);
+            draw_picture(*pair, vec2(x, row_y + size / 2.0), size, time);
             draw_centered_text(pair.number, x, row_y + size + 14.0, 16, DIM);
             fonts::draw_centered(
                 &pair.word.to_uppercase(),

@@ -78,7 +78,10 @@ and never changes it.
   loaded font. Split into `rules.rs` (numbers and pure rules), `answer.rs`
   (matching what was typed), `enemy.rs`, `spawn.rs`, `combat.rs` (spells,
   collisions, movement) and `render.rs` (the only file that draws).
-- `pairs.rs`: the 110 pairs and which characters count as answers.
+- `pairs.rs`: the 110 pairs and which characters count as answers. Each
+  `Pair` carries a `PairId`, its position in `PAIRS`, which memory, the
+  game's appearance counts and the pictures are keyed by; `pairs::find`
+  looks a pair up by number. The save file still uses numbers.
 - `curriculum.rs`: which pairs each level introduces. Level 1 has 0–9, every
   later level adds 5, so all 110 are met by level 21.
 - `long_numbers.rs`: long numbers, read greedily two digits at a time with an
@@ -91,10 +94,16 @@ and never changes it.
   Levels need at most 40 points before their boss.
 - `memory.rs`: spaced repetition. A difficulty from 0 (learned) to 1 per pair,
   judged by answer speed, and when it was last seen; review intervals run from
-  5 hours to 6 days.
+  5 hours to 6 days by difficulty. A streak of good answers in a row (quick,
+  no hint; anything else resets it) stretches a learned pair's interval by
+  half again per answer past five, up to 3 weeks.
 - `save.rs`: the save file, plain text with one fact per line, damaged lines
-  skipped. On the web it goes to local storage.
-- `practice.rs`, `progress.rs`, `title.rs`: the other screens.
+  skipped and absurd numbers clamped or dropped (tests read thousands of
+  garbage files). Saves from before a field existed must keep loading. On
+  the web it goes to local storage.
+- `practice.rs`, `progress.rs`, `title.rs`: the other screens. The progress
+  map shows how well a pair is known by colour and by 1–3 dots, so colour
+  blindness doesn't hide it.
 - `touch.rs`: the on-screen controls. A full Finnish QWERTY keyboard split
   into two panels beside the arena, keys the game doesn't use greyed out; a
   joystick; pause and music buttons. Touches are read from the ordered event

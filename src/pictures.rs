@@ -8,6 +8,8 @@ use std::f32::consts::TAU;
 
 use macroquad::prelude::*;
 
+use crate::pairs::Pair;
+
 /// Draws in a square centered on `center`, `half` pixels from the center
 /// to each edge, with coordinates from -1 to 1.
 pub struct Canvas {
@@ -159,7 +161,9 @@ const SMOKE: Color = rgba(220, 220, 230, 0.6);
 
 type Painter = fn(&Canvas, f32);
 
-/// Every word's picture, by number.
+/// Every word's picture, in the order of the pairs' ids. The numbers are
+/// only here to make a picture in the wrong place easy to see, and a test
+/// checks them.
 const PICTURES: &[(&str, Painter)] = &[
     ("0", hai),
     ("1", jaa),
@@ -273,12 +277,10 @@ const PICTURES: &[(&str, Painter)] = &[
     ("99", vauva),
 ];
 
-/// Draws the picture of the word for `number` on a tile centered on
-/// `center`, `size` pixels across. Returns false if there is none.
-pub fn draw_picture(number: &str, center: Vec2, size: f32, time: f32) -> bool {
-    let Some((_, paint)) = PICTURES.iter().find(|(n, _)| *n == number) else {
-        return false;
-    };
+/// Draws the picture of the word of `pair` on a tile centered on `center`,
+/// `size` pixels across.
+pub fn draw_picture(pair: Pair, center: Vec2, size: f32, time: f32) {
+    let (_, paint) = PICTURES[pair.id.index()];
     let half = size / 2.0;
     draw_rectangle(center.x - half, center.y - half, size, size, TILE);
     draw_rectangle_lines(center.x - half, center.y - half, size, size, 1.0, OUTLINE);
@@ -290,7 +292,6 @@ pub fn draw_picture(number: &str, center: Vec2, size: f32, time: f32) -> bool {
         },
         time,
     );
-    true
 }
 
 // ---------------------------------------------------------------------
@@ -2067,11 +2068,11 @@ mod tests {
     use crate::pairs::PAIRS;
 
     #[test]
-    fn every_pair_has_exactly_one_picture() {
-        for pair in PAIRS {
-            let count = PICTURES.iter().filter(|(n, _)| *n == pair.number).count();
-            assert_eq!(count, 1, "{} = {}", pair.number, pair.word);
-        }
+    fn every_pair_has_its_picture_in_its_place() {
         assert_eq!(PICTURES.len(), PAIRS.len());
+        for pair in PAIRS {
+            let (number, _) = PICTURES[pair.id.index()];
+            assert_eq!(number, pair.number, "{} = {}", pair.number, pair.word);
+        }
     }
 }

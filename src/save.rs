@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::memory::{Memory, PairRecord};
-use crate::pairs::PAIRS;
+use crate::pairs;
 
 const HEADER: &str = "lukuloitsu-save 1";
 
@@ -66,8 +66,8 @@ impl SaveData {
         text += &format!("streak {} {}\n", self.streak_day, self.streak);
         for (number, r) in &self.pairs {
             text += &format!(
-                "pair {number} {:.4} {:.0} {}\n",
-                r.difficulty, r.last_seen, r.times_seen
+                "pair {number} {:.4} {:.0} {} {}\n",
+                r.difficulty, r.last_seen, r.times_seen, r.streak
             );
         }
         text
@@ -101,14 +101,18 @@ impl SaveData {
                         data.streak = count;
                     }
                 }
-                ["pair", number, difficulty, last_seen, times_seen] => {
-                    if let (Ok(difficulty), Ok(last_seen), Ok(times_seen)) = (
+                // The streak came later, so older saves lack it.
+                ["pair", number, difficulty, last_seen, times_seen, rest @ ..]
+                    if rest.len() <= 1 =>
+                {
+                    if let (Ok(difficulty), Ok(last_seen), Ok(times_seen), Some(streak)) = (
                         difficulty.parse::<f32>(),
                         last_seen.parse::<f64>(),
                         times_seen.parse(),
+                        rest.first().map_or(Some(0), |s| s.parse().ok()),
                     ) && difficulty.is_finite()
                         && last_seen.is_finite()
-                        && PAIRS.iter().any(|p| p.number == *number)
+                        && pairs::find(number).is_some()
                     {
                         data.pairs.insert(
                             number.to_string(),
@@ -116,6 +120,7 @@ impl SaveData {
                                 difficulty: difficulty.clamp(0.0, 1.0),
                                 last_seen,
                                 times_seen,
+                                streak,
                             },
                         );
                     }
@@ -233,6 +238,7 @@ fn write_text(text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pairs::PAIRS;
     use crate::rng::{Rng, Stream};
 
     fn sample() -> SaveData {
@@ -251,6 +257,7 @@ mod tests {
                 difficulty: 0.3512,
                 last_seen: 1_790_000_000.0,
                 times_seen: 7,
+                streak: 3,
             },
         );
         data
@@ -414,6 +421,31 @@ mod tests {
     fn numbers_that_are_not_numbers_are_skipped() {
         let text = format!(
             "{HEADER}\npair 22 NaN 100 1\npair 23 inf 100 1\npair 24 0.5 inf 1\npair 25 0.5 100 1\npair x 0.5 100 1\n"
+        );
+        let data = SaveData::from_text(&text);
+        assert_eq!(data.pairs.keys().collect::<Vec<_>>(), vec!["25"]);
+    }
+
+    #[test]
+    fn saves_from_before_streaks_still_load() {
+        let text = format!("{HEADER}\npair 22 0.3512 1790000000 7\n");
+        let data = SaveData::from_text(&text);
+        let record = data.pairs.get("22").expect("the pair is kept");
+        assert_eq!((record.times_seen, record.streak), (7, 0));
+    }
+
+    #[test]
+    fn a_streak_is_saved_and_read_back() {
+        let text = format!("{HEADER}\npair 22 0.3512 1790000000 7 4\n");
+        let data = SaveData::from_text(&text);
+        assert_eq!(data.pairs.get("22").map(|r| r.streak), Some(4));
+        assert!(data.to_text().contains("pair 22 0.3512 1790000000 7 4"));
+    }
+
+    #[test]
+    fn a_pair_line_with_a_broken_streak_or_extra_words_is_skipped() {
+        let text = format!(
+            "{HEADER}\npair 22 0.5 100 1 x\npair 23 0.5 100 1 2 3\npair 24 0.5 100 1 -1\npair 25 0.5 100 1 2\n"
         );
         let data = SaveData::from_text(&text);
         assert_eq!(data.pairs.keys().collect::<Vec<_>>(), vec!["25"]);

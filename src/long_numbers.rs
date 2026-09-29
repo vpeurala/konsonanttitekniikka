@@ -8,7 +8,7 @@
 //! numbers grow a digit longer every few levels, so the step up is gentle.
 
 use crate::curriculum::Curriculum;
-use crate::pairs::{PAIRS, Pair};
+use crate::pairs::{self, Pair};
 use crate::rng::Rng;
 
 /// On this many levels, starting with the first one with long numbers,
@@ -45,7 +45,7 @@ impl Question {
             .chunks(2)
             .map(|chunk| {
                 let number = std::str::from_utf8(chunk).ok()?;
-                PAIRS.iter().find(|p| p.number == number).copied()
+                pairs::find(number)
             })
             .collect::<Option<Vec<Pair>>>()?;
         Some(Question { pairs })
@@ -169,6 +169,7 @@ pub fn random_long_number(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pairs::PAIRS;
     use crate::rng::Stream;
 
     #[test]
