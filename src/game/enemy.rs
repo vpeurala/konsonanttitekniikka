@@ -30,7 +30,15 @@ pub(super) struct BossLives {
     pub harmless_for: f32,
 }
 
+/// Names an enemy for as long as it lives, whatever happens to the others.
+/// Positions in the list shift when an enemy leaves, so anything that
+/// has to find the same enemy later holds one of these instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct EnemyId(pub u32);
+
 pub(super) struct Enemy {
+    /// Set by `Game::admit` when the enemy joins the game.
+    pub id: EnemyId,
     pub pos: Vec2,
     pub radius: f32,
     pub question: Question,
@@ -64,6 +72,7 @@ impl Enemy {
         text_width: TextWidth,
     ) -> Self {
         let mut enemy = Enemy {
+            id: EnemyId(0),
             pos: Vec2::ZERO,
             radius: ENEMY_RADIUS,
             question: question.clone(),

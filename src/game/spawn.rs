@@ -68,7 +68,7 @@ impl Game {
             Some(pos) => pos,
             None => self.spawn_position(&enemy),
         };
-        self.enemies.push(enemy);
+        self.admit(enemy);
     }
 
     /// A random portal far enough from the player to spawn from, if any,
@@ -154,7 +154,7 @@ impl Game {
             None => self.spawn_position(&boss),
         };
         boss.keep_on_screen();
-        self.enemies.push(boss);
+        self.admit(boss);
 
         self.boss_fight = true;
         self.out.sfx.push(Sfx::Boss);

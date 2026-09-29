@@ -3,7 +3,7 @@
 use macroquad::prelude::{Vec2, YELLOW};
 
 use super::Game;
-use super::enemy::Enemy;
+use super::enemy::{Enemy, EnemyId};
 use super::rules::*;
 use crate::audio::Sfx;
 use crate::obstacles::{push_out, steer};
@@ -39,7 +39,10 @@ impl Game {
     /// Casts a spell at the enemy at `index`. Ordinary enemies and a boss
     /// on its last life leave play at once; a boss with lives left moves on
     /// to its next pair.
-    pub(super) fn hit_enemy(&mut self, index: usize) {
+    pub(super) fn hit_enemy(&mut self, id: EnemyId) {
+        let Some(index) = self.enemies.iter().position(|e| e.id == id) else {
+            return;
+        };
         self.enemies[index].record_answer(&mut self.memory, self.now);
         let next = self.enemies[index]
             .boss

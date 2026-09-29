@@ -33,7 +33,7 @@ use crate::view::{ARENA_H, ARENA_W};
 use answer::Slot;
 pub use answer::{InputOutcome, resolve_input};
 use combat::Spell;
-use enemy::Enemy;
+use enemy::{Enemy, EnemyId};
 use rules::*;
 
 /// The width of text in the labels' font at a size, in virtual units.
@@ -122,6 +122,8 @@ pub struct Game {
     player: Vec2,
     player_moving: bool,
     enemies: Vec<Enemy>,
+    /// The id the next enemy to join gets.
+    next_enemy_id: u32,
     /// How many times each pair has appeared in this game.
     appearances: HashMap<Appearance, u32>,
     spells: Vec<Spell>,
@@ -176,6 +178,7 @@ impl Game {
             player: vec2(ARENA_W / 2.0, ARENA_H / 2.0),
             player_moving: false,
             enemies: Vec::new(),
+            next_enemy_id: 0,
             appearances: HashMap::new(),
             spells: Vec::new(),
             cast: None,
@@ -383,17 +386,28 @@ impl Game {
         }
     }
 
-    /// The enemies this slot can answer, as (enemy index, answer).
-    fn candidates(&self, slot: Slot) -> Vec<(usize, String)> {
+    /// The enemy called `id`, if it is still in play.
+    fn enemy(&self, id: EnemyId) -> Option<&Enemy> {
+        self.enemies.iter().find(|e| e.id == id)
+    }
+
+    /// Adds `enemy` to the game, giving it an id of its own.
+    fn admit(&mut self, mut enemy: Enemy) {
+        enemy.id = EnemyId(self.next_enemy_id);
+        self.next_enemy_id += 1;
+        self.enemies.push(enemy);
+    }
+
+    /// The enemies this slot can answer, with their answers.
+    fn candidates(&self, slot: Slot) -> Vec<(EnemyId, String)> {
         self.enemies
             .iter()
-            .enumerate()
-            .filter(|(_, e)| e.answer_slot() == slot)
-            .map(|(i, e)| (i, e.answer()))
+            .filter(|e| e.answer_slot() == slot)
+            .map(|e| (e.id, e.answer()))
             .collect()
     }
 
-    fn outcome(&self, slot: Slot) -> (Vec<(usize, String)>, InputOutcome) {
+    fn outcome(&self, slot: Slot) -> (Vec<(EnemyId, String)>, InputOutcome) {
         let candidates = self.candidates(slot);
         let answers = candidates.iter().map(|(_, answer)| answer.as_str());
         let outcome = resolve_input(self.slot(slot), answers);
@@ -423,11 +437,13 @@ impl Game {
         self.out.sfx.push(Sfx::Type);
         let (candidates, outcome) = self.outcome(slot);
         if let InputOutcome::Hit(hits) = outcome {
-            let first = self.enemies[candidates[hits[0]].0].question.clone();
-            // Candidates are in enemy order, so removing from the back
-            // keeps the remaining indices valid.
-            for &hit in hits.iter().rev() {
-                self.hit_enemy(candidates[hit].0);
+            let ids: Vec<EnemyId> = hits.iter().map(|&hit| candidates[hit].0).collect();
+            let first = self
+                .enemy(ids[0])
+                .map(|e| e.question.clone())
+                .expect("a hit enemy is in the game");
+            for id in ids {
+                self.hit_enemy(id);
             }
             self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
             self.show_question(&first, GREEN);

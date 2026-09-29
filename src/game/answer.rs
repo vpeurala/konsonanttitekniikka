@@ -7,7 +7,7 @@ use macroquad::prelude::{Color, SKYBLUE, VIOLET};
 pub enum InputOutcome {
     /// Nothing typed yet, or the text is the start of some answer.
     Pending,
-    /// The text is the complete answer for the enemies at these indices.
+    /// The text is the complete answer for the answers at these positions.
     Hit(Vec<usize>),
     /// The text cannot become any on-screen answer.
     DeadEnd,

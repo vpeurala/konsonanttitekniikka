@@ -73,14 +73,14 @@ fn idle(game: &mut Game, seconds: f32) -> Log {
 fn with_collision(game: &mut Game) {
     let mut enemy = Enemy::new(Question::single(PAIRS[0]), false, 0, 0.0, width);
     enemy.pos = game.player;
-    game.enemies.push(enemy);
+    game.admit(enemy);
 }
 
 /// A game with one monster far from the player.
 fn with_monster(game: &mut Game) {
     let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), false, 0, 0.0, width);
     enemy.pos = vec2(50.0, 50.0);
-    game.enemies.push(enemy);
+    game.admit(enemy);
 }
 
 #[test]
@@ -552,4 +552,32 @@ fn a_fast_spell_still_lands_in_a_long_frame() {
     );
     assert!(game.spells.is_empty());
     assert!(log.sfx.contains(&Sfx::Explode));
+}
+
+#[test]
+fn enemies_keep_their_ids_when_others_leave() {
+    let mut game = game();
+    for x in [50.0, 150.0, 250.0] {
+        let mut enemy = Enemy::new(
+            Question::single(PAIRS[x as usize / 100]),
+            false,
+            0,
+            0.0,
+            width,
+        );
+        enemy.pos = vec2(x, 50.0);
+        game.admit(enemy);
+    }
+    let ids: Vec<EnemyId> = game.enemies.iter().map(|e| e.id).collect();
+    assert!(ids[0] != ids[1] && ids[1] != ids[2] && ids[0] != ids[2]);
+
+    game.hit_enemy(ids[0]);
+    let left: Vec<EnemyId> = game.enemies.iter().map(|e| e.id).collect();
+    assert_eq!(left, [ids[1], ids[2]]);
+    assert!(game.enemy(ids[0]).is_none());
+    assert_eq!(game.enemy(ids[2]).map(|e| e.pos.x), Some(250.0));
+
+    // Hitting one that is already gone does nothing.
+    game.hit_enemy(ids[0]);
+    assert_eq!(game.enemies.len(), 2);
 }
