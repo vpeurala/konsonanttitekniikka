@@ -215,7 +215,7 @@ const PICTURES: &[(&str, Painter)] = &[
     ("41", maja),
     ("42", muki),
     ("43", mela),
-    ("44", muumi),
+    ("44", muumio),
     ("45", mopo),
     ("46", muuri),
     ("47", muusi),
@@ -1035,17 +1035,84 @@ fn mela(c: &Canvas, _: f32) {
     c.ellipse(0.5, 0.55, 0.18, 0.4, -40.0, rgb(200, 60, 50));
 }
 
-fn muumi(c: &Canvas, _: f32) {
-    let white = rgb(245, 245, 240);
-    c.line(0.45, 0.55, 0.8, 0.35, 0.05, white);
-    c.circle(0.82, 0.32, 0.07, white);
-    c.ellipse(0.0, 0.35, 0.45, 0.5, 0.0, white);
-    c.ellipse(0.1, -0.35, 0.45, 0.35, 0.0, white);
-    c.ellipse(-0.35, -0.3, 0.3, 0.2, 0.0, white);
-    c.ellipse(0.25, -0.75, 0.07, 0.14, 15.0, white);
-    c.ellipse(0.45, -0.7, 0.07, 0.14, 30.0, white);
-    c.circle(0.05, -0.45, 0.05, BLACK_);
-    c.ellipse(0.0, 0.35, 0.45, 0.5, 0.0, rgba(200, 200, 210, 0.15));
+/// A mummy from a horror film, come alive: wrapped in bandages, eyes
+/// glowing, lurching forward with its arms out and a loose end dangling.
+fn muumio(c: &Canvas, time: f32) {
+    let wrap = rgb(225, 214, 180);
+    let seam = rgb(160, 145, 110);
+    let gap = rgb(45, 35, 30);
+    // It lurches from side to side, reaching out as it goes.
+    let sway = (time * 2.0).sin() * 0.04;
+    let reach = (time * 2.0).cos() * 0.04;
+
+    // Legs, stiffly apart.
+    for x in [-0.28, 0.06] {
+        c.rect(x, 0.35, 0.22, 0.6, wrap);
+        for i in 0..4 {
+            let y = 0.42 + i as f32 * 0.14;
+            c.line(x, y, x + 0.22, y + 0.05, 0.025, seam);
+        }
+    }
+
+    // The body, leaning with the sway, wound round and round.
+    c.poly(
+        &[
+            (-0.34 + sway, -0.36),
+            (0.34 + sway, -0.36),
+            (0.3, 0.4),
+            (-0.3, 0.4),
+        ],
+        wrap,
+    );
+    for i in 0..6 {
+        let y = -0.28 + i as f32 * 0.12;
+        let lean = sway * (0.4 - y) / 0.76;
+        let tilt = if i % 2 == 0 { 0.035 } else { -0.035 };
+        c.line(-0.31 + lean, y - tilt, 0.31 + lean, y + tilt, 0.025, seam);
+    }
+
+    // Arms held out in front, hands grasping.
+    let hands = [(-0.88, -0.42 + reach), (0.88, -0.42 - reach)];
+    for (side, (hx, hy)) in [-1.0f32, 1.0].into_iter().zip(hands) {
+        let (sx, sy) = (0.3 * side + sway, -0.28);
+        let hx = hx + sway;
+        c.line(sx, sy, hx, hy, 0.15, wrap);
+        for t in [0.3, 0.55, 0.8] {
+            let (x, y) = (sx + (hx - sx) * t, sy + (hy - sy) * t);
+            c.line(x - 0.02, y - 0.08, x + 0.02, y + 0.08, 0.02, seam);
+        }
+        c.circle(hx, hy, 0.09, wrap);
+        for finger in [-0.06, 0.0, 0.06] {
+            c.line(hx, hy + finger, hx + 0.12 * side, hy + finger * 1.5, 0.035, wrap);
+        }
+    }
+
+    // A loose bandage end swinging from the left arm.
+    let (lx, ly) = (-0.6 + sway, -0.38);
+    let dangle: Vec<Pt> = (0..5)
+        .map(|k| {
+            let k = k as f32;
+            (lx + (time * 3.0 + k).sin() * 0.03 * k, ly + 0.11 * k)
+        })
+        .collect();
+    c.polyline(&dangle, 0.06, seam);
+    c.polyline(&dangle, 0.035, wrap);
+
+    // The head, with a dark slit for the eyes.
+    let (hx, hy) = (sway * 1.3, -0.63);
+    let (rx, ry) = (0.23, 0.27);
+    c.ellipse(hx, hy, rx, ry, 0.0, wrap);
+    for dy in [-0.17f32, -0.08, 0.1, 0.19] {
+        let half = rx * (1.0 - (dy / ry).powi(2)).max(0.0).sqrt();
+        c.line(hx - half, hy + dy - 0.02, hx + half, hy + dy + 0.02, 0.022, seam);
+    }
+    c.rect(hx - 0.18, hy - 0.05, 0.36, 0.09, gap);
+    // Eyes that glow and dim.
+    let glow = 0.6 + 0.4 * (time * 3.0).sin();
+    for ex in [-0.08, 0.08] {
+        c.circle(hx + ex, hy, 0.06, rgba(255, 220, 80, 0.35 * glow));
+        c.circle(hx + ex, hy, 0.025, rgb(255, 240, 140));
+    }
 }
 
 fn mopo(c: &Canvas, _: f32) {

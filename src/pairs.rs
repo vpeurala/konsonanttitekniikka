@@ -88,7 +88,7 @@ pub const PAIRS: &[Pair] = &[
     pair("41", "maja"),
     pair("42", "muki"),
     pair("43", "mela"),
-    pair("44", "muumi"),
+    pair("44", "muumio"),
     pair("45", "mopo"),
     pair("46", "muuri"),
     pair("47", "muusi"),
