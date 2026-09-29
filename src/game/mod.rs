@@ -162,6 +162,9 @@ pub struct Game {
     start_level: u32,
     /// The time of the latest frame, as `Input::now`.
     now: f64,
+    /// Seconds the game has run, not counting pauses. Animations follow
+    /// this rather than the clock, so a pause freezes them too.
+    play_time: f64,
     text_width: TextWidth,
 }
 
@@ -198,6 +201,7 @@ impl Game {
             memory,
             start_level: 1,
             now: 0.0,
+            play_time: 0.0,
             text_width,
         };
         game.start_at(start_level);
@@ -286,6 +290,7 @@ impl Game {
     /// Advances the game by `dt` seconds. What was typed or tapped this
     /// frame is acted on in the `first` step only.
     fn advance(&mut self, dt: f32, input: &Input, first: bool) {
+        self.play_time += f64::from(dt);
         self.effects.update(dt);
         self.update_spells(dt);
 

@@ -277,9 +277,11 @@ fn pausing_stops_time_and_drops_typing() {
     });
     assert!(game.is_paused());
     let (time, pos) = (game.level_time, game.enemies[0].pos);
+    let animation = game.play_time;
     let answer = game.enemies[0].answer();
     play(&mut game, 1.0, &typing(&answer));
     assert_eq!(game.level_time, time);
+    assert_eq!(game.play_time, animation, "animations freeze too");
     assert_eq!(game.enemies[0].pos, pos);
     assert_eq!(game.score, 0, "typing during a pause does nothing");
 

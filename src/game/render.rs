@@ -103,7 +103,7 @@ fn draw_enemy_body(enemy: &Enemy, time: f32, player: Vec2) {
 impl Game {
     pub fn draw(&self, view: View) {
         clear_background(BACKGROUND);
-        let time = get_time() as f32;
+        let time = self.play_time as f32;
         // Under everything else, so monsters are never hidden behind it.
         self.draw_new_pairs();
         for &portal in &self.portals {
