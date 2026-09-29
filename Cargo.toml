@@ -1,6 +1,6 @@
 [package]
 name = "lukuloitsu"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "A game for learning the Finnish consonant technique, a way to remember numbers"
 license = "MIT OR Apache-2.0"
@@ -21,6 +21,10 @@ opt-level = 3
 # must match the crate name.
 package_name = "fi.lukuloitsu.lukuloitsu"
 label = "Lukuloitsu"
+# The version name follows the crate's version by itself. Android also
+# needs a whole number that only ever grows: major * 10000 + minor * 100 +
+# patch, so 0.4.0 is 400.
+version_code = 400
 android_version = 33
 target_sdk_version = 33
 min_sdk_version = 26

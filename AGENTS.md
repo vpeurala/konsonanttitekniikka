@@ -217,8 +217,11 @@ so it can be tested without a screen; do the same for new layouts.
 
 ### Releases
 
-- A release is a version tag: bump `version` in `Cargo.toml` (which updates
-  `Cargo.lock`) and in `ios/Info.plist`, commit, then
+- A release is a version tag. Every part of the project carries the same
+  version: bump `version` in `Cargo.toml` (which updates `Cargo.lock`),
+  `version_code` in `Cargo.toml` for Android and `CFBundleShortVersionString`
+  and `CFBundleVersion` in `ios/Info.plist`. The codes are
+  major * 10000 + minor * 100 + patch (0.4.0 is 400). Commit, then
   `git tag -a X.Y.Z -m "Lukuloitsu X.Y"` and push the tag. Tags have no `v`.
   `.github/workflows/release.yml` builds the Windows executable and attaches
   a zip with it and the licenses to a GitHub Release, using
