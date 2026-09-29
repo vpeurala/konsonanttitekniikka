@@ -8,6 +8,9 @@
 //! | h | j | k | l | m | p | r | s | t | v |
 //!
 //! Vowels are filler. No other letters appear in the words.
+//!
+//! The choice of words is Ville Peurala's own work and is licensed under
+//! CC BY-NC-SA 4.0 (see the README); the code around it is MIT OR Apache-2.0.
 
 /// Which of the pairs it is: its position in `PAIRS`. Small, cheap to
 /// compare and hash, and it can't name a pair that doesn't exist.

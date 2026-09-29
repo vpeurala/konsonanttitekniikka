@@ -80,3 +80,38 @@ without cookies, with [GoatCounter](https://www.goatcounter.com); the apps send
 nothing.
 
 Made by Ville Peurala.
+
+## License
+
+The code is licensed under either of
+
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT license](LICENSE-MIT)
+
+at your option.
+
+The fonts in `assets/fonts` are not covered by this; they are under the SIL
+Open Font License, and the licenses are next to them
+([Nunito](assets/fonts/OFL-Nunito.txt),
+[Fredoka](assets/fonts/OFL-Fredoka.txt)). `vendor/miniquad` keeps its own
+license files.
+
+**The word list.** The 110 number and word pairs in `src/pairs.rs` are the
+author's own work, compiled over years. The list itself (the choice of a word
+for each number, not the Rust code around it) is licensed under
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): you may
+share and adapt it, with credit to Ville Peurala, for non-commercial purposes
+only, and adaptations must use the same license. This also means the game as a
+whole, with this list, can't be used commercially without the author's
+permission; to use the code commercially, replace the list with your own.
+
+**The name and the icon.** The name "Lukuloitsu", the domain lukuloitsu.fi
+and the game's icon are not covered by the code licenses. You are welcome to
+fork the code, but please don't publish a modified version under the name
+Lukuloitsu or with its icon, or in a way that suggests it is the original or
+endorsed by the author. Use a name and an icon of your own.
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in this project, as defined in the Apache-2.0
+license, is dual licensed as above, without any additional terms or
+conditions.
