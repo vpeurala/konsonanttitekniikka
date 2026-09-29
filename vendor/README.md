@@ -14,3 +14,7 @@ from the published crate:
   is open.
 - `src/lib.rs`: `set_or_replace_display` is compiled only on Android, its one
   caller, so other targets don't warn about dead code.
+- `src/lib.rs`, `src/native/ios.rs`: two more warning fixes: the display lock
+  in `set_ime_position` and `set_ime_enabled` is taken only where it is used
+  (not on Android), and `RUN_ARGS` is taken through a raw pointer instead of
+  a reference to a `static mut`.
