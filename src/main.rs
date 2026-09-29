@@ -81,7 +81,6 @@ async fn main() {
         touch_mode,
         // A web page can't be quit, only left.
         !cfg!(target_arch = "wasm32"),
-        fonts::bold_width,
         miniquad::date::now(),
     );
     let inputs = Inputs::new();

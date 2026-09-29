@@ -10,6 +10,7 @@
 mod answer;
 mod combat;
 mod enemy;
+mod metrics;
 mod render;
 mod rules;
 mod spawn;
@@ -35,11 +36,6 @@ use answer::{Slot, Typed};
 use combat::Spell;
 use enemy::{Enemy, EnemyId};
 use rules::*;
-
-/// The width of text in the labels' font at a size, in virtual units.
-/// The game needs it to keep labels apart and on screen, and only the
-/// outside world knows which font is loaded.
-pub type TextWidth = fn(&str, u16) -> f32;
 
 /// What the outside world says happened this frame.
 #[derive(Debug, Default, Clone)]
@@ -186,13 +182,12 @@ pub struct Game {
     /// Seconds the game has run, not counting pauses. Animations follow
     /// this rather than the clock, so a pause freezes them too.
     play_time: f64,
-    text_width: TextWidth,
 }
 
 impl Game {
     /// A new game starting from `start_level`, knowing what `memory` says
     /// about each pair.
-    pub fn new(touch: bool, memory: Memory, start_level: u32, text_width: TextWidth) -> Self {
+    pub fn new(touch: bool, memory: Memory, start_level: u32) -> Self {
         let mut game = Game {
             player: vec2(ARENA_W / 2.0, ARENA_H / 2.0),
             player_moving: false,
@@ -223,7 +218,6 @@ impl Game {
             timestep: Timestep::default(),
             pending: Pending::default(),
             play_time: 0.0,
-            text_width,
         };
         game.start_at(start_level);
         game.out
@@ -259,7 +253,7 @@ impl Game {
     fn restart(&mut self) {
         let memory = std::mem::take(&mut self.memory);
         let mut out = std::mem::take(&mut self.out);
-        *self = Game::new(self.touch, memory, self.start_level, self.text_width);
+        *self = Game::new(self.touch, memory, self.start_level);
         out.extend(std::mem::take(&mut self.out));
         self.out = out;
     }

@@ -6,12 +6,8 @@ use macroquad::prelude::vec2;
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
 
-fn width(text: &str, size: u16) -> f32 {
-    text.chars().count() as f32 * f32::from(size)
-}
-
 fn app_with(progress: SaveData, can_quit: bool) -> App {
-    App::new(progress, false, can_quit, width, START)
+    App::new(progress, false, can_quit, START)
 }
 
 fn app() -> App {

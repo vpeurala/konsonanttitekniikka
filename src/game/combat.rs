@@ -52,7 +52,7 @@ impl Game {
             Some(question) => {
                 let target_pos = self.enemies[index].pos;
                 let earlier = self.count_appearance(&question);
-                self.enemies[index].show(question, earlier, self.text_width);
+                self.enemies[index].show(question, earlier);
                 self.cast_spell(SpellTarget::Boss, target_pos);
             }
             None => {

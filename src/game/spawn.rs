@@ -58,7 +58,7 @@ impl Game {
         let earlier = self.count_appearance(&question);
         let shows_word = self.rng.chance(0.5);
         let phase = self.rng.range(0.0, 100.0);
-        let mut enemy = Enemy::new(question, shows_word, earlier, phase, self.text_width);
+        let mut enemy = Enemy::new(question, shows_word, earlier, phase);
         let portal = if self.rng.chance(PORTAL_SPAWN_SHARE) {
             self.portal_spawn_position()
         } else {
@@ -146,7 +146,7 @@ impl Game {
         }
         let earlier = self.count_appearance(&numbers[0]);
         let phase = self.rng.range(0.0, 100.0);
-        let mut boss = Enemy::boss(&numbers, easy, earlier, phase, self.text_width);
+        let mut boss = Enemy::boss(&numbers, easy, earlier, phase);
         // The boss is slow, so without a portal it starts just inside the
         // edge.
         boss.pos = match self.portal_spawn_position() {

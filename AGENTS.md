@@ -80,9 +80,10 @@ so it can be tested without a screen; do the same for new layouts.
   frame rate; a frame counts as at most 0.25 s, and typing waits in
   `Pending` for the next step, so a slow frame can't skip past a hit and a
   fast one can't lose a key.
-  Text width is injected (`TextWidth`), because only the shell knows the
-  loaded font. Split into `rules.rs` (numbers and pure rules), `answer.rs`
-  (matching what was typed), `enemy.rs`, `spawn.rs`, `combat.rs` (spells,
+  Label widths come from a fixed table of Nunito Bold's letter widths
+  (`metrics.rs`), not from measuring text, so the simulation never depends
+  on the font machinery. Split into `rules.rs` (numbers and pure rules), `answer.rs`
+  (matching what was typed), `enemy.rs`, `metrics.rs`, `spawn.rs`, `combat.rs` (spells,
   collisions, movement) and `render.rs` (the only file that draws).
 - `pairs.rs`: the 110 pairs and which characters count as answers. Each
   `Pair` carries a `PairId`, its position in `PAIRS`, which memory, the

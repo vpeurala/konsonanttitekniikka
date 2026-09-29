@@ -11,7 +11,7 @@ use macroquad::prelude::{BLACK, KeyCode, Rect};
 
 use crate::audio::Sfx;
 use crate::frame::Frame;
-use crate::game::{self, Game, GameEvent, TextWidth};
+use crate::game::{self, Game, GameEvent};
 use crate::levels::{LevelAction, LevelSelect};
 use crate::memory::Memory;
 use crate::practice::{PracticeAction, PracticeScreen};
@@ -69,7 +69,6 @@ pub struct App {
     touch_mode: bool,
     /// A web page can't be quit, only left.
     can_quit: bool,
-    text_width: TextWidth,
     /// When progress was last saved, in seconds since 1970.
     last_save: f64,
 }
@@ -82,13 +81,7 @@ fn menu_rect() -> Rect {
 impl App {
     /// The app at its title screen, with `progress` loaded from the
     /// device, at time `now`.
-    pub fn new(
-        progress: SaveData,
-        touch_mode: bool,
-        can_quit: bool,
-        text_width: TextWidth,
-        now: f64,
-    ) -> Self {
+    pub fn new(progress: SaveData, touch_mode: bool, can_quit: bool, now: f64) -> Self {
         App {
             screen: Screen::Title,
             title: TitleScreen::new(touch_mode),
@@ -97,7 +90,6 @@ impl App {
             progress,
             touch_mode,
             can_quit,
-            text_width,
             last_save: now,
         }
     }
@@ -171,7 +163,6 @@ impl App {
                             self.touch_mode,
                             self.memory.clone(),
                             level,
-                            self.text_width,
                         ))));
                     }
                 }
@@ -265,7 +256,7 @@ impl App {
     }
 
     fn new_game(&self, level: u32) -> Game {
-        Game::new(self.touch_mode, self.memory.clone(), level, self.text_width)
+        Game::new(self.touch_mode, self.memory.clone(), level)
     }
 
     /// Draws the current screen.

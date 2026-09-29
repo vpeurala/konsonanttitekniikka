@@ -2,8 +2,8 @@
 
 use macroquad::prelude::{Vec2, vec2};
 
-use super::TextWidth;
 use super::answer::Slot;
+use super::metrics::text_width;
 use super::rules::{
     BOSS_RADIUS, BOSS_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED, enemy_speed, shows_hint,
 };
@@ -64,13 +64,7 @@ pub(super) struct Enemy {
 
 impl Enemy {
     /// `phase` offsets its animation from other enemies'.
-    pub fn new(
-        question: Question,
-        shows_word: bool,
-        earlier_appearances: u32,
-        phase: f32,
-        text_width: TextWidth,
-    ) -> Self {
+    pub fn new(question: Question, shows_word: bool, earlier_appearances: u32, phase: f32) -> Self {
         let mut enemy = Enemy {
             id: EnemyId(0),
             pos: Vec2::ZERO,
@@ -88,23 +82,17 @@ impl Enemy {
             phase,
             boss: None,
         };
-        enemy.show(question, earlier_appearances, text_width);
+        enemy.show(question, earlier_appearances);
         enemy
     }
 
     /// A boss showing `numbers`, one after another, long numbers split
     /// into their pairs if `split`. Its `earlier_appearances` are for the
     /// first number.
-    pub fn boss(
-        numbers: &[Question],
-        split: bool,
-        earlier_appearances: u32,
-        phase: f32,
-        text_width: TextWidth,
-    ) -> Self {
-        let mut boss = Enemy::new(numbers[0].clone(), false, 0, phase, text_width);
+    pub fn boss(numbers: &[Question], split: bool, earlier_appearances: u32, phase: f32) -> Self {
+        let mut boss = Enemy::new(numbers[0].clone(), false, 0, phase);
         boss.split = split;
-        boss.show(numbers[0].clone(), earlier_appearances, text_width);
+        boss.show(numbers[0].clone(), earlier_appearances);
         boss.radius = BOSS_RADIUS;
         boss.boss = Some(BossLives {
             queue: numbers[1..].to_vec(),
@@ -116,7 +104,7 @@ impl Enemy {
     }
 
     /// Switches to showing `question`.
-    pub fn show(&mut self, question: Question, earlier_appearances: u32, text_width: TextWidth) {
+    pub fn show(&mut self, question: Question, earlier_appearances: u32) {
         let (label, hint) = if self.shows_word {
             (question.words(), question.number(false))
         } else {
@@ -235,17 +223,13 @@ mod tests {
     use super::*;
     use crate::pairs::PAIRS;
 
-    fn width(text: &str, size: u16) -> f32 {
-        text.chars().count() as f32 * f32::from(size) * 0.6
-    }
-
     fn enemy(pair: usize, shows_word: bool) -> Enemy {
-        Enemy::new(Question::single(PAIRS[pair]), shows_word, 0, 0.0, width)
+        Enemy::new(Question::single(PAIRS[pair]), shows_word, 0, 0.0)
     }
 
     fn boss() -> Enemy {
         let numbers: Vec<Question> = PAIRS[..5].iter().map(|p| Question::single(*p)).collect();
-        Enemy::boss(&numbers, false, 0, 0.0, width)
+        Enemy::boss(&numbers, false, 0, 0.0)
     }
 
     fn label_rect(e: &Enemy) -> (f32, f32, f32, f32) {
@@ -359,7 +343,7 @@ mod tests {
     fn showing_the_next_question_restarts_the_hint_timer() {
         let mut e = enemy(3, false);
         e.shown_for = 10.0;
-        e.show(Question::single(PAIRS[4]), 0, width);
+        e.show(Question::single(PAIRS[4]), 0);
         assert_eq!(e.shown_for, 0.0);
         assert_eq!(e.label, "4");
     }

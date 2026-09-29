@@ -8,14 +8,8 @@ use crate::pairs::PAIRS;
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
 
-/// A stand-in for measuring text: every character is as wide as it is
-/// tall.
-fn width(text: &str, size: u16) -> f32 {
-    text.chars().count() as f32 * f32::from(size)
-}
-
 fn game_from(level: u32) -> Game {
-    Game::new(false, Memory::default(), level, width)
+    Game::new(false, Memory::default(), level)
 }
 
 fn game() -> Game {
@@ -72,14 +66,14 @@ fn idle(game: &mut Game, seconds: f32) -> Log {
 /// A game with one monster showing `pair` right on top of the player, so
 /// it hurts her on the next frame.
 fn with_collision(game: &mut Game) {
-    let mut enemy = Enemy::new(Question::single(PAIRS[0]), false, 0, 0.0, width);
+    let mut enemy = Enemy::new(Question::single(PAIRS[0]), false, 0, 0.0);
     enemy.pos = game.player;
     game.admit(enemy);
 }
 
 /// A game with one monster far from the player.
 fn with_monster(game: &mut Game) {
-    let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), false, 0, 0.0, width);
+    let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), false, 0, 0.0);
     enemy.pos = vec2(50.0, 50.0);
     game.admit(enemy);
 }
@@ -562,13 +556,7 @@ fn a_fast_spell_still_lands_in_a_long_frame() {
 fn enemies_keep_their_ids_when_others_leave() {
     let mut game = game();
     for x in [50.0, 150.0, 250.0] {
-        let mut enemy = Enemy::new(
-            Question::single(PAIRS[x as usize / 100]),
-            false,
-            0,
-            0.0,
-            width,
-        );
+        let mut enemy = Enemy::new(Question::single(PAIRS[x as usize / 100]), false, 0, 0.0);
         enemy.pos = vec2(x, 50.0);
         game.admit(enemy);
     }
