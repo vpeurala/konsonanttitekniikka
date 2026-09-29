@@ -56,3 +56,19 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         # A missing token or a Codecov outage shouldn't turn the build red.
         fail_ci_if_error: false
+
+  # Builds the game for Windows, which proves it still compiles there and
+  # gives a downloadable lukuloitsu.exe (Actions run page, "Artifacts").
+  windows:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --release
+    - name: Upload the executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: lukuloitsu-windows
+        path: target/release/lukuloitsu.exe
