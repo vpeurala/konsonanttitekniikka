@@ -135,4 +135,26 @@ mod tests {
             assert!((5..9).contains(&rng.index(5..9)));
         }
     }
+
+    /// Pinned so the generator, and with it every game's sequence of
+    /// spawns, can't change by accident.
+    #[test]
+    fn the_gameplay_stream_starts_with_these_numbers() {
+        let mut rng = Rng::new(Stream::Gameplay, 0);
+        assert_eq!(
+            [rng.next_u64(), rng.next_u64(), rng.next_u64()],
+            [
+                6_755_087_138_771_210_701,
+                6_448_486_015_279_407_272,
+                4_376_902_893_971_273_747
+            ]
+        );
+    }
+
+    #[test]
+    fn streams_and_indices_give_different_sequences() {
+        let first = |stream, index| Rng::new(stream, index).next_u64();
+        assert_ne!(first(Stream::Gameplay, 0), first(Stream::Effects, 0));
+        assert_ne!(first(Stream::Gameplay, 0), first(Stream::Gameplay, 1));
+    }
 }

@@ -121,7 +121,8 @@ and never changes it.
 
 ### Web (lukuloitsu.fi)
 
-- Built by `scripts/web.sh` into `target/web`. Netlify runs
+- Built by `scripts/web.sh` into `target/web`, with link-time optimization
+  turned on through environment variables (about 13% smaller). Netlify runs
   `scripts/netlify-build.sh` (see `netlify.toml`) on every push to `main`;
   `rust-toolchain.toml` is there for Netlify's build machine.
 - `.cargo/config.toml` passes `--allow-undefined` to the wasm linker, because

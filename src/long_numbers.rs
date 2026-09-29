@@ -246,4 +246,24 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn every_number_up_to_four_digits_reads_and_decodes_back() {
+        use crate::pairs::DIGIT_CONSONANTS;
+        for length in 1..=4 {
+            for n in 0..10u32.pow(length) {
+                let digits = format!("{n:0width$}", width = length as usize);
+                let question =
+                    Question::for_number(&digits).unwrap_or_else(|| panic!("{digits} should read"));
+                assert_eq!(question.number(false), digits);
+                let decoded: String = question
+                    .typed_words()
+                    .chars()
+                    .filter_map(|c| DIGIT_CONSONANTS.iter().position(|&d| d == c))
+                    .map(|d| char::from_digit(d as u32, 10).unwrap())
+                    .collect();
+                assert_eq!(decoded, digits, "{}", question.words());
+            }
+        }
+    }
 }

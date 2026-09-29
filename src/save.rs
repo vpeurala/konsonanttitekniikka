@@ -20,8 +20,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::memory::{Memory, PairRecord};
+use crate::pairs::PAIRS;
 
 const HEADER: &str = "lukuloitsu-save 1";
+
+/// No saved level is taken to be higher than this: nobody plays this far,
+/// and a damaged number must not send the game counting to billions.
+const MAX_LEVEL: u32 = 1000;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SaveData {
@@ -81,8 +86,8 @@ impl SaveData {
             match words.as_slice() {
                 ["music", setting] => data.music_on = *setting != "off",
                 ["best-level", level] => {
-                    if let Ok(level) = level.parse() {
-                        data.best_level = level;
+                    if let Ok(level) = level.parse::<u32>() {
+                        data.best_level = level.clamp(1, MAX_LEVEL);
                     }
                 }
                 ["stars", level, stars] => {
@@ -99,9 +104,12 @@ impl SaveData {
                 ["pair", number, difficulty, last_seen, times_seen] => {
                     if let (Ok(difficulty), Ok(last_seen), Ok(times_seen)) = (
                         difficulty.parse::<f32>(),
-                        last_seen.parse(),
+                        last_seen.parse::<f64>(),
                         times_seen.parse(),
-                    ) {
+                    ) && difficulty.is_finite()
+                        && last_seen.is_finite()
+                        && PAIRS.iter().any(|p| p.number == *number)
+                    {
                         data.pairs.insert(
                             number.to_string(),
                             PairRecord {
@@ -132,8 +140,8 @@ impl SaveData {
         if day == self.streak_day {
             return;
         }
-        self.streak = if day == self.streak_day + 1 {
-            self.streak + 1
+        self.streak = if self.streak_day.checked_add(1) == Some(day) {
+            self.streak.saturating_add(1)
         } else {
             1
         };
@@ -225,6 +233,7 @@ fn write_text(text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rng::{Rng, Stream};
 
     fn sample() -> SaveData {
         let mut data = SaveData {
@@ -292,5 +301,121 @@ mod tests {
         data.record_level(2, 3);
         assert_eq!(data.stars.get(&2), Some(&3));
         assert_eq!(data.best_level, 3);
+    }
+
+    /// A save file made of plausible and implausible pieces, as damaged or
+    /// tampered local storage might hold.
+    fn garbage(seed: u64) -> String {
+        const TOKENS: [&str; 26] = [
+            "music",
+            "best-level",
+            "stars",
+            "streak",
+            "pair",
+            "on",
+            "off",
+            "NaN",
+            "inf",
+            "-inf",
+            "-1",
+            "0",
+            "1",
+            "22",
+            "99",
+            "0.5",
+            "1e400",
+            "4294967295",
+            "99999999999999999999",
+            "9223372036854775807",
+            "-9223372036854775808",
+            "x",
+            "",
+            "3.14",
+            "1800000000",
+            "00",
+        ];
+        let mut rng = Rng::new(Stream::Gameplay, seed);
+        let mut text = format!("{HEADER}\n");
+        for _ in 0..rng.index(1..12) {
+            for _ in 0..rng.index(1..7) {
+                text += rng.pick(&TOKENS);
+                text += " ";
+            }
+            text += "\n";
+        }
+        text
+    }
+
+    #[test]
+    fn damaged_save_files_never_panic_and_always_give_usable_data() {
+        for seed in 0..3000 {
+            let text = garbage(seed);
+            let mut data = SaveData::from_text(&text);
+            assert!(
+                (1..=MAX_LEVEL).contains(&data.best_level),
+                "best level {} from {text:?}",
+                data.best_level
+            );
+            for (number, record) in &data.pairs {
+                assert!(
+                    (0.0..=1.0).contains(&record.difficulty) && record.last_seen.is_finite(),
+                    "pair {number} {record:?} from {text:?}"
+                );
+            }
+            // Whatever was read must survive being used.
+            let memory = data.memory();
+            for pair in PAIRS {
+                assert!(memory.weight(pair, 1.8e9).is_finite(), "{text:?}");
+            }
+            data.record_play_day(20_000);
+            data.record_play_day(20_001);
+            assert!(crate::levels::checkpoints(data.best_level).len() <= 25);
+            // Writing rounds times to whole seconds, but once rounded a
+            // save reads back as itself.
+            let once = SaveData::from_text(&data.to_text());
+            assert_eq!(SaveData::from_text(&once.to_text()), once, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_save_cut_off_anywhere_still_loads() {
+        let text = sample().to_text();
+        for end in 0..=text.len() {
+            if text.is_char_boundary(end) {
+                SaveData::from_text(&text[..end]);
+            }
+        }
+    }
+
+    #[test]
+    fn the_streak_survives_extreme_days() {
+        let mut data = SaveData {
+            streak_day: i64::MAX,
+            streak: u32::MAX,
+            ..SaveData::default()
+        };
+        data.record_play_day(i64::MAX);
+        data.record_play_day(i64::MIN);
+        data.streak_day = i64::MAX - 1;
+        data.streak = u32::MAX;
+        data.record_play_day(i64::MAX);
+        assert_eq!(data.streak, u32::MAX);
+    }
+
+    #[test]
+    fn an_absurd_best_level_is_capped() {
+        let data = SaveData::from_text(&format!("{HEADER}\nbest-level 4294967295\n"));
+        assert_eq!(data.best_level, MAX_LEVEL);
+        let data = SaveData::from_text(&format!("{HEADER}\nbest-level 0\n"));
+        assert_eq!(data.best_level, 1);
+    }
+
+    #[test]
+    fn numbers_that_are_not_numbers_are_skipped() {
+        let text = format!(
+            "{HEADER}\npair 22 NaN 100 1\npair 23 inf 100 1\npair 24 0.5 inf 1\npair 25 0.5 100 1\npair x 0.5 100 1\n"
+        );
+        let data = SaveData::from_text(&text);
+        assert_eq!(data.pairs.keys().collect::<Vec<_>>(), vec!["25"]);
     }
 }

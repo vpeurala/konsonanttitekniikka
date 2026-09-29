@@ -118,4 +118,29 @@ mod tests {
             assert!(numbers.is_sorted());
         }
     }
+
+    /// The promise that every game introduces the same pairs in the same
+    /// order is only kept if these never change by accident. Change them
+    /// on purpose only: everyone's progress on later levels shifts with
+    /// them.
+    #[test]
+    fn the_first_levels_introduce_these_pairs() {
+        let mut curriculum = Curriculum::new();
+        let mut levels = Vec::new();
+        for _ in 2..=6 {
+            curriculum.next_level();
+            let numbers: Vec<&str> = curriculum.new_pairs().iter().map(|p| p.number).collect();
+            levels.push(numbers);
+        }
+        assert_eq!(
+            levels,
+            [
+                ["39", "49", "52", "64", "77"],
+                ["01", "51", "55", "66", "82"],
+                ["11", "41", "48", "71", "87"],
+                ["13", "28", "31", "34", "36"],
+                ["07", "20", "63", "90", "92"],
+            ]
+        );
+    }
 }
