@@ -13,6 +13,7 @@ use crate::audio::Sfx;
 use crate::frame::Frame;
 use crate::game::{self, Game, GameEvent, TextWidth};
 use crate::levels::{LevelAction, LevelSelect};
+use crate::memory::Memory;
 use crate::practice::{PracticeAction, PracticeScreen};
 use crate::progress::ProgressScreen;
 use crate::save::SaveData;
@@ -62,6 +63,9 @@ pub struct App {
     title: TitleScreen,
     controls: TouchControls,
     progress: SaveData,
+    /// How well each pair is known, live: `progress` only gets it when
+    /// saving, so nothing is converted every frame.
+    memory: Memory,
     touch_mode: bool,
     /// A web page can't be quit, only left.
     can_quit: bool,
@@ -89,6 +93,7 @@ impl App {
             screen: Screen::Title,
             title: TitleScreen::new(touch_mode),
             controls: TouchControls::default(),
+            memory: progress.memory(),
             progress,
             touch_mode,
             can_quit,
@@ -117,7 +122,7 @@ impl App {
         // Esc leaves the game or a menu screen, and quits from the title.
         let escape = frame.pressed(KeyCode::Escape);
         if frame.pressed(KeyCode::Tab) {
-            toggle_music(&mut self.progress, &mut effects);
+            toggle_music(&mut self.progress, &self.memory, &mut effects);
         }
 
         let mut next = None;
@@ -144,7 +149,7 @@ impl App {
                         effects.push(Effect::count("harjoittelu", "Harjoittelu"));
                         next = Some(Screen::Practice(Box::new(PracticeScreen::new(
                             self.progress.best_level,
-                            &self.progress.memory(),
+                            &self.memory,
                             self.touch_mode,
                             frame.now,
                         ))));
@@ -164,7 +169,7 @@ impl App {
                     LevelAction::Start(level) => {
                         next = Some(Screen::Game(Box::new(Game::new(
                             self.touch_mode,
-                            self.progress.memory(),
+                            self.memory.clone(),
                             level,
                             self.text_width,
                         ))));
@@ -183,19 +188,19 @@ impl App {
                 let view = View::fit(touch::content_rect(self.touch_mode), frame.screen);
                 let input = touch_input(&mut self.controls, self.touch_mode, frame, &view);
                 if input.buttons.contains(&Button::Music) {
-                    toggle_music(&mut self.progress, &mut effects);
+                    toggle_music(&mut self.progress, &self.memory, &mut effects);
                 }
                 let mut keys = frame.typed.clone();
                 keys.extend(input.keys.iter().copied());
                 // The pause button leaves practice.
                 let back = escape || input.buttons.contains(&Button::Pause);
-                let mut memory = self.progress.memory();
-                let action = practice.update(frame, &keys, input.arena_taps, back, &mut memory);
-                self.progress.set_memory(&memory);
+                let action =
+                    practice.update(frame, &keys, input.arena_taps, back, &mut self.memory);
                 effects.extend(practice.take_sfx().into_iter().map(Effect::Play));
                 let leaving = matches!(action, PracticeAction::Back);
                 save(
-                    &self.progress,
+                    &mut self.progress,
+                    &self.memory,
                     &mut self.last_save,
                     frame.now,
                     leaving,
@@ -210,7 +215,7 @@ impl App {
                 let view = View::fit(touch::content_rect(self.touch_mode), frame.screen);
                 let input = touch_input(&mut self.controls, self.touch_mode, frame, &view);
                 if input.buttons.contains(&Button::Music) {
-                    toggle_music(&mut self.progress, &mut effects);
+                    toggle_music(&mut self.progress, &self.memory, &mut effects);
                 }
 
                 let mut keys = frame.typed.clone();
@@ -237,10 +242,12 @@ impl App {
                     save_now = true;
                 }
                 if save_now || frame.now - self.last_save > SAVE_INTERVAL {
-                    self.progress.set_memory(game.memory());
+                    // The game has been learning; take what it knows.
+                    self.memory = game.memory().clone();
                 }
                 save(
-                    &self.progress,
+                    &mut self.progress,
+                    &self.memory,
                     &mut self.last_save,
                     frame.now,
                     save_now,
@@ -258,12 +265,7 @@ impl App {
     }
 
     fn new_game(&self, level: u32) -> Game {
-        Game::new(
-            self.touch_mode,
-            self.progress.memory(),
-            level,
-            self.text_width,
-        )
+        Game::new(self.touch_mode, self.memory.clone(), level, self.text_width)
     }
 
     /// Draws the current screen.
@@ -281,7 +283,7 @@ impl App {
             }
             Screen::Progress(screen) => {
                 let view = view::begin(menu_rect());
-                screen.draw(&self.progress, self.touch_mode);
+                screen.draw(&self.progress, &self.memory, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Practice(practice) => {
@@ -321,21 +323,24 @@ fn touch_input(
 }
 
 /// Switches the music on or off and remembers the choice.
-fn toggle_music(progress: &mut SaveData, effects: &mut Vec<Effect>) {
+fn toggle_music(progress: &mut SaveData, memory: &Memory, effects: &mut Vec<Effect>) {
     progress.music_on = !progress.music_on;
+    progress.set_memory(memory);
     effects.push(Effect::Save(Box::new(progress.clone())));
 }
 
 /// Saves `progress` if `now` is `forced`, or it has been a while since the
 /// last time.
 fn save(
-    progress: &SaveData,
+    progress: &mut SaveData,
+    memory: &Memory,
     last_save: &mut f64,
     now: f64,
     forced: bool,
     effects: &mut Vec<Effect>,
 ) {
     if forced || now - *last_save > SAVE_INTERVAL {
+        progress.set_memory(memory);
         effects.push(Effect::Save(Box::new(progress.clone())));
         *last_save = now;
     }

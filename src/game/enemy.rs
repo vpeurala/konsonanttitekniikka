@@ -220,3 +220,138 @@ impl Enemy {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pairs::PAIRS;
+
+    fn width(text: &str, size: u16) -> f32 {
+        text.chars().count() as f32 * f32::from(size) * 0.6
+    }
+
+    fn enemy(pair: usize, shows_word: bool) -> Enemy {
+        Enemy::new(Question::single(PAIRS[pair]), shows_word, 0, 0.0, width)
+    }
+
+    fn boss() -> Enemy {
+        let numbers: Vec<Question> = PAIRS[..5].iter().map(|p| Question::single(*p)).collect();
+        Enemy::boss(&numbers, false, 0, 0.0, width)
+    }
+
+    fn label_rect(e: &Enemy) -> (f32, f32, f32, f32) {
+        let center = e.pos + vec2(0.0, e.label_offset());
+        (
+            center.x - e.label_width / 2.0,
+            center.y - LABEL_HEIGHT / 2.0,
+            center.x + e.label_width / 2.0,
+            center.y + LABEL_HEIGHT / 2.0,
+        )
+    }
+
+    fn grid() -> impl Iterator<Item = Vec2> {
+        (-2..=22).flat_map(|i| {
+            (-2..=17).map(move |j| vec2(i as f32 * ARENA_W / 20.0, j as f32 * ARENA_H / 15.0))
+        })
+    }
+
+    #[test]
+    fn a_kept_enemys_label_is_inside_the_arena() {
+        // The longest words, as words and as numbers, hint showing or not.
+        let longest = PAIRS.iter().position(|p| p.word == "muumio").unwrap();
+        for shows_word in [true, false] {
+            for shown_for in [0.0, 10.0] {
+                for pos in grid() {
+                    let mut e = enemy(longest, shows_word);
+                    e.shown_for = shown_for;
+                    e.pos = pos;
+                    e.keep_on_screen();
+                    let (left, top, right, mut bottom) = label_rect(&e);
+                    if e.shows_hint() {
+                        bottom += HINT_SPACE;
+                    }
+                    assert!(left >= 0.0 && right <= ARENA_W, "{pos}: {left}..{right}");
+                    assert!(top >= 0.0 && bottom <= ARENA_H, "{pos}: {top}..{bottom}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_kept_enemys_body_is_inside_the_arena() {
+        for pos in grid() {
+            let mut e = enemy(3, true);
+            e.pos = pos;
+            e.keep_on_screen();
+            assert!(
+                e.pos.x >= e.radius && e.pos.x <= ARENA_W - e.radius,
+                "{pos}"
+            );
+            assert!(e.pos.y >= e.radius, "{pos}");
+        }
+    }
+
+    #[test]
+    fn a_kept_boss_has_room_for_its_wings_and_lives() {
+        for pos in grid() {
+            let mut b = boss();
+            b.pos = pos;
+            b.keep_on_screen();
+            assert!(b.pos.x - b.radius * 1.7 >= -1e-3, "{pos}");
+            assert!(b.pos.x + b.radius * 1.7 <= ARENA_W + 1e-3, "{pos}");
+            // The pips sit above its head.
+            assert!(b.pos.y - b.radius * 1.6 - 8.0 >= 0.0, "{pos}");
+        }
+    }
+
+    #[test]
+    fn keeping_an_enemy_on_screen_changes_nothing_when_it_already_is() {
+        let mut e = enemy(3, false);
+        e.pos = vec2(400.0, 300.0);
+        e.keep_on_screen();
+        assert_eq!(e.pos, vec2(400.0, 300.0));
+    }
+
+    #[test]
+    fn enemies_are_kept_apart_by_their_reach() {
+        let e = enemy(3, false);
+        assert!(e.reach() > e.radius, "the label is part of it");
+        let longer = enemy(PAIRS.iter().position(|p| p.word == "muumio").unwrap(), true);
+        assert!(longer.reach() > e.reach());
+    }
+
+    #[test]
+    fn an_enemy_shows_its_word_or_its_number_and_takes_the_other_as_answer() {
+        let word = enemy(3, true);
+        assert_eq!(word.label, "LUU");
+        assert_eq!(word.answer(), "3");
+        assert_eq!(word.answer_slot(), Slot::Number);
+        let number = enemy(3, false);
+        assert_eq!(number.label, "3");
+        assert_eq!(number.answer(), "luu");
+        assert_eq!(number.answer_slot(), Slot::Word);
+    }
+
+    #[test]
+    fn the_hint_shows_the_other_side_of_the_pair() {
+        assert_eq!(enemy(3, true).hint, "= 3");
+        assert_eq!(enemy(3, false).hint, "= LUU");
+    }
+
+    #[test]
+    fn a_boss_is_bigger_and_slower_than_a_monster() {
+        let (monster, boss) = (enemy(3, false), boss());
+        assert!(boss.radius > monster.radius);
+        assert!(boss.speed() < monster.speed());
+        assert!(boss.is_boss() && !monster.is_boss());
+    }
+
+    #[test]
+    fn showing_the_next_question_restarts_the_hint_timer() {
+        let mut e = enemy(3, false);
+        e.shown_for = 10.0;
+        e.show(Question::single(PAIRS[4]), 0, width);
+        assert_eq!(e.shown_for, 0.0);
+        assert_eq!(e.label, "4");
+    }
+}

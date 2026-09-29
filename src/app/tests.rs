@@ -259,3 +259,55 @@ fn the_same_frames_give_the_same_effects() {
     };
     assert_eq!(run(), run());
 }
+
+fn last_saved(effects: &[Effect]) -> Option<&SaveData> {
+    effects.iter().rev().find_map(|e| match e {
+        Effect::Save(data) => Some(&**data),
+        _ => None,
+    })
+}
+
+#[test]
+fn what_practice_teaches_is_saved_when_leaving() {
+    let mut app = app();
+    app.update(&press(KeyCode::H));
+    // Giving up on a card is a miss, which is remembered.
+    app.update(&press(KeyCode::Space));
+    let effects = app.update(&press(KeyCode::Escape));
+    let saved = last_saved(&effects).expect("leaving practice saves");
+    assert_eq!(saved.pairs.len(), 1);
+}
+
+#[test]
+fn what_a_game_teaches_is_saved_when_leaving() {
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    // Monsters that nobody answers reach her, and each is a miss.
+    idle(&mut app, START, 30.0);
+    let effects = app.update(&press(KeyCode::Escape));
+    let saved = last_saved(&effects).expect("leaving a game saves");
+    assert!(!saved.pairs.is_empty(), "the misses are in the save");
+    assert!(on_title(&app));
+}
+
+#[test]
+fn a_new_game_starts_from_what_practice_taught() {
+    let mut app = app();
+    app.update(&press(KeyCode::H));
+    app.update(&press(KeyCode::Space));
+    app.update(&press(KeyCode::Escape));
+    app.update(&press(KeyCode::Enter));
+    let Screen::Game(game) = &app.screen else {
+        panic!("a game should be showing");
+    };
+    assert_eq!(game.memory().records().count(), 1);
+}
+
+#[test]
+fn the_progress_screen_shows_what_was_learned_without_saving_first() {
+    let mut app = app();
+    app.update(&press(KeyCode::H));
+    app.update(&press(KeyCode::Space));
+    assert_eq!(app.memory.records().count(), 1, "kept live in the app");
+    assert!(app.progress.pairs.is_empty(), "not converted every frame");
+}

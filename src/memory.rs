@@ -287,4 +287,67 @@ mod tests {
         assert_eq!(restored.records().count(), 1);
         assert_eq!(restored.record(&PAIRS[5]), memory.record(&PAIRS[5]));
     }
+
+    /// The days until a pair is next due, after each of `answers` in turn:
+    /// each is given `seconds` after it appeared, and the first one reads
+    /// its hint. The pair is asked again exactly when it comes due.
+    fn schedule(seconds: f32, answers: usize, slip_at: Option<usize>) -> Vec<f64> {
+        let pair = PAIRS[3];
+        let mut memory = Memory::default();
+        let mut now = NOW;
+        (1..=answers)
+            .map(|n| {
+                if Some(n) == slip_at {
+                    memory.record_miss(pair, now);
+                } else {
+                    memory.record_answer(pair, seconds, n == 1, now);
+                }
+                let record = memory.record(&pair).unwrap();
+                let interval = review_interval(record.difficulty, record.streak);
+                now += interval;
+                interval / DAY
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_quick_learner_is_asked_less_and_less_often() {
+        let days = schedule(1.0, 14, None);
+        assert!(days.is_sorted(), "{days:?}");
+        assert!(
+            days[0] > 0.5 && days[0] < 2.0,
+            "the first review is soon: {days:?}"
+        );
+        assert_eq!(*days.last().unwrap(), 21.0);
+        // The cap is reached after a handful of reviews, not dozens.
+        let capped = days.iter().position(|&d| d == 21.0).unwrap();
+        assert!((6..=12).contains(&capped), "{days:?}");
+    }
+
+    #[test]
+    fn a_quick_learner_has_learned_it_within_about_two_months() {
+        let days = schedule(1.0, 10, None);
+        let total: f64 = days.iter().sum();
+        assert!((30.0..90.0).contains(&total), "{total} days");
+    }
+
+    #[test]
+    fn a_learner_who_struggles_keeps_seeing_the_pair_within_a_day() {
+        let days = schedule(9.0, 30, None);
+        assert!(days.iter().all(|&d| d < 1.5), "{days:?}");
+    }
+
+    #[test]
+    fn a_slip_sends_a_well_known_pair_back_to_a_short_interval() {
+        let days = schedule(1.0, 14, Some(8));
+        assert!(days[6] > 5.0, "well known before the slip: {days:?}");
+        assert!(days[7] < 2.0, "soon again after it: {days:?}");
+        assert!(days[13] > days[8], "and it builds up again: {days:?}");
+    }
+
+    #[test]
+    fn a_pair_answered_in_five_seconds_still_counts_as_good() {
+        let days = schedule(5.0, 14, None);
+        assert_eq!(*days.last().unwrap(), 21.0, "{days:?}");
+    }
 }

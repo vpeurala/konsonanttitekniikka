@@ -60,11 +60,14 @@ through it (see `src/app/tests.rs` and `src/game/tests.rs`). Keep it that
 way: don't call `is_key_pressed`, `get_frame_time`, `date::now` or measure
 text inside the core; add a field to `Frame` or `game::Input` instead.
 Drawing (`draw` methods, `game/render.rs`, sprites, pictures) reads state
-and never changes it.
+and never changes it. Layout maths that drawing needs is kept in pure
+functions (`slot_rects`, `cell_rect`, `legend_layout`, `Enemy::keep_on_screen`)
+so it can be tested without a screen; do the same for new layouts.
 
 - `main.rs`: the shell, described above, and the `--render-*` commands.
 - `app.rs`: which screen is showing (title, level choice, game, practice,
-  progress), progress and saving, and the `Effect`s.
+  progress), progress and saving, and the `Effect`s. It holds the live
+  `Memory` and copies it into the save data only when saving.
 - `frame.rs`: `Frame`, one frame of input, and `Inputs::read`, which makes
   it.
 - `game/`: the game itself. Monsters show a number or a word; typed digits
@@ -119,9 +122,11 @@ and never changes it.
   the same pairs in the same order.
 - `audio.rs`, `music.rs`: all sounds are synthesized at startup. The music is
   a score of note names in `music.rs`, a minute-long loop in six sections.
-- `pictures.rs`, `sprites.rs`, `effects.rs`, `obstacles.rs`, `portals.rs`,
-  `icon.rs`: everything drawn is code; there are no image assets besides the
-  fonts in `assets/`.
+- `pictures.rs`, `sprites.rs`, `obstacles.rs`, `portals.rs`, `icon.rs`:
+  everything drawn is code; there are no image assets besides the fonts in
+  `assets/`.
+- `effects.rs`: sparks, rings and lightning as pure state that moves on with
+  time; `game/render.rs` draws it.
 - `lifecycle.rs`: notices when the app was away, so the game pauses itself
   (`Frame::away`).
 - `web.rs`, `analytics.rs`: the browser version's link to the page.

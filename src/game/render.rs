@@ -9,12 +9,76 @@ use super::answer::Slot;
 use super::combat::SpellTarget;
 use super::enemy::{Enemy, HINT_FONT_SIZE, HINT_SPACE, LABEL_FONT_SIZE, LABEL_HEIGHT};
 use super::rules::*;
+use crate::effects::Effects;
 use crate::fonts::{self, Style, draw_centered_text};
 use crate::long_numbers::{self, Question};
 use crate::sprites::{
     draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal, draw_star,
 };
 use crate::view::{ARENA_H, ARENA_W, View};
+
+/// The space between the two answer slots.
+const SLOT_GAP: f32 = 8.0;
+
+/// Where the number and word slots go, given how wide each is: side by side
+/// under the player, or above her when she is near the bottom edge, and
+/// always inside the arena.
+fn slot_rects(player: Vec2, widths: [f32; 2], height: f32) -> [Rect; 2] {
+    let total_width = widths[0] + SLOT_GAP + widths[1];
+    let below = player.y + PLAYER_RADIUS + 14.0;
+    let y = if below + height > ARENA_H {
+        player.y - PLAYER_RADIUS - 20.0 - height
+    } else {
+        below
+    };
+    let left = (player.x - total_width / 2.0).clamp(0.0, (ARENA_W - total_width).max(0.0));
+    [
+        Rect::new(left, y, widths[0], height),
+        Rect::new(left + widths[0] + SLOT_GAP, y, widths[1], height),
+    ]
+}
+
+/// Draws the sparks, rings and lightning.
+fn draw_effects(effects: &Effects) {
+    for ring in effects.rings() {
+        let color = Color {
+            a: 1.0 - ring.progress(),
+            ..ring.color
+        };
+        draw_circle_lines(ring.pos.x, ring.pos.y, ring.radius(), 3.0, color);
+    }
+    for p in effects.particles() {
+        let fade = p.fade();
+        let color = Color { a: fade, ..p.color };
+        draw_circle(p.pos.x, p.pos.y, p.size * fade.max(0.3), color);
+    }
+    if let Some((bolts, brightness)) = effects.bolts() {
+        let glow = Color::new(0.6, 0.8, 1.0, 0.35 * brightness);
+        let core = Color::new(1.0, 1.0, 1.0, brightness);
+        for bolt in bolts {
+            for pair in bolt.points.windows(2) {
+                let (a, b) = (pair[0], pair[1]);
+                draw_line(a.x, a.y, b.x, b.y, bolt.width * 4.0, glow);
+                draw_line(a.x, a.y, b.x, b.y, bolt.width, core);
+            }
+        }
+    }
+}
+
+/// Whitens the whole screen right after a lightning strike. Drawn on top
+/// of everything else.
+fn draw_flash(effects: &Effects, view: View) {
+    if let Some(alpha) = effects.flash() {
+        let screen = view.visible();
+        draw_rectangle(
+            screen.x,
+            screen.y,
+            screen.w,
+            screen.h,
+            Color::new(0.9, 0.95, 1.0, alpha),
+        );
+    }
+}
 
 /// Draws a body: a boss, a cyclops showing a word or an ordinary monster.
 fn draw_enemy_body(enemy: &Enemy, time: f32, player: Vec2) {
@@ -74,7 +138,7 @@ impl Game {
         for enemy in &self.enemies {
             draw_label(enemy);
         }
-        self.effects.draw();
+        draw_effects(&self.effects);
         if !self.is_over() {
             self.draw_slots();
         }
@@ -83,7 +147,7 @@ impl Game {
         }
 
         self.draw_hud();
-        self.effects.draw_flash(view);
+        draw_flash(&self.effects, view);
 
         if self.is_over() {
             draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.7));
@@ -253,7 +317,6 @@ impl Game {
     fn draw_slots(&self) {
         const FONT_SIZE: u16 = 20;
         const PAD: f32 = 6.0;
-        const GAP: f32 = 8.0;
         const MIN_WIDTH: f32 = 36.0;
 
         let texts = [Slot::Number, Slot::Word].map(|slot| {
@@ -266,19 +329,10 @@ impl Game {
             let width = fonts::measure(&text, Style::Bold, FONT_SIZE).width + 2.0 * PAD;
             (slot, text, width.max(MIN_WIDTH), typed.is_empty())
         });
+        let widths = [texts[0].2, texts[1].2];
         let height = FONT_SIZE as f32 + PAD;
-        let total_width = texts[0].2 + GAP + texts[1].2;
-
-        let below = self.player.y + PLAYER_RADIUS + 14.0;
-        let y = if below + height > ARENA_H {
-            self.player.y - PLAYER_RADIUS - 20.0 - height
-        } else {
-            below
-        };
-        let mut x =
-            (self.player.x - total_width / 2.0).clamp(0.0, (ARENA_W - total_width).max(0.0));
-
-        for (slot, text, width, empty) in texts {
+        let rects = slot_rects(self.player, widths, height);
+        for ((slot, text, _, empty), rect) in texts.into_iter().zip(rects) {
             let dead_end = self.is_dead_end(slot);
             let accent = if dead_end { RED } else { slot.accent() };
             let background = if dead_end {
@@ -286,18 +340,11 @@ impl Game {
             } else {
                 Color::new(0.0, 0.0, 0.0, 0.6)
             };
-            draw_rectangle(x, y, width, height, background);
-            draw_rectangle_lines(x, y, width, height, 2.0, accent);
+            draw_rectangle(rect.x, rect.y, rect.w, rect.h, background);
+            draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 2.0, accent);
             let color = if empty { GRAY } else { WHITE };
-            fonts::draw_centered(
-                &text,
-                x + width / 2.0,
-                y + height / 2.0,
-                FONT_SIZE,
-                color,
-                Style::Bold,
-            );
-            x += width + GAP;
+            let center = rect.center();
+            fonts::draw_centered(&text, center.x, center.y, FONT_SIZE, color, Style::Bold);
         }
     }
 }
@@ -401,5 +448,88 @@ fn draw_label(enemy: &Enemy) {
             }
             draw_circle_lines(x, y, PIP_RADIUS, 1.5, WHITE);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HEIGHT: f32 = 26.0;
+
+    fn overlaps(a: Rect, b: Rect) -> bool {
+        a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom()
+    }
+
+    /// Whether a rectangle touches a circle.
+    fn touches_circle(rect: Rect, center: Vec2, radius: f32) -> bool {
+        let nearest = center.clamp(rect.point(), rect.point() + rect.size());
+        nearest.distance(center) < radius
+    }
+
+    fn positions() -> impl Iterator<Item = Vec2> {
+        (0..=20).flat_map(|i| {
+            (0..=15).map(move |j| vec2(i as f32 * ARENA_W / 20.0, j as f32 * ARENA_H / 15.0))
+        })
+    }
+
+    #[test]
+    fn the_slots_stay_inside_the_arena_wherever_she_stands() {
+        for player in positions() {
+            for widths in [[36.0, 36.0], [36.0, 150.0], [80.0, 240.0]] {
+                let [a, b] = slot_rects(player, widths, HEIGHT);
+                for rect in [a, b] {
+                    assert!(
+                        rect.x >= 0.0 && rect.right() <= ARENA_W,
+                        "{player} {widths:?} {rect:?}"
+                    );
+                    assert!(
+                        rect.y >= 0.0 && rect.bottom() <= ARENA_H,
+                        "{player} {rect:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_slots_sit_side_by_side_without_overlapping() {
+        for player in positions() {
+            let [a, b] = slot_rects(player, [36.0, 90.0], HEIGHT);
+            assert!(!overlaps(a, b));
+            assert_eq!(a.y, b.y);
+            assert!((b.x - a.right() - SLOT_GAP).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn the_slots_never_cover_her() {
+        for player in positions() {
+            let player = player.clamp(
+                vec2(PLAYER_RADIUS, PLAYER_RADIUS * 1.5),
+                vec2(ARENA_W - PLAYER_RADIUS, ARENA_H - PLAYER_RADIUS * 1.5),
+            );
+            for rect in slot_rects(player, [36.0, 150.0], HEIGHT) {
+                assert!(
+                    !touches_circle(rect, player, PLAYER_RADIUS),
+                    "{player} {rect:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_slots_are_below_her_unless_she_is_near_the_bottom() {
+        let [mid, _] = slot_rects(vec2(400.0, 300.0), [36.0, 36.0], HEIGHT);
+        assert!(mid.y > 300.0);
+        let [low, _] = slot_rects(vec2(400.0, ARENA_H - 24.0), [36.0, 36.0], HEIGHT);
+        assert!(low.bottom() < ARENA_H - 24.0);
+    }
+
+    #[test]
+    fn the_slots_are_centred_under_her_when_there_is_room() {
+        let [a, b] = slot_rects(vec2(400.0, 200.0), [40.0, 80.0], HEIGHT);
+        let middle = (a.x + b.right()) / 2.0;
+        assert!((middle - 400.0).abs() < 1e-4);
     }
 }

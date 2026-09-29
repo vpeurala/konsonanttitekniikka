@@ -503,4 +503,187 @@ mod tests {
     fn the_example_in_the_explanation_is_a_real_pair() {
         assert!(PAIRS.iter().any(|p| p.number == "22" && p.word == "keko"));
     }
+
+    const DT: f32 = 1.0 / 60.0;
+
+    fn frame() -> Frame {
+        Frame {
+            dt: DT,
+            ..Frame::default()
+        }
+    }
+
+    fn pressed(key: KeyCode) -> Frame {
+        Frame {
+            pressed: vec![key],
+            ..frame()
+        }
+    }
+
+    fn holding(key: KeyCode, dt: f32) -> Frame {
+        Frame {
+            down: vec![key],
+            dt,
+            ..Frame::default()
+        }
+    }
+
+    fn pointer(phase: TouchPhase, pos: Vec2) -> Pointer {
+        Pointer { id: 1, pos, phase }
+    }
+
+    fn tap_on(pos: Vec2) -> Vec<Pointer> {
+        vec![
+            pointer(TouchPhase::Started, pos),
+            pointer(TouchPhase::Ended, pos),
+        ]
+    }
+
+    #[test]
+    fn keys_pick_the_menu_actions() {
+        let mut title = TitleScreen::new(false);
+        assert_eq!(
+            title.update(&pressed(KeyCode::Enter), &[]),
+            TitleAction::StartGame
+        );
+        assert_eq!(
+            title.update(&pressed(KeyCode::Space), &[]),
+            TitleAction::StartGame
+        );
+        assert_eq!(
+            title.update(&pressed(KeyCode::H), &[]),
+            TitleAction::Practice
+        );
+        assert_eq!(
+            title.update(&pressed(KeyCode::E), &[]),
+            TitleAction::Progress
+        );
+        assert_eq!(title.update(&pressed(KeyCode::X), &[]), TitleAction::Stay);
+    }
+
+    #[test]
+    fn tapping_a_button_picks_its_action() {
+        for (i, (_, _, action)) in MENU.iter().enumerate() {
+            let mut title = TitleScreen::new(true);
+            let center = button_rect(i, 0.0).center();
+            assert_eq!(title.update(&frame(), &tap_on(center)), *action);
+        }
+    }
+
+    #[test]
+    fn tapping_beside_the_buttons_does_nothing() {
+        let mut title = TitleScreen::new(true);
+        assert_eq!(
+            title.update(&frame(), &tap_on(vec2(5.0, 5.0))),
+            TitleAction::Stay
+        );
+    }
+
+    #[test]
+    fn a_tap_on_a_scrolled_button_uses_where_it_is_now() {
+        let mut title = TitleScreen::new(true);
+        title.scroll = 40.0;
+        let moved = button_rect(0, 40.0).center();
+        assert_eq!(
+            title.update(&frame(), &tap_on(moved)),
+            TitleAction::StartGame
+        );
+        // Where it used to be, another button or nothing is under the finger.
+        let mut title = TitleScreen::new(true);
+        title.scroll = 300.0;
+        let old = button_rect(0, 0.0).center();
+        assert_eq!(title.update(&frame(), &tap_on(old)), TitleAction::Stay);
+    }
+
+    #[test]
+    fn dragging_scrolls_and_does_not_pick_a_button() {
+        let mut title = TitleScreen::new(true);
+        let button = button_rect(0, 0.0).center();
+        let up = button - vec2(0.0, 100.0);
+        let pointers = [
+            pointer(TouchPhase::Started, button),
+            pointer(TouchPhase::Moved, up),
+            pointer(TouchPhase::Ended, up),
+        ];
+        assert_eq!(title.update(&frame(), &pointers), TitleAction::Stay);
+        assert!((title.scroll - 100.0).abs() < 1e-3, "{}", title.scroll);
+    }
+
+    #[test]
+    fn a_wobbly_tap_is_still_a_tap() {
+        let mut title = TitleScreen::new(true);
+        let center = button_rect(1, 0.0).center();
+        let pointers = [
+            pointer(TouchPhase::Started, center),
+            pointer(TouchPhase::Moved, center + vec2(2.0, 3.0)),
+            pointer(TouchPhase::Ended, center + vec2(2.0, 3.0)),
+        ];
+        assert_eq!(title.update(&frame(), &pointers), TitleAction::Practice);
+    }
+
+    #[test]
+    fn holding_down_scrolls_at_a_steady_speed_and_up_scrolls_back() {
+        let mut title = TitleScreen::new(false);
+        title.update(&holding(KeyCode::Down, 0.2), &[]);
+        assert!((title.scroll - KEY_SCROLL_SPEED * 0.2).abs() < 1e-3);
+        title.update(&holding(KeyCode::Up, 0.2), &[]);
+        assert!(title.scroll.abs() < 1e-3);
+    }
+
+    #[test]
+    fn the_scroll_stays_between_the_top_and_the_end() {
+        let mut title = TitleScreen::new(false);
+        title.update(&holding(KeyCode::Up, 1.0), &[]);
+        assert_eq!(title.scroll, 0.0);
+        title.update(&pressed(KeyCode::End), &[]);
+        assert_eq!(title.scroll, title.max_scroll());
+        assert!(title.max_scroll() > 0.0, "there is more than fits");
+        title.update(&holding(KeyCode::Down, 1.0), &[]);
+        assert_eq!(title.scroll, title.max_scroll());
+        title.update(&pressed(KeyCode::Home), &[]);
+        assert_eq!(title.scroll, 0.0);
+    }
+
+    #[test]
+    fn page_down_and_up_move_by_most_of_a_page() {
+        let mut title = TitleScreen::new(false);
+        title.update(&pressed(KeyCode::PageDown), &[]);
+        let page = ARENA_H - FOOTER_HEIGHT;
+        assert!((title.scroll - page * 0.9).abs() < 1e-3);
+        title.update(&pressed(KeyCode::PageUp), &[]);
+        assert_eq!(title.scroll, 0.0);
+    }
+
+    #[test]
+    fn the_mouse_wheel_scrolls() {
+        let mut title = TitleScreen::new(false);
+        title.scroll = 100.0;
+        title.update(
+            &Frame {
+                wheel: 30.0,
+                ..frame()
+            },
+            &[],
+        );
+        assert_eq!(title.scroll, 70.0);
+        title.update(
+            &Frame {
+                wheel: -50.0,
+                ..frame()
+            },
+            &[],
+        );
+        assert_eq!(title.scroll, 120.0);
+    }
+
+    #[test]
+    fn the_buttons_fit_side_by_side_in_the_arena() {
+        for i in 0..MENU.len() {
+            let r = button_rect(i, 0.0);
+            assert!(r.x >= 0.0 && r.right() <= ARENA_W);
+        }
+        for i in 1..MENU.len() {
+            assert!(button_rect(i - 1, 0.0).right() < button_rect(i, 0.0).x);
+        }
+    }
 }

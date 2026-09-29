@@ -192,4 +192,155 @@ mod tests {
         let last = *checkpoints(long).last().unwrap();
         assert!(long - last <= 1, "checkpoint {last}, long numbers {long}");
     }
+
+    fn frame() -> Frame {
+        Frame::default()
+    }
+
+    fn pressed(key: KeyCode) -> Frame {
+        Frame {
+            pressed: vec![key],
+            ..frame()
+        }
+    }
+
+    fn tap_on(pos: Vec2) -> Vec<Pointer> {
+        vec![Pointer {
+            id: 1,
+            pos,
+            phase: TouchPhase::Ended,
+        }]
+    }
+
+    /// A player who has reached level 30, with six levels to start from.
+    fn select() -> LevelSelect {
+        LevelSelect::new(30, false)
+    }
+
+    #[test]
+    fn a_new_player_has_nothing_to_choose() {
+        assert_eq!(LevelSelect::new(1, false).len(), 1);
+        assert_eq!(select().len(), 6);
+    }
+
+    #[test]
+    fn the_furthest_level_is_chosen_at_first() {
+        let mut levels = select();
+        assert!(matches!(
+            levels.update(&pressed(KeyCode::Enter), &[]),
+            LevelAction::Start(26)
+        ));
+    }
+
+    #[test]
+    fn arrow_keys_move_the_choice_within_the_list() {
+        let mut levels = select();
+        levels.update(&pressed(KeyCode::Right), &[]);
+        assert_eq!(levels.selected, 5, "already at the end");
+        levels.update(&pressed(KeyCode::Left), &[]);
+        assert_eq!(levels.selected, 4);
+        levels.update(&pressed(KeyCode::Up), &[]);
+        assert_eq!(levels.selected, 0, "up a row, stopping at the first");
+        levels.update(&pressed(KeyCode::Left), &[]);
+        assert_eq!(levels.selected, 0);
+        levels.update(&pressed(KeyCode::Down), &[]);
+        assert_eq!(levels.selected, 5, "down a row");
+        levels.update(&pressed(KeyCode::Down), &[]);
+        assert_eq!(levels.selected, 5, "there is no row below");
+    }
+
+    #[test]
+    fn down_does_not_jump_to_a_button_that_is_not_there() {
+        // Seven levels: the second row has one button.
+        let mut levels = LevelSelect::new(31, false);
+        assert_eq!(levels.len(), 7);
+        levels.selected = 3;
+        levels.update(&pressed(KeyCode::Down), &[]);
+        assert_eq!(levels.selected, 3, "no button below the fourth");
+    }
+
+    #[test]
+    fn enter_and_space_start_the_chosen_level() {
+        for key in [KeyCode::Enter, KeyCode::Space] {
+            let mut levels = select();
+            levels.update(&pressed(KeyCode::Left), &[]);
+            assert!(matches!(
+                levels.update(&pressed(key), &[]),
+                LevelAction::Start(21)
+            ));
+        }
+    }
+
+    #[test]
+    fn escape_and_backspace_go_back() {
+        for key in [KeyCode::Escape, KeyCode::Backspace] {
+            assert!(matches!(
+                select().update(&pressed(key), &[]),
+                LevelAction::Back
+            ));
+        }
+    }
+
+    #[test]
+    fn nothing_happens_without_input() {
+        assert!(matches!(select().update(&frame(), &[]), LevelAction::Stay));
+    }
+
+    #[test]
+    fn tapping_a_level_starts_it() {
+        let levels = select();
+        for (i, level) in levels.levels.clone().into_iter().enumerate() {
+            let center = levels.button_rect(i).center();
+            assert!(matches!(
+                select().update(&frame(), &tap_on(center)),
+                LevelAction::Start(l) if l == level
+            ));
+        }
+    }
+
+    #[test]
+    fn tapping_beside_the_buttons_goes_back() {
+        assert!(matches!(
+            select().update(&frame(), &tap_on(vec2(2.0, 2.0))),
+            LevelAction::Back
+        ));
+    }
+
+    #[test]
+    fn a_finger_only_touching_down_does_nothing_yet() {
+        let started = [Pointer {
+            id: 1,
+            pos: vec2(2.0, 2.0),
+            phase: TouchPhase::Started,
+        }];
+        assert!(matches!(
+            select().update(&frame(), &started),
+            LevelAction::Stay
+        ));
+    }
+
+    #[test]
+    fn the_buttons_fit_the_arena_and_do_not_overlap() {
+        for best in [6, 30, 500] {
+            let levels = LevelSelect::new(best, false);
+            for i in 0..levels.len() {
+                let r = levels.button_rect(i);
+                assert!(r.x >= 0.0 && r.right() <= ARENA_W, "{best}: {i}");
+                assert!(r.bottom() <= ARENA_H, "{best}: {i}");
+                for j in i + 1..levels.len() {
+                    let o = levels.button_rect(j);
+                    let apart = r.right() <= o.x
+                        || o.right() <= r.x
+                        || r.bottom() <= o.y
+                        || o.bottom() <= r.y;
+                    assert!(apart, "{best}: {i} and {j}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_first_level_is_captioned_as_the_beginning() {
+        assert_eq!(select().captions[0], "Alusta");
+    }
 }

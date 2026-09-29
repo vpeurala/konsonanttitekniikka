@@ -1,7 +1,10 @@
-use macroquad::prelude::*;
+//! Short-lived visual effects: sparks, rings and lightning. Everything
+//! here is state that moves on with time, and it is pure; `game/render.rs`
+//! draws it.
+
+use macroquad::prelude::{Color, SKYBLUE, Vec2, WHITE, YELLOW, vec2};
 
 use crate::rng::{Rng, Stream};
-use crate::view::View;
 
 const PARTICLES_PER_EXPLOSION: usize = 40;
 const RING_SECONDS: f32 = 0.35;
@@ -10,26 +13,45 @@ const FLASH_SECONDS: f32 = 0.6;
 const BOLT_SEGMENTS: usize = 14;
 const BOLT_BRANCHES: usize = 3;
 
-struct Particle {
-    pos: Vec2,
+pub struct Particle {
+    pub pos: Vec2,
     vel: Vec2,
     age: f32,
     lifetime: f32,
-    size: f32,
-    color: Color,
+    pub size: f32,
+    pub color: Color,
 }
 
-struct Ring {
-    pos: Vec2,
+impl Particle {
+    /// How visible it still is, from 1 (new) to 0 (gone).
+    pub fn fade(&self) -> f32 {
+        1.0 - self.age / self.lifetime
+    }
+}
+
+pub struct Ring {
+    pub pos: Vec2,
     age: f32,
     start_radius: f32,
-    color: Color,
+    pub color: Color,
+}
+
+impl Ring {
+    /// How far along it is, from 0 (new) to 1 (gone).
+    pub fn progress(&self) -> f32 {
+        self.age / RING_SECONDS
+    }
+
+    /// How wide it has spread.
+    pub fn radius(&self) -> f32 {
+        self.start_radius * (1.0 + 2.0 * self.progress())
+    }
 }
 
 /// A jagged lightning bolt, as a polyline.
-struct Bolt {
-    points: Vec<Vec2>,
-    width: f32,
+pub struct Bolt {
+    pub points: Vec<Vec2>,
+    pub width: f32,
 }
 
 /// Short-lived visual effects that don't affect gameplay.
@@ -176,59 +198,150 @@ impl Effects {
         self.rings.retain(|r| r.age < RING_SECONDS);
     }
 
-    pub fn draw(&self) {
-        for ring in &self.rings {
-            let t = ring.age / RING_SECONDS;
-            let radius = ring.start_radius * (1.0 + 2.0 * t);
-            let color = Color {
-                a: 1.0 - t,
-                ..ring.color
-            };
-            draw_circle_lines(ring.pos.x, ring.pos.y, radius, 3.0, color);
-        }
-        for p in &self.particles {
-            let fade = 1.0 - p.age / p.lifetime;
-            let color = Color { a: fade, ..p.color };
-            draw_circle(p.pos.x, p.pos.y, p.size * fade.max(0.3), color);
-        }
-        self.draw_bolts();
+    pub fn particles(&self) -> &[Particle] {
+        &self.particles
     }
 
-    fn draw_bolts(&self) {
-        let Some(age) = self.lightning_age else {
-            return;
-        };
-        // Real lightning flickers: skip every third frame-ish slice.
+    pub fn rings(&self) -> &[Ring] {
+        &self.rings
+    }
+
+    /// The lightning bolts to draw now, with how bright they are from 0
+    /// to 1. Real lightning flickers, so some moments show none.
+    pub fn bolts(&self) -> Option<(&[Bolt], f32)> {
+        let age = self.lightning_age?;
         if age >= LIGHTNING_SECONDS || (age * 30.0) as u32 % 3 == 2 {
-            return;
+            return None;
         }
-        let fade = 1.0 - age / LIGHTNING_SECONDS;
-        let glow = Color::new(0.6, 0.8, 1.0, 0.35 * fade);
-        let core = Color::new(1.0, 1.0, 1.0, fade);
-        for bolt in &self.bolts {
-            for pair in bolt.points.windows(2) {
-                let (a, b) = (pair[0], pair[1]);
-                draw_line(a.x, a.y, b.x, b.y, bolt.width * 4.0, glow);
-                draw_line(a.x, a.y, b.x, b.y, bolt.width, core);
+        Some((&self.bolts, 1.0 - age / LIGHTNING_SECONDS))
+    }
+
+    /// How white the whole screen is right after a lightning strike, from
+    /// 0 to 1, if it is at all.
+    pub fn flash(&self) -> Option<f32> {
+        let age = self.lightning_age?;
+        (age < FLASH_SECONDS).then(|| 0.7 * (1.0 - age / FLASH_SECONDS).powi(2))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn palette() -> [Color; 2] {
+        [WHITE, YELLOW]
+    }
+
+    #[test]
+    fn an_explosion_makes_sparks_and_a_ring() {
+        let mut effects = Effects::default();
+        effects.explode(vec2(100.0, 100.0), 20.0, &palette());
+        assert_eq!(effects.particles().len(), PARTICLES_PER_EXPLOSION);
+        assert_eq!(effects.rings().len(), 1);
+    }
+
+    #[test]
+    fn sparks_fade_and_then_disappear() {
+        let mut effects = Effects::default();
+        effects.explode(Vec2::ZERO, 20.0, &palette());
+        assert!(effects.particles().iter().all(|p| p.fade() == 1.0));
+        effects.update(0.2);
+        assert!(effects.particles().iter().all(|p| p.fade() < 1.0));
+        effects.update(5.0);
+        assert!(effects.particles().is_empty());
+        assert!(effects.rings().is_empty());
+    }
+
+    #[test]
+    fn sparks_fly_outwards_and_slow_down() {
+        let mut effects = Effects::default();
+        effects.explode(Vec2::ZERO, 20.0, &palette());
+        effects.update(0.1);
+        let far = effects
+            .particles()
+            .iter()
+            .filter(|p| p.pos.length() > 1.0)
+            .count();
+        assert!(far > PARTICLES_PER_EXPLOSION / 2);
+    }
+
+    #[test]
+    fn a_ring_spreads_out_as_it_ages() {
+        let mut effects = Effects::default();
+        effects.explode(Vec2::ZERO, 20.0, &palette());
+        let before = effects.rings()[0].radius();
+        assert_eq!(before, 20.0);
+        effects.update(RING_SECONDS / 2.0);
+        assert!(effects.rings()[0].radius() > before);
+        assert!((effects.rings()[0].progress() - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn lightning_flashes_the_screen_and_then_calms_down() {
+        let mut effects = Effects::default();
+        assert_eq!(effects.flash(), None);
+        effects.lightning(vec2(400.0, 300.0));
+        let first = effects.flash().expect("it flashes at once");
+        assert!(first > 0.6);
+        effects.update(FLASH_SECONDS / 2.0);
+        assert!(effects.flash().expect("still flashing") < first);
+        effects.update(FLASH_SECONDS);
+        assert_eq!(effects.flash(), None);
+        assert!(effects.bolts().is_none());
+    }
+
+    #[test]
+    fn a_bolt_reaches_from_above_the_screen_to_the_target() {
+        let mut effects = Effects::default();
+        let target = vec2(400.0, 300.0);
+        effects.lightning(target);
+        let (bolts, brightness) = effects.bolts().expect("the bolt is visible at first");
+        assert!(brightness > 0.9);
+        let trunk = bolts.last().expect("the trunk comes last");
+        assert!(trunk.points.first().unwrap().y < 0.0);
+        assert_eq!(*trunk.points.last().unwrap(), target);
+        assert_eq!(bolts.len(), BOLT_BRANCHES + 1);
+    }
+
+    #[test]
+    fn lightning_flickers() {
+        let mut effects = Effects::default();
+        effects.lightning(vec2(400.0, 300.0));
+        let mut shown = 0;
+        let mut hidden = 0;
+        for _ in 0..27 {
+            effects.update(1.0 / 60.0);
+            if effects.bolts().is_some() {
+                shown += 1;
+            } else {
+                hidden += 1;
             }
         }
+        assert!(shown > 0 && hidden > 0, "{shown} shown, {hidden} hidden");
     }
 
-    /// Whitens the whole screen right after a lightning strike. Drawn on
-    /// top of everything else.
-    pub fn draw_flash(&self, view: View) {
-        if let Some(age) = self.lightning_age
-            && age < FLASH_SECONDS
-        {
-            let alpha = 0.7 * (1.0 - age / FLASH_SECONDS).powi(2);
-            let screen = view.visible();
-            draw_rectangle(
-                screen.x,
-                screen.y,
-                screen.w,
-                screen.h,
-                Color::new(0.9, 0.95, 1.0, alpha),
-            );
-        }
+    #[test]
+    fn a_trail_leaves_a_few_short_lived_sparks() {
+        let mut effects = Effects::default();
+        effects.trail(vec2(10.0, 10.0), &palette());
+        assert_eq!(effects.particles().len(), 3);
+        effects.update(1.0);
+        assert!(effects.particles().is_empty());
+    }
+
+    #[test]
+    fn effects_are_the_same_every_time() {
+        let run = || {
+            let mut effects = Effects::default();
+            effects.explode(vec2(5.0, 5.0), 10.0, &palette());
+            effects.lightning(vec2(100.0, 100.0));
+            effects.update(0.1);
+            effects
+                .particles()
+                .iter()
+                .map(|p| p.pos)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(run(), run());
     }
 }

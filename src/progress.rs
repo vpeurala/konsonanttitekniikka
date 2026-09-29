@@ -84,16 +84,15 @@ impl ProgressScreen {
             || frame.pressed(KeyCode::Backspace)
     }
 
-    pub fn draw(&self, data: &SaveData, touch: bool) {
+    pub fn draw(&self, data: &SaveData, memory: &Memory, touch: bool) {
         clear_background(BACKGROUND);
-        let memory = data.memory();
         let cx = ARENA_W / 2.0;
         fonts::draw_centered("Edistyminen", cx, 36.0, 44, GOLD, Style::Heading);
 
         let stars: u32 = data.stars.values().map(|&s| u32::from(s)).sum();
         let stats = format!(
             "Opittu {} / {}     Päiviä putkeen {}",
-            learned_count(&memory),
+            learned_count(memory),
             PAIRS.len(),
             data.streak
         );
@@ -109,22 +108,9 @@ impl ProgressScreen {
         draw_star(vec2(star_x, 74.0), 11.0, true);
         fonts::draw(&stars_text, star_x + 16.0, 82.0, 22, WHITE, Style::Body);
 
-        let cell = (ARENA_W - 2.0 * MARGIN) / 10.0;
         for (i, row) in pair_rows().iter().enumerate() {
-            let y = GRID_TOP + i as f32 * ROW_H;
             for pair in row {
-                let column = pair
-                    .number
-                    .chars()
-                    .last()
-                    .and_then(|c| c.to_digit(10))
-                    .unwrap_or(0) as f32;
-                let x = MARGIN + column * cell;
-                draw_cell(
-                    pair,
-                    &memory,
-                    Rect::new(x + 2.0, y + 2.0, cell - 4.0, ROW_H - 4.0),
-                );
+                draw_cell(pair, memory, cell_rect(i, pair));
             }
         }
 
@@ -144,6 +130,26 @@ impl ProgressScreen {
     }
 }
 
+/// Where the cell of `pair` goes, in grid row `row`: the columns are the
+/// last digit of the number.
+fn cell_rect(row: usize, pair: &Pair) -> Rect {
+    let cell = (ARENA_W - 2.0 * MARGIN) / 10.0;
+    let column = pair
+        .number
+        .chars()
+        .last()
+        .and_then(|c| c.to_digit(10))
+        .unwrap_or(0) as f32;
+    let (x, y) = (MARGIN + column * cell, GRID_TOP + row as f32 * ROW_H);
+    Rect::new(x + 2.0, y + 2.0, cell - 4.0, ROW_H - 4.0)
+}
+
+/// Where the dots of a cell are centred: in its top right corner, clear of
+/// the number in the middle.
+fn meter_center(cell: Rect) -> Vec2 {
+    vec2(cell.right() - 11.5, cell.y + 7.5)
+}
+
 fn draw_cell(pair: &Pair, memory: &Memory, rect: Rect) {
     let (fill, text, tier) = match memory.record(pair) {
         Some(record) => (
@@ -154,7 +160,7 @@ fn draw_cell(pair: &Pair, memory: &Memory, rect: Rect) {
         None => (UNSEEN, Color::new(0.6, 0.6, 0.65, 1.0), None),
     };
     draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
-    draw_meter(vec2(rect.right() - 11.5, rect.y + 7.5), tier, text);
+    draw_meter(meter_center(rect), tier, text);
     let c = rect.center();
     fonts::draw_centered(pair.number, c.x, c.y - 7.0, 16, text, Style::Bold);
     fonts::draw_centered(
@@ -167,12 +173,16 @@ fn draw_cell(pair: &Pair, memory: &Memory, rect: Rect) {
     );
 }
 
+/// How far the dots of a meter reach from their centre sideways.
+const METER_REACH: f32 = 6.5 + 2.4;
+
 /// Three dots in a row, centred on `center`: as many filled, from the left,
 /// as `tier` says, the rest empty. Nothing is filled for a pair not yet
 /// seen.
 fn draw_meter(center: Vec2, tier: Option<u8>, color: Color) {
     const SPACING: f32 = 6.5;
     const RADIUS: f32 = 2.4;
+    debug_assert!((SPACING + RADIUS - METER_REACH).abs() < 1e-6);
     for i in 0..3u8 {
         let x = center.x + (f32::from(i) - 1.0) * SPACING;
         if tier.is_some_and(|tier| i < tier) {
@@ -183,15 +193,32 @@ fn draw_meter(center: Vec2, tier: Option<u8>, color: Color) {
     }
 }
 
-fn draw_legend(y: f32) {
-    let items = [
-        (UNSEEN, None, "Ei vielä nähty"),
-        (RED, Some(1), "Harjoittele"),
-        (YELLOW, Some(2), "Melkein"),
-        (GREEN, Some(3), "Osaat"),
-    ];
+/// The legend: a swatch, its dots and a label for each of the colours.
+const LEGEND: [(Color, Option<u8>, &str); 4] = [
+    (UNSEEN, None, "Ei vielä nähty"),
+    (RED, Some(1), "Harjoittele"),
+    (YELLOW, Some(2), "Melkein"),
+    (GREEN, Some(3), "Osaat"),
+];
+
+/// Where each legend entry starts, and where the last one ends, given how
+/// wide `text_width` says the labels are.
+fn legend_layout(text_width: impl Fn(&str, u16) -> f32) -> ([f32; 4], f32) {
+    let mut xs = [0.0; 4];
     let mut x = MARGIN;
-    for (color, tier, label) in items {
+    for (i, (_, _, label)) in LEGEND.iter().enumerate() {
+        xs[i] = x;
+        x += 44.0 + text_width(label, 18);
+        if i + 1 < LEGEND.len() {
+            x += 18.0;
+        }
+    }
+    (xs, x)
+}
+
+fn draw_legend(y: f32) {
+    let (xs, _) = legend_layout(|text, size| fonts::measure(text, Style::Body, size).width);
+    for ((color, tier, label), x) in LEGEND.into_iter().zip(xs) {
         draw_rectangle(x, y - 10.0, 34.0, 20.0, color);
         let dots = if tier.is_some() {
             BLACK
@@ -200,7 +227,6 @@ fn draw_legend(y: f32) {
         };
         draw_meter(vec2(x + 17.0, y), tier, dots);
         fonts::draw(label, x + 40.0, y + 6.0, 18, WHITE, Style::Body);
-        x += 44.0 + fonts::measure(label, Style::Body, 18).width + 18.0;
     }
 }
 
@@ -256,5 +282,131 @@ mod tests {
         assert_eq!(mastery_tier(0.0), 3, "green");
         assert_eq!(mastery_tier(NEARLY), 2, "yellow");
         assert_eq!(mastery_tier(1.0), 1, "red");
+    }
+
+    /// A stand-in for measuring text.
+    fn width(text: &str, size: u16) -> f32 {
+        text.chars().count() as f32 * f32::from(size) * 0.6
+    }
+
+    fn all_cells() -> Vec<(Pair, Rect)> {
+        pair_rows()
+            .iter()
+            .enumerate()
+            .flat_map(|(row, pairs)| pairs.iter().map(move |p| (*p, cell_rect(row, p))))
+            .collect()
+    }
+
+    #[test]
+    fn every_pair_has_a_cell_and_none_overlap() {
+        let cells = all_cells();
+        assert_eq!(cells.len(), PAIRS.len());
+        for (i, (a, ra)) in cells.iter().enumerate() {
+            for (b, rb) in &cells[i + 1..] {
+                let overlap = ra.x < rb.right()
+                    && rb.x < ra.right()
+                    && ra.y < rb.bottom()
+                    && rb.y < ra.bottom();
+                assert!(!overlap, "{} and {} overlap", a.number, b.number);
+            }
+        }
+    }
+
+    #[test]
+    fn the_grid_fits_the_arena_above_the_legend() {
+        let legend_y = GRID_TOP + 11.0 * ROW_H + 22.0;
+        for (pair, rect) in all_cells() {
+            assert!(rect.x >= 0.0 && rect.right() <= ARENA_W, "{}", pair.number);
+            assert!(
+                rect.y >= GRID_TOP && rect.bottom() < legend_y - 10.0,
+                "{}",
+                pair.number
+            );
+        }
+    }
+
+    #[test]
+    fn a_pairs_column_is_the_last_digit_of_its_number() {
+        for (pair, rect) in all_cells() {
+            let digit = pair.number.chars().last().unwrap().to_digit(10).unwrap() as f32;
+            let cell = (ARENA_W - 2.0 * MARGIN) / 10.0;
+            assert!((rect.x - (MARGIN + digit * cell + 2.0)).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn the_dots_fit_in_the_cell_clear_of_the_number() {
+        for (pair, rect) in all_cells() {
+            let dots = meter_center(rect);
+            let (left, right) = (dots.x - METER_REACH, dots.x + METER_REACH);
+            assert!(left > rect.x && right < rect.right(), "{}", pair.number);
+            assert!(
+                dots.y > rect.y && dots.y < rect.center().y,
+                "{}",
+                pair.number
+            );
+            // The number is centred in the cell.
+            let number_right = rect.center().x + width(pair.number, 16) / 2.0;
+            assert!(
+                left > number_right,
+                "{}: {left} vs {number_right}",
+                pair.number
+            );
+        }
+    }
+
+    #[test]
+    fn the_legend_fits_on_one_line() {
+        let (xs, end) = legend_layout(width);
+        assert!(xs.is_sorted());
+        assert!(end <= ARENA_W - MARGIN, "the legend ends at {end}");
+    }
+
+    #[test]
+    fn the_legend_entries_do_not_run_into_each_other() {
+        let (xs, _) = legend_layout(width);
+        for (i, label) in LEGEND.iter().map(|(_, _, l)| l).enumerate().take(3) {
+            assert!(xs[i] + 40.0 + width(label, 18) < xs[i + 1], "{label}");
+        }
+    }
+
+    fn tap() -> Vec<Pointer> {
+        vec![Pointer {
+            id: 1,
+            pos: vec2(100.0, 100.0),
+            phase: TouchPhase::Ended,
+        }]
+    }
+
+    fn pressed(key: KeyCode) -> Frame {
+        Frame {
+            pressed: vec![key],
+            ..Frame::default()
+        }
+    }
+
+    #[test]
+    fn the_progress_screen_closes_on_a_tap_or_a_leaving_key() {
+        let mut screen = ProgressScreen;
+        assert!(!screen.update(&Frame::default(), &[]));
+        assert!(screen.update(&Frame::default(), &tap()));
+        for key in [
+            KeyCode::Escape,
+            KeyCode::Enter,
+            KeyCode::Space,
+            KeyCode::Backspace,
+        ] {
+            assert!(screen.update(&pressed(key), &[]), "{key:?}");
+        }
+        assert!(!screen.update(&pressed(KeyCode::A), &[]));
+    }
+
+    #[test]
+    fn a_finger_only_touching_down_does_not_close_it() {
+        let started = [Pointer {
+            phase: TouchPhase::Started,
+            ..tap()[0]
+        }];
+        assert!(!ProgressScreen.update(&Frame::default(), &started));
     }
 }
