@@ -68,7 +68,7 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Upload the executable
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: lukuloitsu-windows
         path: target/release/lukuloitsu.exe
@@ -85,7 +85,7 @@ jobs:
     - name: Build the app
       run: scripts/macos-app.sh
     - name: Upload the app
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: lukuloitsu-macos
         path: target/macos/lukuloitsu-macos.zip
@@ -101,7 +101,7 @@ jobs:
     - name: Build and pack it
       run: scripts/linux-package.sh
     - name: Upload the package
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: lukuloitsu-linux
         path: target/linux/lukuloitsu-linux.tar.gz
@@ -122,7 +122,7 @@ jobs:
     - name: Build the booklet
       run: xvfb-run -a scripts/booklet.sh
     - name: Upload the booklet
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: lukuloitsu-opas
         path: target/booklet/lukuloitsu-opas.pdf
