@@ -156,7 +156,7 @@ impl Game {
         boss.keep_on_screen();
         self.admit(boss);
 
-        self.boss_fight = true;
+        self.stage.boss_fight = true;
         self.out.sfx.push(Sfx::Boss);
         let subtitle = if long > 0 && self.level == long_numbers::first_long_level() {
             format!("Tarvitaan {count} osumaa. Viimeinen on pitkä luku!")

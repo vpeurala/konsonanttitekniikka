@@ -48,6 +48,35 @@ pub(super) enum Slot {
     Word,
 }
 
+/// What has been typed into each slot so far.
+#[derive(Debug, Default)]
+pub(super) struct Typed {
+    number: String,
+    word: String,
+}
+
+impl Typed {
+    pub(super) fn get(&self, slot: Slot) -> &str {
+        match slot {
+            Slot::Number => &self.number,
+            Slot::Word => &self.word,
+        }
+    }
+
+    pub(super) fn get_mut(&mut self, slot: Slot) -> &mut String {
+        match slot {
+            Slot::Number => &mut self.number,
+            Slot::Word => &mut self.word,
+        }
+    }
+
+    /// Empties both slots.
+    pub(super) fn clear(&mut self) {
+        self.number.clear();
+        self.word.clear();
+    }
+}
+
 impl Slot {
     /// The slot a typed character goes to.
     pub(super) fn of_char(c: char) -> Slot {

@@ -30,8 +30,8 @@ use crate::portals::portal_positions;
 use crate::rng::{Rng, Stream};
 use crate::view::{ARENA_H, ARENA_W};
 
-use answer::Slot;
 pub use answer::{InputOutcome, resolve_input};
+use answer::{Slot, Typed};
 use combat::Spell;
 use enemy::{Enemy, EnemyId};
 use rules::*;
@@ -118,6 +118,17 @@ struct Banner {
     seconds_left: f32,
 }
 
+/// How the current level is going; starts over with every level.
+#[derive(Debug, Default)]
+struct Stage {
+    /// Points scored.
+    points: u32,
+    /// Seconds spent.
+    time: f32,
+    /// Whether the boss has been summoned and not yet beaten.
+    boss_fight: bool,
+}
+
 pub struct Game {
     player: Vec2,
     player_moving: bool,
@@ -129,17 +140,12 @@ pub struct Game {
     spells: Vec<Spell>,
     /// Where she is casting toward, and for how much longer.
     cast: Option<(Vec2, f32)>,
-    number_typed: String,
-    word_typed: String,
+    typed: Typed,
     energy: f32,
     score: u32,
     level: u32,
-    /// Points scored on the current level.
-    level_points: u32,
-    /// Seconds spent on the current level.
-    level_time: f32,
-    /// Whether this level's boss has been summoned and not yet beaten.
-    boss_fight: bool,
+    /// How the current level is going.
+    stage: Stage,
     banner: Option<Banner>,
     spawn_timer: f32,
     feedback: Option<Feedback>,
@@ -182,14 +188,11 @@ impl Game {
             appearances: HashMap::new(),
             spells: Vec::new(),
             cast: None,
-            number_typed: String::new(),
-            word_typed: String::new(),
+            typed: Typed::default(),
             energy: MAX_ENERGY,
             score: 0,
             level: 1,
-            level_points: 0,
-            level_time: 0.0,
-            boss_fight: false,
+            stage: Stage::default(),
             banner: None,
             spawn_timer: 1.0,
             feedback: None,
@@ -304,7 +307,7 @@ impl Game {
             return;
         }
 
-        self.level_time += dt;
+        self.stage.time += dt;
         if let Some(banner) = &mut self.banner {
             banner.seconds_left -= dt;
             if banner.seconds_left <= 0.0 {
@@ -324,10 +327,10 @@ impl Game {
         }
 
         // No new monsters join a boss fight.
-        if !self.boss_fight {
+        if !self.stage.boss_fight {
             self.spawn_timer -= dt;
             if self.spawn_timer <= 0.0 {
-                self.spawn_timer = spawn_interval(self.level_time);
+                self.spawn_timer = spawn_interval(self.stage.time);
                 self.spawn_enemy();
             }
         }
@@ -368,22 +371,7 @@ impl Game {
     }
 
     fn clear_typed(&mut self) {
-        self.number_typed.clear();
-        self.word_typed.clear();
-    }
-
-    fn slot(&self, slot: Slot) -> &str {
-        match slot {
-            Slot::Number => &self.number_typed,
-            Slot::Word => &self.word_typed,
-        }
-    }
-
-    fn slot_mut(&mut self, slot: Slot) -> &mut String {
-        match slot {
-            Slot::Number => &mut self.number_typed,
-            Slot::Word => &mut self.word_typed,
-        }
+        self.typed.clear();
     }
 
     /// The enemy called `id`, if it is still in play.
@@ -410,7 +398,7 @@ impl Game {
     fn outcome(&self, slot: Slot) -> (Vec<(EnemyId, String)>, InputOutcome) {
         let candidates = self.candidates(slot);
         let answers = candidates.iter().map(|(_, answer)| answer.as_str());
-        let outcome = resolve_input(self.slot(slot), answers);
+        let outcome = resolve_input(self.typed.get(slot), answers);
         (candidates, outcome)
     }
 
@@ -425,15 +413,15 @@ impl Game {
             self.energy = after_wrong_key(self.energy);
             self.out.sfx.push(Sfx::Wrong);
             self.feedback = Some(Feedback {
-                text: format!("Väärin: {}", self.slot(slot).to_uppercase()),
+                text: format!("Väärin: {}", self.typed.get(slot).to_uppercase()),
                 color: RED,
                 seconds_left: FEEDBACK_SECONDS,
             });
-            self.slot_mut(slot).clear();
+            self.typed.get_mut(slot).clear();
             return;
         }
 
-        self.slot_mut(slot).push(c);
+        self.typed.get_mut(slot).push(c);
         self.out.sfx.push(Sfx::Type);
         let (candidates, outcome) = self.outcome(slot);
         if let InputOutcome::Hit(hits) = outcome {
@@ -447,7 +435,7 @@ impl Game {
             }
             self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
             self.show_question(&first, GREEN);
-            self.slot_mut(slot).clear();
+            self.typed.get_mut(slot).clear();
             self.add_points(hits.len() as u32);
         }
     }
@@ -468,12 +456,12 @@ impl Game {
 
     fn add_points(&mut self, points: u32) {
         self.score += points;
-        if self.boss_fight {
+        if self.stage.boss_fight {
             return;
         }
-        self.level_points += points;
-        if self.level_points >= points_to_clear(self.level) {
-            self.level_points = points_to_clear(self.level);
+        self.stage.points += points;
+        if self.stage.points >= points_to_clear(self.level) {
+            self.stage.points = points_to_clear(self.level);
             self.summon_boss();
         }
     }
@@ -488,9 +476,9 @@ impl Game {
             stars,
         });
         self.level += 1;
-        self.level_points = 0;
-        self.level_time = 0.0;
-        self.boss_fight = false;
+        self.stage.points = 0;
+        self.stage.time = 0.0;
+        self.stage.boss_fight = false;
         self.spawn_timer = LEVEL_BREAK_SECONDS;
         for enemy in self.enemies.drain(..) {
             self.effects.explode(enemy.pos, enemy.radius, &KILL_PALETTE);

@@ -231,13 +231,13 @@ impl Game {
         // Level progress bar under the score.
         let needed = points_to_clear(self.level);
         let right = ARENA_W - 16.0;
-        let progress = self.level_points as f32 / needed as f32;
-        let (bar_color, level) = if self.boss_fight {
+        let progress = self.stage.points as f32 / needed as f32;
+        let (bar_color, level) = if self.stage.boss_fight {
             (VIOLET, format!("Taso {}: POMO", self.level))
         } else {
             (
                 GOLD,
-                format!("Taso {}: {}/{}", self.level, self.level_points, needed),
+                format!("Taso {}: {}/{}", self.level, self.stage.points, needed),
             )
         };
         draw_rectangle(right - bar_width, 44.0, bar_width, 10.0, DARKGRAY);
@@ -320,7 +320,7 @@ impl Game {
         const MIN_WIDTH: f32 = 36.0;
 
         let texts = [Slot::Number, Slot::Word].map(|slot| {
-            let typed = self.slot(slot);
+            let typed = self.typed.get(slot);
             let text = if typed.is_empty() {
                 "·".to_owned()
             } else {

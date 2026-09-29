@@ -119,7 +119,7 @@ fn typing_a_monsters_answer_casts_a_spell_and_scores() {
     log.add(game.update(&typing(&answer)));
     assert!(game.enemies.is_empty(), "the monster is out of play");
     assert_eq!(game.score, 1);
-    assert_eq!(game.level_points, 1);
+    assert_eq!(game.stage.points, 1);
     assert!(log.sfx.contains(&Sfx::Cast));
     // The spell explodes it a moment later.
     assert!(idle(&mut game, 1.0).sfx.contains(&Sfx::Explode));
@@ -149,7 +149,7 @@ fn a_wrong_key_costs_energy_after_the_first_dead_end() {
     let outputs = game.update(&typing("1"));
     assert_eq!(game.energy, MAX_ENERGY - WRONG_PENALTY);
     assert!(outputs.sfx.contains(&Sfx::Wrong));
-    assert!(game.number_typed.is_empty());
+    assert!(game.typed.get(Slot::Number).is_empty());
 }
 
 #[test]
@@ -166,21 +166,21 @@ fn backspace_empties_both_slots() {
     game.update(&typing("1"));
     game.update(&typing("s"));
     assert_eq!(
-        (game.number_typed.as_str(), game.word_typed.as_str()),
+        (game.typed.get(Slot::Number), game.typed.get(Slot::Word)),
         ("1", "s")
     );
     game.update(&Input {
         keys: vec![Key::Backspace],
         ..frame()
     });
-    assert!(game.number_typed.is_empty() && game.word_typed.is_empty());
+    assert!((game.typed.get(Slot::Number).is_empty() && game.typed.get(Slot::Word).is_empty()));
 }
 
 #[test]
 fn keys_that_are_not_answers_are_ignored() {
     let mut game = game();
     game.update(&typing("wxz"));
-    assert!(game.word_typed.is_empty());
+    assert!(game.typed.get(Slot::Word).is_empty());
 }
 
 #[test]
@@ -193,7 +193,10 @@ fn a_monster_reaching_her_hurts_and_teaches() {
     assert_eq!(game.energy, MAX_ENERGY - COLLISION_PENALTY);
     assert!(game.enemies.is_empty());
     assert!(log.sfx.contains(&Sfx::Hurt));
-    assert!(game.number_typed.is_empty(), "what she typed is dropped");
+    assert!(
+        game.typed.get(Slot::Number).is_empty(),
+        "what she typed is dropped"
+    );
     let feedback = game.feedback.as_ref().expect("the pair is shown");
     assert!(feedback.text.contains(PAIRS[0].number));
     assert!(game.memory().record(&PAIRS[0]).is_some());
@@ -276,11 +279,11 @@ fn pausing_stops_time_and_drops_typing() {
         ..frame()
     });
     assert!(game.is_paused());
-    let (time, pos) = (game.level_time, game.enemies[0].pos);
+    let (time, pos) = (game.stage.time, game.enemies[0].pos);
     let animation = game.play_time;
     let answer = game.enemies[0].answer();
     play(&mut game, 1.0, &typing(&answer));
-    assert_eq!(game.level_time, time);
+    assert_eq!(game.stage.time, time);
     assert_eq!(game.play_time, animation, "animations freeze too");
     assert_eq!(game.enemies[0].pos, pos);
     assert_eq!(game.score, 0, "typing during a pause does nothing");
@@ -290,7 +293,7 @@ fn pausing_stops_time_and_drops_typing() {
         ..frame()
     });
     assert!(!game.is_paused());
-    assert!(game.number_typed.is_empty() && game.word_typed.is_empty());
+    assert!((game.typed.get(Slot::Number).is_empty() && game.typed.get(Slot::Word).is_empty()));
 }
 
 #[test]
@@ -333,7 +336,7 @@ fn scoring_enough_points_summons_the_boss() {
     let mut log = Log::default();
     game.add_points(1);
     log.add(std::mem::take(&mut game.out));
-    assert!(game.boss_fight);
+    assert!(game.stage.boss_fight);
     assert!(log.sfx.contains(&Sfx::Boss));
     let boss = &game.enemies[0];
     assert!(boss.is_boss());
@@ -364,8 +367,8 @@ fn beating_the_boss_completes_the_level() {
     log.append(idle(&mut game, 1.5));
 
     assert_eq!(game.level, 2);
-    assert!(!game.boss_fight);
-    assert_eq!(game.level_points, 0);
+    assert!(!game.stage.boss_fight);
+    assert_eq!(game.stage.points, 0);
     assert_eq!(
         log.events.last(),
         Some(&GameEvent::LevelCompleted { level: 1, stars: 3 })
@@ -523,7 +526,7 @@ fn a_long_frame_plays_like_the_same_time_in_short_ones() {
         ..frame()
     });
     assert!((short.player.x - long.player.x).abs() < 0.5);
-    assert!((short.level_time - long.level_time).abs() < 0.01);
+    assert!((short.stage.time - long.stage.time).abs() < 0.01);
 }
 
 #[test]
@@ -533,7 +536,7 @@ fn a_stall_does_not_make_the_game_jump_ahead() {
         dt: 30.0,
         ..frame()
     });
-    assert!(game.level_time <= MAX_FRAME_SECONDS + 1e-3);
+    assert!(game.stage.time <= MAX_FRAME_SECONDS + 1e-3);
 }
 
 #[test]
