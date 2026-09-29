@@ -12,3 +12,5 @@ from the published crate:
 - `java/MainActivity.java`: the volume buttons are passed on to Android
   instead of being swallowed, and they adjust media volume while the game
   is open.
+- `src/lib.rs`: `set_or_replace_display` is compiled only on Android, its one
+  caller, so other targets don't warn about dead code.

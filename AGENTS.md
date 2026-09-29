@@ -24,8 +24,7 @@ code fits together, and pitfalls already found the hard way.
 
 ## Checking your work
 
-- `cargo test` and `cargo clippy --all-targets`. One warning is expected:
-  `set_or_replace_display` is never used, in the vendored miniquad.
+- `cargo test` and `cargo clippy --all-targets`, both warning-free.
 - For web changes also run `cargo clippy --target wasm32-unknown-unknown`.
 - GitHub Actions (`.github/workflows/rust.yml`) builds and tests every push on
   Ubuntu; it installs ALSA, X11 and OpenGL libraries first.
