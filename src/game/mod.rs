@@ -118,6 +118,15 @@ struct Banner {
     seconds_left: f32,
 }
 
+/// What was typed or tapped since the game last advanced. A frame can be
+/// shorter than a step, so these wait for the step that acts on them.
+#[derive(Debug, Default)]
+struct Pending {
+    keys: Vec<Key>,
+    taps: usize,
+    confirm: bool,
+}
+
 /// How the current level is going; starts over with every level.
 #[derive(Debug, Default)]
 struct Stage {
@@ -170,6 +179,10 @@ pub struct Game {
     start_level: u32,
     /// The time of the latest frame, as `Input::now`.
     now: f64,
+    /// Cuts frames into the fixed steps the game advances in.
+    timestep: Timestep,
+    /// Typing and taps not acted on yet.
+    pending: Pending,
     /// Seconds the game has run, not counting pauses. Animations follow
     /// this rather than the clock, so a pause freezes them too.
     play_time: f64,
@@ -207,6 +220,8 @@ impl Game {
             memory,
             start_level: 1,
             now: 0.0,
+            timestep: Timestep::default(),
+            pending: Pending::default(),
             play_time: 0.0,
             text_width,
         };
@@ -284,24 +299,31 @@ impl Game {
             self.paused = !self.paused;
         }
         // Keys typed during a pause are dropped along with the frame.
-        if !self.paused {
-            let (steps, dt) = frame_steps(input.dt);
+        if self.paused {
+            self.pending = Pending::default();
+        } else {
+            self.pending.keys.extend(&input.keys);
+            self.pending.taps += input.taps;
+            self.pending.confirm |= input.confirm;
+            let steps = self.timestep.steps_due(input.dt);
             for step in 0..steps {
-                self.advance(dt, input, step == 0);
+                // What was typed is acted on in the first step only.
+                let acts = (step == 0).then(|| std::mem::take(&mut self.pending));
+                self.advance(STEP_SECONDS, input, acts);
             }
         }
         std::mem::take(&mut self.out)
     }
 
-    /// Advances the game by `dt` seconds. What was typed or tapped this
-    /// frame is acted on in the `first` step only.
-    fn advance(&mut self, dt: f32, input: &Input, first: bool) {
+    /// Advances the game by `dt` seconds, acting on what was typed or
+    /// tapped (`acts`) if there is anything new.
+    fn advance(&mut self, dt: f32, input: &Input, acts: Option<Pending>) {
         self.play_time += f64::from(dt);
         self.effects.update(dt);
         self.update_spells(dt);
 
         if self.is_over() {
-            if first && (input.confirm || input.taps > 0) {
+            if acts.is_some_and(|a| a.confirm || a.taps > 0) {
                 self.restart();
             }
             return;
@@ -316,10 +338,8 @@ impl Game {
         }
 
         self.move_player(dt, input.arrows, input.stick);
-        if first {
-            for &key in &input.keys {
-                self.handle_key(key);
-            }
+        for key in acts.into_iter().flat_map(|a| a.keys) {
+            self.handle_key(key);
         }
         self.move_enemies(dt);
         if self.is_over() {

@@ -103,9 +103,14 @@ pub(super) const PORTAL_PALETTE: [Color; 3] = [VIOLET, SKYBLUE, WHITE];
 /// A frame longer than this counts as this long, so a stall doesn't make
 /// the game jump ahead.
 pub(super) const MAX_FRAME_SECONDS: f32 = 0.25;
-/// The game advances in steps no longer than this, so a fast spell or
-/// monster can't skip past what it should hit however slow a frame is.
-pub(super) const MAX_STEP_SECONDS: f32 = 1.0 / 30.0;
+/// The game always advances in steps of exactly this long, however long
+/// the frames are, so a game plays out the same on a slow phone and a fast
+/// monitor, and a fast spell or monster can't skip past what it should
+/// hit. It is short enough that a screen showing fewer or more frames
+/// than steps per second looks smooth without blending between steps.
+pub(super) const STEP_SECONDS: f32 = 1.0 / 120.0;
+/// How far short of a step still counts as one, to absorb rounding.
+const STEP_TOLERANCE: f32 = 1e-6;
 
 /// The energy left after a wrong key: the penalty, but never below
 /// `LOW_ENERGY`.
@@ -152,12 +157,27 @@ pub fn stars_for(energy_fraction: f32) -> u8 {
     }
 }
 
-/// How many steps a frame of `dt` seconds is advanced in, and how long
-/// each is. A frame is never longer than `MAX_FRAME_SECONDS`.
-pub(super) fn frame_steps(dt: f32) -> (u32, f32) {
-    let dt = dt.clamp(0.0, MAX_FRAME_SECONDS);
-    let steps = (dt / MAX_STEP_SECONDS).ceil().max(1.0) as u32;
-    (steps, dt / steps as f32)
+/// Turns frames of varying length into fixed steps: time that doesn't add
+/// up to a whole step waits for the next frame.
+#[derive(Debug, Default)]
+pub(super) struct Timestep {
+    leftover: f32,
+}
+
+impl Timestep {
+    /// How many steps of `STEP_SECONDS` a frame of `dt` seconds makes
+    /// due. A frame is never counted longer than `MAX_FRAME_SECONDS`.
+    pub(super) fn steps_due(&mut self, dt: f32) -> u32 {
+        self.leftover += dt.clamp(0.0, MAX_FRAME_SECONDS);
+        let mut steps = 0;
+        // Rounding in `f32` mustn't make a frame that is exactly a whole
+        // number of steps lose one.
+        while self.leftover >= STEP_SECONDS - STEP_TOLERANCE {
+            self.leftover -= STEP_SECONDS;
+            steps += 1;
+        }
+        steps
+    }
 }
 
 #[cfg(test)]
@@ -253,26 +273,41 @@ mod tests {
     }
 
     #[test]
-    fn a_normal_frame_is_one_step() {
-        assert_eq!(frame_steps(1.0 / 60.0), (1, 1.0 / 60.0));
+    fn a_60_hz_frame_is_two_steps() {
+        assert_eq!(Timestep::default().steps_due(1.0 / 60.0), 2);
     }
 
     #[test]
-    fn a_long_frame_is_split_into_short_steps() {
-        let (steps, step) = frame_steps(0.2);
-        assert!(steps > 1);
-        assert!(step <= MAX_STEP_SECONDS);
-        assert!((steps as f32 * step - 0.2).abs() < 1e-6);
+    fn a_long_frame_is_many_steps() {
+        let steps = Timestep::default().steps_due(0.2);
+        assert_eq!(steps, (0.2 / STEP_SECONDS) as u32);
     }
 
     #[test]
     fn a_stall_counts_as_a_bounded_frame() {
-        let (steps, step) = frame_steps(30.0);
-        assert!((steps as f32 * step - MAX_FRAME_SECONDS).abs() < 1e-5);
+        let steps = Timestep::default().steps_due(30.0);
+        assert!((steps as f32 * STEP_SECONDS - MAX_FRAME_SECONDS).abs() <= STEP_SECONDS);
     }
 
     #[test]
-    fn no_time_is_still_one_step() {
-        assert_eq!(frame_steps(0.0), (1, 0.0));
+    fn a_frame_shorter_than_a_step_waits_for_the_next() {
+        let mut timestep = Timestep::default();
+        assert_eq!(timestep.steps_due(STEP_SECONDS * 0.6), 0);
+        assert_eq!(timestep.steps_due(STEP_SECONDS * 0.6), 1);
+    }
+
+    #[test]
+    fn uneven_frames_add_up_to_the_same_number_of_steps() {
+        let mut timestep = Timestep::default();
+        let total: u32 = (0..1000)
+            .map(|i| timestep.steps_due(if i % 2 == 0 { 0.010 } else { 0.023 }))
+            .sum();
+        // 16.5 seconds at 120 steps per second, less what still waits.
+        assert!((1978..=1980).contains(&total), "{total}");
+    }
+
+    #[test]
+    fn no_time_is_no_steps() {
+        assert_eq!(Timestep::default().steps_due(0.0), 0);
     }
 }

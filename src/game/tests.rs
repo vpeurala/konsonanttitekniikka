@@ -662,3 +662,46 @@ fn a_typist_who_never_types_loses_on_the_first_level() {
     assert_eq!(overs, 1, "game over is reported exactly once");
     assert!(completed_levels(&log).is_empty());
 }
+
+/// Plays `seconds` at `fps` frames per second, moving right all the time.
+fn play_at(fps: f32, seconds: f32) -> Game {
+    let mut game = game();
+    for _ in 0..(seconds * fps).round() as usize {
+        game.update(&Input {
+            dt: 1.0 / fps,
+            arrows: vec2(1.0, 0.0),
+            ..frame()
+        });
+    }
+    game
+}
+
+#[test]
+fn a_game_plays_out_the_same_at_any_frame_rate() {
+    let reference = play_at(60.0, 20.0);
+    assert!(!reference.enemies.is_empty(), "something happened");
+    for fps in [30.0, 120.0, 240.0] {
+        let other = play_at(fps, 20.0);
+        assert_eq!(other.player, reference.player, "{fps} fps");
+        assert_eq!(other.play_time, reference.play_time, "{fps} fps");
+        assert_eq!(other.enemies.len(), reference.enemies.len(), "{fps} fps");
+        for (a, b) in other.enemies.iter().zip(&reference.enemies) {
+            assert_eq!(a.question.number(false), b.question.number(false));
+            assert_eq!(a.pos, b.pos, "{fps} fps");
+        }
+    }
+}
+
+#[test]
+fn typing_on_a_frame_too_short_for_a_step_is_not_lost() {
+    let mut game = game();
+    with_monster(&mut game);
+    let answer = game.enemies[0].answer();
+    // A frame at 1000 fps is a fraction of a step.
+    let short = |input: Input| Input { dt: 0.001, ..input };
+    for c in answer.chars() {
+        game.update(&short(typing(&c.to_string())));
+    }
+    idle(&mut game, 0.1);
+    assert_eq!(game.score, 1);
+}

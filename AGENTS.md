@@ -75,8 +75,11 @@ so it can be tested without a screen; do the same for new layouts.
   monsters showing the other kind. Backspace empties both slots.
   `Game::update(&Input) -> Outputs` is the only way in; `Outputs` carry
   sound effects and `GameEvent`s (started, level completed, game over) for
-  saving and analytics. A frame is advanced in steps of at most 1/30 s and
-  never more than 0.25 s in all, so a slow frame can't skip past a hit.
+  saving and analytics. The game advances in fixed steps of 1/120 s
+  (`Timestep`), however long the frames are, so it plays out the same at any
+  frame rate; a frame counts as at most 0.25 s, and typing waits in
+  `Pending` for the next step, so a slow frame can't skip past a hit and a
+  fast one can't lose a key.
   Text width is injected (`TextWidth`), because only the shell knows the
   loaded font. Split into `rules.rs` (numbers and pure rules), `answer.rs`
   (matching what was typed), `enemy.rs`, `spawn.rs`, `combat.rs` (spells,
