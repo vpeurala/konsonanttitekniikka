@@ -1,5 +1,13 @@
 # Lukuloitsu
 
+[![CI](https://github.com/vpeurala/lukuloitsu.fi/actions/workflows/rust.yml/badge.svg)](https://github.com/vpeurala/lukuloitsu.fi/actions/workflows/rust.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![Play at lukuloitsu.fi](https://img.shields.io/badge/play-lukuloitsu.fi-brightgreen.svg)](https://lukuloitsu.fi)
+[![Latest tag](https://img.shields.io/github/v/tag/vpeurala/lukuloitsu.fi)](https://github.com/vpeurala/lukuloitsu.fi/tags)
+[![Last commit](https://img.shields.io/github/last-commit/vpeurala/lukuloitsu.fi)](https://github.com/vpeurala/lukuloitsu.fi/commits/main)
+[![Rust 2024 edition](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/)
+![Platforms: web, macOS, Android, iOS](https://img.shields.io/badge/platforms-web%20%7C%20macOS%20%7C%20Android%20%7C%20iOS-lightgrey.svg)
+
 A game for learning the Finnish **consonant technique** (*konsonanttitekniikka*),
 the Finnish version of the Major system: a way to remember any number by
 turning its digits into words.
