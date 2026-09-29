@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes the Windows build and the user booklet on a GitHub Release when a version tag is
+# Publishes the Windows, macOS and Linux builds and the user booklet on a GitHub Release when a version tag is
 # pushed (git tag 0.3.0 && git push origin 0.3.0). Run it by hand from the
 # Actions tab to add the build to a tag that already exists.
 on:
@@ -49,6 +49,45 @@ jobs:
             --title "Lukuloitsu $TAG" \
             --notes-file .github/release-notes.md
         fi
+
+  # The macOS and Linux builds join the release the Windows job made.
+  # scripts/macos-app.sh and scripts/linux-package.sh do the work, and CI
+  # (rust.yml) runs them on every push, so a tag rarely finds them broken.
+  # Tags from before 0.4.3 don't have the scripts.
+  macos:
+
+    needs: windows
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}
+    - name: Build the app
+      run: scripts/macos-app.sh
+    - name: Attach it to the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh release upload "$TAG" target/macos/lukuloitsu-macos.zip --clobber
+
+  linux:
+
+    needs: windows
+    # An older Ubuntu, so the program runs on older distributions too.
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}
+    - name: Install system libraries
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev
+    - name: Build and pack it
+      run: scripts/linux-package.sh
+    - name: Attach it to the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh release upload "$TAG" target/linux/lukuloitsu-linux.tar.gz --clobber
 
   # The user booklet (in Finnish), made by the game's own program from the
   # same tag. Needs the release to exist, so it waits for the Windows job.

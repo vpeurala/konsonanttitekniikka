@@ -38,7 +38,8 @@ code fits together, and pitfalls already found the hard way.
   OpenGL libraries first. Two more jobs there measure test coverage with
   `cargo llvm-cov` and send it to Codecov (files that only draw are left
   out, see the comment in the workflow; `cargo llvm-cov --summary-only`
-  shows it locally), and build the Windows executable.
+  shows it locally), and build the Windows executable. Two more build the macOS app and the Linux
+  package the way a release does.
 - To see a screen, temporarily make `main` draw it and call
   `get_screen_data().export_png(path)`, then restore `src/main.rs`. Put
   screenshots, rendered music and other scratch files outside the repository.
@@ -227,6 +228,20 @@ so it can be tested without a screen; do the same for new layouts.
   After renaming the project folder, run `cargo clean -p lukuloitsu`, or the
   build script keeps the old path.
 - Saves go to `~/Library/Application Support/Lukuloitsu/save.txt`.
+- `scripts/macos-app.sh` makes `Lukuloitsu.app`, a universal (Apple silicon
+  and Intel) build with the iOS icon turned into an .icns, and zips it. It
+  signs the app ad hoc: the `lipo` step throws away the linker's signature,
+  and Apple silicon refuses to run an unsigned program. Without a paid
+  Apple Developer ID it can't be notarized, so downloaders right-click and
+  choose Open (the release notes say so).
+
+### Linux
+
+- `cargo run --release` builds it (see the README for the libraries).
+  `scripts/linux-package.sh` makes the release tarball. CI builds it on
+  Ubuntu 22.04, so it runs on distributions with glibc 2.35 or newer; don't
+  move it to a newer runner without changing the release notes.
+- Saves go to `~/.lukuloitsu/save.txt`.
 
 ### Windows
 
@@ -252,7 +267,8 @@ so it can be tested without a screen; do the same for new layouts.
   `git tag -a X.Y.Z -m "Lukuloitsu X.Y"` and push the tag. Tags have no `v`.
   `.github/workflows/release.yml` builds the Windows executable and attaches
   a zip with it and the licenses to a GitHub Release, using
-  `.github/release-notes.md` as the text. It can also be started by hand
+  `.github/release-notes.md` as the text, then adds the macOS app, the Linux
+  tarball and the booklet to it. It can also be started by hand
   for an existing tag.
 
 ### Shared

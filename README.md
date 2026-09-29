@@ -7,15 +7,15 @@
 [![Latest tag](https://img.shields.io/github/v/tag/vpeurala/lukuloitsu.fi)](https://github.com/vpeurala/lukuloitsu.fi/tags)
 [![Last commit](https://img.shields.io/github/last-commit/vpeurala/lukuloitsu.fi)](https://github.com/vpeurala/lukuloitsu.fi/commits/main)
 [![Rust 2024 edition](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/)
-![Platforms: web, macOS, Android, iOS](https://img.shields.io/badge/platforms-web%20%7C%20macOS%20%7C%20Android%20%7C%20iOS-lightgrey.svg)
+![Platforms: web, Windows, macOS, Linux, Android, iOS](https://img.shields.io/badge/platforms-web%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-lightgrey.svg)
 
 A game for learning the Finnish **consonant technique** (*konsonanttitekniikka*),
 the Finnish version of the Major system: a way to remember any number by
 turning its digits into words.
 
 Play it in the browser at **[lukuloitsu.fi](https://lukuloitsu.fi)**, download it
-for Windows from the [releases](https://github.com/vpeurala/lukuloitsu.fi/releases)
-(where the printable PDF booklet is too), or build it for macOS, Android or iOS.
+for Windows, macOS or Linux from the [releases](https://github.com/vpeurala/lukuloitsu.fi/releases)
+(where the printable PDF booklet is too), or build it for Android or iOS.
 The game itself is in Finnish.
 
 ![The title screen](docs/screenshots/title.png)
@@ -70,7 +70,7 @@ cargo run --release
 
 | Platform | How |
 |---|---|
-| macOS (or Linux, Windows) | `cargo run --release` |
+| macOS, Linux, Windows | `cargo run --release`. `scripts/macos-app.sh` makes a double-clickable `Lukuloitsu.app` for both kinds of Mac, and `scripts/linux-package.sh` a tarball; releases carry both. |
 | Web | `scripts/web.sh` builds into `target/web`; `scripts/web.sh --serve` also serves it at http://localhost:8000 |
 | Android | `scripts/android.sh` builds, installs and starts it on a phone connected over USB. Needs the Android SDK and NDK, Java 8 and `cargo-quad-apk` (install with `scripts/install-cargo-quad-apk.sh`); see the script for details. |
 | iOS Simulator | `scripts/ios-sim.sh` (needs Xcode) |

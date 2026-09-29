@@ -73,6 +73,39 @@ jobs:
         name: lukuloitsu-windows
         path: target/release/lukuloitsu.exe
 
+  # Builds the macOS app and the Linux package the way the release does, so
+  # a broken script shows up here and not on release day. They can be
+  # downloaded from the run page ("Artifacts").
+  macos:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the app
+      run: scripts/macos-app.sh
+    - name: Upload the app
+      uses: actions/upload-artifact@v4
+      with:
+        name: lukuloitsu-macos
+        path: target/macos/lukuloitsu-macos.zip
+
+  linux:
+
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install system libraries
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev
+    - name: Build and pack it
+      run: scripts/linux-package.sh
+    - name: Upload the package
+      uses: actions/upload-artifact@v4
+      with:
+        name: lukuloitsu-linux
+        path: target/linux/lukuloitsu-linux.tar.gz
+
   # Builds the user booklet as a PDF, which proves the booklet still renders
   # and gives a copy to look at (Actions run page, "Artifacts"). Releases
   # attach it too; see release.yml.
