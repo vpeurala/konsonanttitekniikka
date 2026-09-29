@@ -1,0 +1,51 @@
+name: Release
+
+# Publishes the Windows build on a GitHub Release when a version tag is
+# pushed (git tag 0.3.0 && git push origin 0.3.0). Run it by hand from the
+# Actions tab to add the build to a tag that already exists.
+on:
+  push:
+    tags: [ "[0-9]+.[0-9]+.[0-9]+" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release, e.g. 0.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  windows:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}
+    - name: Build
+      run: cargo build --release
+    # The licenses travel with the binary: it contains the fonts too.
+    - name: Make the zip
+      shell: pwsh
+      run: |
+        Compress-Archive -DestinationPath lukuloitsu-windows.zip -Path `
+          target/release/lukuloitsu.exe, LICENSE-MIT, LICENSE-APACHE, `
+          assets/fonts/OFL-Nunito.txt, assets/fonts/OFL-Fredoka.txt
+    - name: Publish the release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          gh release upload "$TAG" lukuloitsu-windows.zip --clobber
+        else
+          gh release create "$TAG" lukuloitsu-windows.zip \
+            --title "Lukuloitsu $TAG" \
+            --notes-file .github/release-notes.md
+        fi

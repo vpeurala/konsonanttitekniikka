@@ -13,8 +13,9 @@ A game for learning the Finnish **consonant technique** (*konsonanttitekniikka*)
 the Finnish version of the Major system: a way to remember any number by
 turning its digits into words.
 
-Play it in the browser at **[lukuloitsu.fi](https://lukuloitsu.fi)**, or build it
-for macOS, Android or iOS. The game itself is in Finnish.
+Play it in the browser at **[lukuloitsu.fi](https://lukuloitsu.fi)**, download it
+for Windows from the [releases](https://github.com/vpeurala/lukuloitsu.fi/releases),
+or build it for macOS, Android or iOS. The game itself is in Finnish.
 
 ## The idea
 
