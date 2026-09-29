@@ -46,6 +46,11 @@ code fits together, and pitfalls already found the hard way.
   instance keeps playing unseen: run `xcrun simctl shutdown all` after
   simulator tests, close browser tabs showing the game and stop the preview
   server, and don't leave the desktop build running.
+- The booklet's pages are 296.6 mm tall, not 297: at exactly 297 mm Chrome
+  sometimes adds a blank page after each. Reading a render target back gives
+  the picture upside down; `booklet/images.rs` flips it, like `export_png`
+  does. A page whose content grows past its height is silently cut off, so
+  look at the PDF after changing text.
 - A hidden browser preview pane gets frames only in bursts. The game reads a
   long gap between frames as the player being away and pauses itself,
   discarding that frame's keys, so keyboard tests there are unreliable.
@@ -95,6 +100,18 @@ so it can be tested without a screen; do the same for new layouts.
   messages, which the rules tell to show but never read), `enemy.rs`,
   `metrics.rs`, `spawn.rs`, `combat.rs` (spells, collisions, movement) and
   `render.rs` (the only file that draws).
+- `booklet/`: the user instruction booklet, `--render-booklet FILE.html`:
+  one self-contained HTML file (fonts and PNG pictures embedded as base64),
+  16 A4 pages in Finnish, colourful, decorated with the game's characters.
+  `scripts/booklet.sh` prints it to PDF with headless Chrome, CI attaches
+  the PDF to each GitHub release. `mod.rs` and `pages.rs` are pure (assets in,
+  HTML out) and `images.rs` is the shell that draws the pictures with the
+  game's own drawing code into render targets. Every number, word,
+  consonant and level in the text is looked up from `pairs`, `curriculum`
+  and `long_numbers`, never typed in, so the booklet can't disagree with
+  the game; keep it that way when editing pages, and test it in
+  `booklet/tests.rs`. The text is Finnish. To look at pages, render the PDF
+  and read it page by page (`pdftoppm` from poppler is needed for that).
 - `pairs.rs`: the 110 pairs and which characters count as answers. Each
   `Pair` carries a `PairId`, its position in `PAIRS`, which memory, the
   game's appearance counts and the pictures are keyed by; `pairs::find`

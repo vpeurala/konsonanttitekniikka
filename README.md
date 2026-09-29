@@ -14,8 +14,9 @@ the Finnish version of the Major system: a way to remember any number by
 turning its digits into words.
 
 Play it in the browser at **[lukuloitsu.fi](https://lukuloitsu.fi)**, download it
-for Windows from the [releases](https://github.com/vpeurala/lukuloitsu.fi/releases),
-or build it for macOS, Android or iOS. The game itself is in Finnish.
+for Windows from the [releases](https://github.com/vpeurala/lukuloitsu.fi/releases)
+(where the printable PDF booklet is too), or build it for macOS, Android or iOS.
+The game itself is in Finnish.
 
 ## The idea
 
@@ -70,11 +71,16 @@ cargo run --release
 On Linux, building needs the ALSA, X11 and OpenGL development libraries, for
 example `libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev` on Ubuntu.
 
-Two extra commands:
+Three extra commands:
 
 - `cargo run -- --render-icons` regenerates the app icons for Android and iOS.
 - `cargo run --release -- --render-music music.wav` writes the background music
   to a file.
+- `scripts/booklet.sh` writes the user booklet, 16 A4 pages in Finnish, to
+  `target/booklet/lukuloitsu-opas.pdf`. The game's own program renders it as
+  HTML (`--render-booklet FILE.html`), with the pairs and pictures taken from
+  the game itself, and Chrome or Chromium prints it to PDF (set `CHROME` if it
+  isn't found).
 
 Run the tests with `cargo test`. To measure test coverage, install
 [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) and run

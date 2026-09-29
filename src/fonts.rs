@@ -5,9 +5,9 @@ use std::sync::OnceLock;
 
 use macroquad::prelude::*;
 
-const NUNITO_REGULAR: &[u8] = include_bytes!("../assets/fonts/Nunito-Regular.ttf");
-const NUNITO_BOLD: &[u8] = include_bytes!("../assets/fonts/Nunito-Bold.ttf");
-const FREDOKA_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/Fredoka-SemiBold.ttf");
+pub(crate) const NUNITO_REGULAR: &[u8] = include_bytes!("../assets/fonts/Nunito-Regular.ttf");
+pub(crate) const NUNITO_BOLD: &[u8] = include_bytes!("../assets/fonts/Nunito-Bold.ttf");
+pub(crate) const FREDOKA_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/Fredoka-SemiBold.ttf");
 
 static BOLD: OnceLock<Font> = OnceLock::new();
 static HEADING: OnceLock<Font> = OnceLock::new();

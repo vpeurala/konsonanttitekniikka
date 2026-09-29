@@ -13,7 +13,7 @@ use crate::touch::Pointer;
 use crate::view::{ARENA_H, ARENA_W};
 
 /// A checkpoint every this many levels: 1, 6, 11, ...
-const LEVELS_PER_CHECKPOINT: u32 = 5;
+pub const LEVELS_PER_CHECKPOINT: u32 = 5;
 const COLUMNS: usize = 5;
 /// At most this many checkpoints fit on the screen.
 const MAX_SHOWN: usize = 25;

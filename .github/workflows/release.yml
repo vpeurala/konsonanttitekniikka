@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes the Windows build on a GitHub Release when a version tag is
+# Publishes the Windows build and the user booklet on a GitHub Release when a version tag is
 # pushed (git tag 0.3.0 && git push origin 0.3.0). Run it by hand from the
 # Actions tab to add the build to a tag that already exists.
 on:
@@ -49,3 +49,24 @@ jobs:
             --title "Lukuloitsu $TAG" \
             --notes-file .github/release-notes.md
         fi
+
+  # The user booklet (in Finnish), made by the game's own program from the
+  # same tag. Needs the release to exist, so it waits for the Windows job.
+  # Tags from before 0.4.0 can't make it: they don't have the booklet yet.
+  booklet:
+
+    needs: windows
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}
+    - name: Install system libraries
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
+    - name: Build the booklet
+      run: xvfb-run -a scripts/booklet.sh
+    - name: Attach it to the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh release upload "$TAG" target/booklet/lukuloitsu-opas.pdf --clobber

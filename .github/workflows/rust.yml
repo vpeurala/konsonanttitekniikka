@@ -33,7 +33,7 @@ jobs:
 
   # Test coverage, sent to Codecov for the README badge. Files that only draw
   # or start the app (pictures, sprites, the icon, fonts, the render code,
-  # main, analytics) are left out: the tests can't run them without a screen,
+  # the booklet's picture rendering, main, analytics) are left out: the tests can't run them without a screen,
   # and counting them would hide how well the game's logic is tested.
   coverage:
 
@@ -48,7 +48,7 @@ jobs:
     - name: Measure coverage
       run: >
         cargo llvm-cov --lcov --output-path lcov.info
-        --ignore-filename-regex 'src/(main|fonts|icon|pictures|sprites|analytics)\.rs|src/game/render\.rs'
+        --ignore-filename-regex 'src/(main|fonts|icon|pictures|sprites|analytics)\.rs|src/game/render\.rs|src/booklet/images\.rs'
     - name: Upload to Codecov
       uses: codecov/codecov-action@v5
       with:
@@ -72,3 +72,24 @@ jobs:
       with:
         name: lukuloitsu-windows
         path: target/release/lukuloitsu.exe
+
+  # Builds the user booklet as a PDF, which proves the booklet still renders
+  # and gives a copy to look at (Actions run page, "Artifacts"). Releases
+  # attach it too; see release.yml.
+  booklet:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    # The pictures are drawn by the game's own code, which needs a window,
+    # so run under a virtual display with software OpenGL.
+    - name: Install system libraries
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
+    - name: Build the booklet
+      run: xvfb-run -a scripts/booklet.sh
+    - name: Upload the booklet
+      uses: actions/upload-artifact@v4
+      with:
+        name: lukuloitsu-opas
+        path: target/booklet/lukuloitsu-opas.pdf

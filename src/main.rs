@@ -1,6 +1,7 @@
 mod analytics;
 mod app;
 mod audio;
+mod booklet;
 mod curriculum;
 mod effects;
 mod fonts;
@@ -62,6 +63,14 @@ async fn main() {
         let path = args.get(i + 1).map_or("music.wav", String::as_str);
         std::fs::write(path, audio::wav(&music::music()))
             .expect("the music file should be writable");
+        println!("wrote {path}");
+        return;
+    }
+    // `cargo run --release -- --render-booklet FILE.html` writes the user
+    // instruction booklet, which `scripts/booklet.sh` turns into a PDF.
+    if let Some(i) = args.iter().position(|a| a == "--render-booklet") {
+        let path = args.get(i + 1).map_or("opas.html", String::as_str);
+        booklet::write(path);
         println!("wrote {path}");
         return;
     }

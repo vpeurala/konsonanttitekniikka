@@ -6,7 +6,7 @@ use crate::pairs::{PAIRS, Pair};
 use crate::rng::{Rng, Stream};
 
 /// How many pairs each level after the first introduces.
-const NEW_PAIRS_PER_LEVEL: usize = 5;
+pub const NEW_PAIRS_PER_LEVEL: usize = 5;
 
 pub struct Curriculum {
     level: u32,
