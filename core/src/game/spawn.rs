@@ -5,7 +5,7 @@ use glam::{Vec2, vec2};
 use super::enemy::Enemy;
 use super::rules::{
     MAX_ENEMIES, MIN_PORTAL_SPAWN_DISTANCE, MIN_SPAWN_DISTANCE, NEW_PAIR_SHARE, PORTAL_SPAWN_SHARE,
-    SPAWN_ATTEMPTS, boss_hits,
+    SPAWN_ATTEMPTS, boss_hits, speed_growth,
 };
 use super::world::World;
 use crate::arena::{ARENA_H, ARENA_W};
@@ -80,6 +80,7 @@ impl World {
         let shows_word = rng.chance(0.5);
         let phase = rng.range(0.0, 100.0);
         let mut enemy = Enemy::new(question, shows_word, earlier, phase);
+        enemy.speed_growth = speed_growth(ctx.level);
         let portal = if rng.chance(PORTAL_SPAWN_SHARE) {
             self.portal_spawn_position(ctx, rng)
         } else {
@@ -164,6 +165,7 @@ impl World {
         let earlier = self.count_appearance(&numbers[0]);
         let phase = rng.range(0.0, 100.0);
         let mut boss = Enemy::boss(&numbers, easy, earlier, phase);
+        boss.speed_growth = speed_growth(ctx.level);
         // The boss is slow, so without a portal it starts just inside the
         // edge.
         let portal = self.portal_spawn_position(ctx, rng);

@@ -57,12 +57,25 @@ pub const LEVEL_BREAK_SECONDS: f32 = 2.0;
 
 /// A new enemy's speed.
 pub const START_SPEED: f32 = 12.0;
-/// Speed an enemy gains per second on screen, up to the player's speed.
-const SPEED_GROWTH: f32 = 3.0;
+/// Speed an enemy gains per second on screen, up to the player's speed, on
+/// the level where the ramp ends (`SPEED_GROWTH_LEVEL`) and after it.
+pub const SPEED_GROWTH: f32 = 3.0;
+/// ...and on the first level, where monsters speed up very slowly.
+const FIRST_LEVEL_SPEED_GROWTH: f32 = 0.5;
+/// The level from which monsters gain speed at the full rate; the growth
+/// rises evenly until then (level 21 is when all pairs have been met).
+const SPEED_GROWTH_LEVEL: u32 = 21;
+/// The spawn interval at the start of a level, once the easy levels are over.
 pub const START_SPAWN_INTERVAL: f32 = 4.0;
+/// ...and on the first level, where newcomers arrive less often.
+const FIRST_LEVEL_SPAWN_INTERVAL: f32 = 5.0;
 pub const MIN_SPAWN_INTERVAL: f32 = 1.2;
-/// Spawn interval lost per second spent on a level.
+/// Spawn interval lost per second spent on a level, on the later levels...
 const SPAWN_INTERVAL_SHRINK: f32 = 0.05;
+/// ...and on the first level.
+const FIRST_LEVEL_SPAWN_INTERVAL_SHRINK: f32 = 0.03;
+/// The level from which spawns follow the later levels' numbers.
+const SPAWN_EASE_LEVEL: u32 = 11;
 
 pub const BOSS_RADIUS: f32 = 36.0;
 /// The first level's boss takes this many hits.
@@ -133,16 +146,46 @@ pub fn boss_hits(level: u32) -> usize {
     (BOSS_FIRST_HITS + extra).min(BOSS_MAX_HITS)
 }
 
-/// Every enemy starts slow and speeds up as it ages, until it is as fast
-/// as the player.
-pub fn enemy_speed(age: f32) -> f32 {
-    (START_SPEED + SPEED_GROWTH * age).min(PLAYER_SPEED)
+/// Blends from `first` on level 1 to `later` on `full_level` and after.
+fn ramp(first: f32, later: f32, level: u32, full_level: u32) -> f32 {
+    let t = (level.saturating_sub(1) as f32 / (full_level - 1) as f32).min(1.0);
+    first + (later - first) * t
+}
+
+/// How fast enemies of `level` speed up, per second on screen: very slowly
+/// at first, then a little more every level.
+pub fn speed_growth(level: u32) -> f32 {
+    ramp(
+        FIRST_LEVEL_SPEED_GROWTH,
+        SPEED_GROWTH,
+        level,
+        SPEED_GROWTH_LEVEL,
+    )
+}
+
+/// Every enemy starts slow and speeds up as it ages (`growth` per second,
+/// see `speed_growth`), until it is as fast as the player.
+pub fn enemy_speed(age: f32, growth: f32) -> f32 {
+    (START_SPEED + growth * age).min(PLAYER_SPEED)
 }
 
 /// Difficulty comes from the spawn rate: enemies appear more often the
-/// longer a level lasts, and a new level starts calm again.
-pub fn spawn_interval(level_time: f32) -> f32 {
-    (START_SPAWN_INTERVAL - SPAWN_INTERVAL_SHRINK * level_time).max(MIN_SPAWN_INTERVAL)
+/// longer a level lasts, and a new level starts calm again. The early
+/// levels start calmer and tighten more slowly.
+pub fn spawn_interval(level: u32, level_time: f32) -> f32 {
+    let start = ramp(
+        FIRST_LEVEL_SPAWN_INTERVAL,
+        START_SPAWN_INTERVAL,
+        level,
+        SPAWN_EASE_LEVEL,
+    );
+    let shrink = ramp(
+        FIRST_LEVEL_SPAWN_INTERVAL_SHRINK,
+        SPAWN_INTERVAL_SHRINK,
+        level,
+        SPAWN_EASE_LEVEL,
+    );
+    (start - shrink * level_time).max(MIN_SPAWN_INTERVAL)
 }
 
 /// Stars for finishing a level with this fraction of energy left: three
@@ -187,7 +230,11 @@ mod tests {
     #[test]
     fn every_enemy_appears_without_a_hint() {
         for earlier in 0..10 {
-            assert!(!shows_hint(earlier, 0.0, enemy_speed(0.0) / PLAYER_SPEED));
+            assert!(!shows_hint(
+                earlier,
+                0.0,
+                enemy_speed(0.0, SPEED_GROWTH) / PLAYER_SPEED
+            ));
         }
     }
 
@@ -260,16 +307,36 @@ mod tests {
 
     #[test]
     fn enemies_speed_up_with_age_to_the_players_speed() {
-        assert_eq!(enemy_speed(0.0), START_SPEED);
-        assert!(enemy_speed(10.0) > enemy_speed(0.0));
-        assert_eq!(enemy_speed(1000.0), PLAYER_SPEED);
+        assert_eq!(enemy_speed(0.0, SPEED_GROWTH), START_SPEED);
+        assert!(enemy_speed(10.0, SPEED_GROWTH) > enemy_speed(0.0, SPEED_GROWTH));
+        assert_eq!(enemy_speed(1000.0, SPEED_GROWTH), PLAYER_SPEED);
+    }
+
+    #[test]
+    fn speed_growth_starts_slow_and_rises_gradually_to_the_full_rate() {
+        assert_eq!(speed_growth(1), FIRST_LEVEL_SPEED_GROWTH);
+        for level in 1..SPEED_GROWTH_LEVEL {
+            assert!(speed_growth(level + 1) > speed_growth(level));
+        }
+        assert_eq!(speed_growth(SPEED_GROWTH_LEVEL), SPEED_GROWTH);
+        assert_eq!(speed_growth(1000), SPEED_GROWTH);
     }
 
     #[test]
     fn spawns_get_more_frequent_within_a_level_down_to_a_floor() {
-        assert_eq!(spawn_interval(0.0), START_SPAWN_INTERVAL);
-        assert!(spawn_interval(10.0) < spawn_interval(0.0));
-        assert_eq!(spawn_interval(1000.0), MIN_SPAWN_INTERVAL);
+        for level in [1, 5, 11, 30] {
+            assert!(spawn_interval(level, 10.0) < spawn_interval(level, 0.0));
+            assert_eq!(spawn_interval(level, 1000.0), MIN_SPAWN_INTERVAL);
+        }
+        assert_eq!(spawn_interval(11, 0.0), START_SPAWN_INTERVAL);
+    }
+
+    #[test]
+    fn early_levels_spawn_less_often_than_later_ones() {
+        for time in [0.0, 20.0, 40.0] {
+            assert!(spawn_interval(1, time) > spawn_interval(11, time));
+            assert!(spawn_interval(5, time) >= spawn_interval(6, time));
+        }
     }
 
     #[test]

@@ -387,7 +387,12 @@ fn switching_the_sound_off_silences_the_sound_effects_too() {
     );
     // Everything but the sounds carries on, and switching back restores them.
     app.update(&press(KeyCode::Tab));
-    assert!(app.update(&typing()).contains(&Effect::Play(Sfx::Type)));
+    // (Whatever the key does, it makes a sound: a monster may be in the way.)
+    let effects = app.update(&typing());
+    assert!(
+        effects.iter().any(|e| matches!(e, Effect::Play(_))),
+        "{effects:?}"
+    );
 }
 
 #[test]

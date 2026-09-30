@@ -7,7 +7,8 @@ use glam::{Vec2, vec2};
 use super::answer::Slot;
 use super::metrics::text_width;
 use super::rules::{
-    BOSS_RADIUS, BOSS_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED, enemy_speed, shows_hint,
+    BOSS_RADIUS, BOSS_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED, SPEED_GROWTH, enemy_speed,
+    shows_hint,
 };
 use crate::arena::{ARENA_H, ARENA_W};
 use crate::long_numbers::Question;
@@ -61,6 +62,8 @@ pub struct Enemy {
     pub earlier_appearances: u32,
     /// Seconds on screen; sets the speed.
     pub age: f32,
+    /// Speed gained per second on screen, which the level sets.
+    pub speed_growth: f32,
     /// Seconds the current pair has been shown; sets the hint.
     pub shown_for: f32,
     /// Offsets the animation so enemies don't move in sync.
@@ -85,6 +88,7 @@ impl Enemy {
             hint_width: 0.0,
             earlier_appearances: 0,
             age: 0.0,
+            speed_growth: SPEED_GROWTH,
             shown_for: 0.0,
             phase,
             boss: None,
@@ -136,7 +140,7 @@ impl Enemy {
     }
 
     pub fn speed(&self) -> f32 {
-        let speed = enemy_speed(self.age);
+        let speed = enemy_speed(self.age, self.speed_growth);
         if self.is_boss() {
             speed * BOSS_SPEED_FACTOR
         } else {
@@ -164,8 +168,10 @@ impl Enemy {
 
     pub fn shows_hint(&self) -> bool {
         // The boss's speed factor applies to its top speed as well, so it
-        // cancels out of the fraction.
-        let speed_fraction = enemy_speed(self.age) / PLAYER_SPEED;
+        // cancels out of the fraction. Hints follow the full growth rate,
+        // not the level's, so they still appear after the same time on the
+        // slow early levels.
+        let speed_fraction = enemy_speed(self.age, SPEED_GROWTH) / PLAYER_SPEED;
         shows_hint(self.earlier_appearances, self.shown_for, speed_fraction)
     }
 

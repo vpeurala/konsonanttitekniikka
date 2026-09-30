@@ -298,7 +298,7 @@ impl Game {
         if !self.stage.boss_fight {
             self.spawn_timer -= dt;
             if self.spawn_timer <= 0.0 {
-                self.spawn_timer = spawn_interval(self.stage.time);
+                self.spawn_timer = spawn_interval(self.level, self.stage.time);
                 self.spawn_enemy(input.now, memory);
             }
         }
