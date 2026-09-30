@@ -156,7 +156,10 @@ so it can be tested without a screen; do the same for new layouts.
   badge, add a line to the table (and raise its length); the tests check
   ids, order and that nothing is met from the start.
   `badge_screen.rs` is the screen (rows by category, layout in pure
-  functions), `badge_art.rs` draws the medals and `toast.rs` is the notice.
+  functions), `badge_art.rs` draws the medals (a ribbon, a disc in the tier's
+  metal and an `Emblem`, a small picture of the badge's own; `emblem_of` maps
+  every badge id to a different one, and a test fails if two share or one is
+  missing) and `toast.rs` is the notice.
   The "sound" switch (Tab) is still `music_on` in the save.
 - `practice.rs`, `progress.rs`, `title.rs`: the other screens. The progress
   map shows how well a pair is known by colour and by 1–3 dots, so colour
