@@ -1,9 +1,9 @@
 //! What the game's events mean for the lifetime counters and the
 //! statistics. Plain functions of their arguments.
 
-use crate::analytics;
 use crate::badges::{self, Stats};
 use crate::game::GameEvent;
+use crate::platform::analytics;
 
 /// The counters after `event` has happened.
 pub fn tally(mut stats: Stats, event: &GameEvent) -> Stats {

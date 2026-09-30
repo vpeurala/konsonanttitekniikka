@@ -357,7 +357,7 @@ fn sound_effects_are_passed_on() {
     app.update(&press(KeyCode::Enter));
     // Typing with nothing on screen makes a click.
     let effects = app.update(&Frame {
-        typed: vec![crate::keyboard::Key::Char('1')],
+        typed: vec![crate::input::keyboard::Key::Char('1')],
         ..frame()
     });
     assert!(effects.contains(&Effect::Play(Sfx::Type)));
@@ -366,7 +366,7 @@ fn sound_effects_are_passed_on() {
 #[test]
 fn switching_the_sound_off_silences_the_sound_effects_too() {
     let typing = || Frame {
-        typed: vec![crate::keyboard::Key::Char('1')],
+        typed: vec![crate::input::keyboard::Key::Char('1')],
         ..frame()
     };
     let mut app = app();

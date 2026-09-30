@@ -5,14 +5,14 @@
 
 use macroquad::prelude::*;
 
-use crate::badge_art::draw_medal;
 use crate::badges::{BADGES, Badge, standing};
-use crate::fonts::{self, Style};
-use crate::frame::Frame;
+use crate::gfx::badge_art::draw_medal;
+use crate::gfx::fonts::{self, Style};
+use crate::gfx::view::{ARENA_H, ARENA_W};
+use crate::input::frame::Frame;
+use crate::input::touch::Pointer;
 use crate::memory::Memory;
-use crate::save::SaveData;
-use crate::touch::Pointer;
-use crate::view::{ARENA_H, ARENA_W};
+use crate::platform::save::SaveData;
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 const PANEL: Color = Color::new(0.13, 0.13, 0.19, 1.0);

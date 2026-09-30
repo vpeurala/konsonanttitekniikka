@@ -7,7 +7,7 @@ use super::events::{tally, worth_saving};
 use crate::badges::{self, Badge, Stats};
 use crate::game::GameEvent;
 use crate::memory::Memory;
-use crate::save::{self, SaveData};
+use crate::platform::save::{self, SaveData};
 
 /// How often progress is saved while playing, in seconds, so little is lost
 /// if the app is closed or killed in the background.

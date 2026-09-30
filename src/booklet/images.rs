@@ -5,10 +5,12 @@ use image::ImageEncoder;
 use macroquad::prelude::*;
 
 use super::{Assets, Characters, data_uri, html};
-use crate::fonts::{FREDOKA_SEMIBOLD, NUNITO_BOLD, NUNITO_REGULAR};
+use crate::gfx::fonts::{FREDOKA_SEMIBOLD, NUNITO_BOLD, NUNITO_REGULAR};
+use crate::gfx::pictures::draw_picture;
+use crate::gfx::sprites::{
+    draw_boss, draw_cyclops, draw_girl, draw_monster, draw_portal, draw_star,
+};
 use crate::pairs::PAIRS;
-use crate::pictures::draw_picture;
-use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster, draw_portal, draw_star};
 
 /// The pair pictures are printed about 3 cm wide, so this is plenty.
 const PICTURE_PIXELS: u32 = 360;

@@ -7,10 +7,10 @@ use macroquad::input::utils::{register_input_subscriber, repeat_all_miniquad_inp
 use macroquad::miniquad::{self, EventHandler};
 use macroquad::prelude::*;
 
-use crate::fonts::{self, Style};
-use crate::keyboard::Key;
+use crate::gfx::fonts::{self, Style};
+use crate::gfx::view::{ARENA_H, ARENA_W};
+use crate::input::keyboard::Key;
 use crate::pairs::{DIGIT_CONSONANTS, VOWELS, is_answer_char};
-use crate::view::{ARENA_H, ARENA_W};
 
 /// A key's size, and the gaps around keys and panel edges.
 const KEY: f32 = 60.0;
@@ -38,7 +38,7 @@ pub fn content_rect(touch: bool) -> Rect {
 /// when the `LUKULOITSU_TOUCH` environment variable is set.
 pub fn enabled() -> bool {
     #[cfg(target_arch = "wasm32")]
-    if crate::web::touch_screen() {
+    if crate::platform::web::touch_screen() {
         return true;
     }
     cfg!(any(target_os = "ios", target_os = "android"))

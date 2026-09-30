@@ -3,16 +3,16 @@
 
 use macroquad::prelude::*;
 
-use crate::fonts::draw_centered_text;
-use crate::fonts::{self, Style};
-use crate::frame::Frame;
+use crate::gfx::fonts::draw_centered_text;
+use crate::gfx::fonts::{self, Style};
+use crate::gfx::sprites::draw_star;
+use crate::gfx::view::{ARENA_H, ARENA_W};
+use crate::input::frame::Frame;
+use crate::input::touch::Pointer;
 use crate::memory::{LEARNED, Memory, learned_count};
 use crate::pairs::{PAIRS, Pair};
-use crate::save::SaveData;
-use crate::sprites::draw_star;
-use crate::title::pair_rows;
-use crate::touch::Pointer;
-use crate::view::{ARENA_H, ARENA_W};
+use crate::platform::save::SaveData;
+use crate::screens::title::pair_rows;
 
 /// The colour is pure yellow here; a pair is "nearly" learned around it.
 const NEARLY: f32 = 0.5;

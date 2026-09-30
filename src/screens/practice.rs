@@ -4,18 +4,18 @@
 
 use macroquad::prelude::*;
 
-use crate::audio::Sfx;
 use crate::curriculum::Curriculum;
-use crate::fonts::draw_centered_text;
-use crate::fonts::{self, Style};
-use crate::frame::Frame;
 use crate::game::{InputOutcome, resolve_input};
-use crate::keyboard::Key;
+use crate::gfx::fonts::draw_centered_text;
+use crate::gfx::fonts::{self, Style};
+use crate::gfx::pictures::draw_picture;
+use crate::gfx::view::{ARENA_H, ARENA_W};
+use crate::input::frame::Frame;
+use crate::input::keyboard::Key;
 use crate::memory::Memory;
 use crate::pairs::{self, Pair};
-use crate::pictures::draw_picture;
 use crate::rng::{Rng, Stream};
-use crate::view::{ARENA_H, ARENA_W};
+use crate::sound::audio::Sfx;
 
 /// How long a right answer stays on screen before the next card.
 const CORRECT_SECONDS: f32 = 1.3;

@@ -8,7 +8,7 @@
 
 use std::f32::consts::TAU;
 
-use crate::audio::{Noise, RATE, Wave, envelope, limit, midi_to_freq, sample_count};
+use crate::sound::audio::{Noise, RATE, Wave, envelope, limit, midi_to_freq, sample_count};
 
 const BPM: f32 = 150.0;
 const BEAT: f32 = 60.0 / BPM;

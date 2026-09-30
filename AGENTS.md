@@ -82,6 +82,13 @@ the app and its screens, drawing, audio, touch, saving to disk. `main.rs`
 re-exports the core modules by name, so shell code says `crate::pairs::...`.
 A plain `cargo test` or `cargo clippy` covers both crates (`default-members`).
 
+The shell is grouped by what its parts are for (bare file names in the list
+below are inside these folders): `input/` (`frame`, `keyboard`, `lifecycle`,
+`touch`), `screens/` (`title`, `levels`, `practice`, `progress`,
+`badge_screen`, `toast`), `gfx/` (`fonts`, `view`, `pictures`, `sprites`,
+`badge_art`, `icon`, `game_render`), `sound/` (`audio`, `music`) and
+`platform/` (`save`, `analytics`, `web`), plus `app`, `booklet` and `main`.
+
 **Pure core, impure shell.** Side effects live only in the outermost layer.
 `main.rs` is the shell: each frame it reads input into a `Frame`
 (`frame.rs`, the one place that asks the window and the clock), passes it

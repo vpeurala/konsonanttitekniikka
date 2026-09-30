@@ -4,7 +4,7 @@
 
 use macroquad::prelude::*;
 
-use crate::sprites::{draw_cyclops, draw_girl};
+use crate::gfx::sprites::{draw_cyclops, draw_girl};
 
 /// The icon's background, also used as Android's adaptive icon background.
 pub const BACKGROUND: Color = Color::new(0.14, 0.1, 0.3, 1.0);

@@ -62,7 +62,7 @@ impl Event {
 /// Sends the count to the statistics.
 pub fn send(event: &Event) {
     #[cfg(target_arch = "wasm32")]
-    crate::web::event(&event.path(), &event.title());
+    crate::platform::web::event(&event.path(), &event.title());
     #[cfg(not(target_arch = "wasm32"))]
     let _ = event;
 }

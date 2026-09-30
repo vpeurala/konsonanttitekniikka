@@ -4,13 +4,13 @@
 
 use macroquad::prelude::*;
 
-use crate::fonts::draw_centered_text;
-use crate::fonts::{self, Style};
-use crate::frame::Frame;
+use crate::gfx::fonts::draw_centered_text;
+use crate::gfx::fonts::{self, Style};
+use crate::gfx::view::{ARENA_H, ARENA_W};
+use crate::input::frame::Frame;
+use crate::input::touch::Pointer;
 use crate::long_numbers::first_long_level;
-use crate::practice::unlocked_pairs;
-use crate::touch::Pointer;
-use crate::view::{ARENA_H, ARENA_W};
+use crate::screens::practice::unlocked_pairs;
 use lukuloitsu_core::levels::checkpoints;
 
 const COLUMNS: usize = 5;

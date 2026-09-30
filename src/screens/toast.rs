@@ -7,9 +7,9 @@ use std::collections::VecDeque;
 
 use macroquad::prelude::*;
 
-use crate::badge_art::draw_medal;
 use crate::badges::Badge;
-use crate::fonts::{self, Style};
+use crate::gfx::badge_art::draw_medal;
+use crate::gfx::fonts::{self, Style};
 
 /// How long a notice stays, fading included.
 const SHOWN_SECONDS: f32 = 3.5;

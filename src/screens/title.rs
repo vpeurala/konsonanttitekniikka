@@ -4,15 +4,15 @@
 
 use macroquad::prelude::*;
 
-use crate::fonts::draw_centered_text;
-use crate::fonts::{self, Style};
-use crate::frame::Frame;
+use crate::gfx::fonts::draw_centered_text;
+use crate::gfx::fonts::{self, Style};
+use crate::gfx::pictures::draw_picture;
+use crate::gfx::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
+use crate::gfx::view::{ARENA_H, ARENA_W, View};
+use crate::input::frame::Frame;
+use crate::input::touch::Pointer;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
-use crate::pictures::draw_picture;
-use crate::save::SaveData;
-use crate::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
-use crate::touch::Pointer;
-use crate::view::{ARENA_H, ARENA_W, View};
+use crate::platform::save::SaveData;
 
 /// Pixels scrolled per second while an arrow key is held.
 const KEY_SCROLL_SPEED: f32 = 500.0;

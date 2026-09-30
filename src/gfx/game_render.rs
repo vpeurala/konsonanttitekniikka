@@ -7,12 +7,12 @@ use lukuloitsu_core::game::rules::*;
 use lukuloitsu_core::game::{Enemy, Scene, Slot, SlotView, SpellTarget, Tone};
 use macroquad::prelude::*;
 
-use crate::fonts::{self, Style, draw_centered_text};
-use crate::long_numbers::{self, Question};
-use crate::sprites::{
+use crate::gfx::fonts::{self, Style, draw_centered_text};
+use crate::gfx::sprites::{
     draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal, draw_star,
 };
-use crate::view::{ARENA_H, ARENA_W, View};
+use crate::gfx::view::{ARENA_H, ARENA_W, View};
+use crate::long_numbers::{self, Question};
 use lukuloitsu_core::game::enemy::{HINT_FONT_SIZE, HINT_SPACE, LABEL_FONT_SIZE, LABEL_HEIGHT};
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);

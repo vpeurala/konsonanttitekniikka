@@ -5,7 +5,7 @@
 use macroquad::prelude::*;
 
 use crate::badges::{Badge, Tier};
-use crate::fonts::{self, Style};
+use crate::gfx::fonts::{self, Style};
 
 /// What a medal is made of.
 struct Metal {

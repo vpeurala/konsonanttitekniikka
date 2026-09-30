@@ -66,10 +66,10 @@ fn write_text(text: &str) {
 // In a browser, progress is kept in the page's local storage.
 #[cfg(target_arch = "wasm32")]
 fn read_text() -> Option<String> {
-    crate::web::load()
+    crate::platform::web::load()
 }
 
 #[cfg(target_arch = "wasm32")]
 fn write_text(text: &str) {
-    crate::web::store(text);
+    crate::platform::web::store(text);
 }

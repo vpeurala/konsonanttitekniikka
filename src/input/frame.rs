@@ -7,10 +7,10 @@
 
 use macroquad::prelude::*;
 
-use crate::keyboard::{Key, Keyboard};
-use crate::lifecycle::{self, Lifecycle};
-use crate::touch::{Pointer, TouchReader};
-use crate::view::View;
+use crate::gfx::view::View;
+use crate::input::keyboard::{Key, Keyboard};
+use crate::input::lifecycle::{self, Lifecycle};
+use crate::input::touch::{Pointer, TouchReader};
 
 /// One frame's worth of input.
 #[derive(Debug, Default, Clone)]

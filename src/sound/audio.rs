@@ -33,7 +33,7 @@ pub struct Audio {
 impl Audio {
     pub async fn load() -> Self {
         Audio {
-            music: load(&crate::music::music()).await,
+            music: load(&crate::sound::music::music()).await,
             music_on: true,
             playing: false,
             type_key: load(&type_key()).await,

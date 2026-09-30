@@ -1,38 +1,25 @@
 #![cfg_attr(test, allow(clippy::float_cmp))]
 
-mod analytics;
 mod app;
-mod audio;
-mod badge_art;
-mod badge_screen;
 mod booklet;
-mod fonts;
-mod frame;
-mod game_render;
-mod icon;
-mod keyboard;
-mod levels;
-mod lifecycle;
-mod music;
-mod pictures;
-mod practice;
-mod progress;
-mod save;
-mod sprites;
-mod title;
-mod toast;
-mod touch;
-mod view;
-#[cfg(target_arch = "wasm32")]
-mod web;
+mod gfx;
+mod input;
+mod platform;
+mod screens;
+mod sound;
 
 // The rules live in the core crate; these names keep the paths short.
 use lukuloitsu_core::{badges, curriculum, game, long_numbers, memory, obstacles, pairs, rng};
 use macroquad::prelude::*;
 
 use app::{App, Effect};
-use audio::Audio;
-use frame::Inputs;
+use gfx::{fonts, icon};
+use input::{frame::Inputs, touch};
+use platform::{analytics, save};
+use sound::{
+    audio::{self, Audio},
+    music,
+};
 
 fn window_conf() -> Conf {
     Conf {
@@ -78,7 +65,7 @@ async fn main() {
     let touch_mode = touch::enabled();
     let audio = Audio::load().await;
     #[cfg(target_arch = "wasm32")]
-    web::loaded();
+    platform::web::loaded();
     let mut progress = save::load();
     progress.record_play_day(save::day_of(miniquad::date::now()));
     save::store(&progress.to_text());
