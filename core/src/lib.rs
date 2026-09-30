@@ -9,6 +9,7 @@
 #![cfg_attr(test, allow(clippy::float_cmp))]
 
 pub mod analytics;
+pub mod app;
 pub mod arena;
 pub mod badges;
 pub mod color;

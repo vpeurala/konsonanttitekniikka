@@ -5,34 +5,28 @@
 //! `Effect`s it wants carried out (sounds, saving, statistics, quitting),
 //! and it is the caller's job to perform them. That keeps the game's
 //! decisions testable by running frames through it, and every impure
-//! call in one place, `main`. `App::draw` only reads the state.
+//! call in one place, `main`. Drawing the app, which only reads its state
+//! through the accessors below, is the shell's job.
 
 mod events;
 mod persistence;
 
-use macroquad::prelude::BLACK;
-
-use lukuloitsu_core::geometry::Rect;
-use lukuloitsu_core::input::{Frame, KeyCode, Pointer};
-use lukuloitsu_core::toast::Toasts;
-use lukuloitsu_core::touch::{self, Button, TouchControls, TouchInput};
-
+use crate::analytics;
+use crate::arena::{ARENA_H, ARENA_W};
+use crate::game::rules::MAX_FRAME_SECONDS;
 use crate::game::{self, Game};
-use crate::gfx::view::{self, ARENA_H, ARENA_W};
-use crate::gfx::{game_render, touch_render};
-use crate::input::keyboard::Key;
-use crate::platform::analytics;
+use crate::geometry::Rect;
+use crate::input::{Frame, Key, KeyCode, Pointer};
 use crate::progress::{Progress, day_of};
-use crate::screens::progress;
-use crate::screens::{badge_screen, levels, practice, title, toast};
-use crate::sound::audio::Sfx;
+use crate::screens::badge_screen::BadgeScreen;
+use crate::screens::levels::{LevelAction, LevelSelect};
+use crate::screens::practice::{PracticeAction, PracticeScreen};
+use crate::screens::progress_map;
+use crate::screens::title::{TitleAction, TitleScreen};
+use crate::sfx::Sfx;
+use crate::toast::Toasts;
+use crate::touch::{self, Button, TouchControls, TouchInput};
 use events::analytics_of;
-use lukuloitsu_core::game::rules::MAX_FRAME_SECONDS;
-use lukuloitsu_core::screens::badge_screen::BadgeScreen;
-use lukuloitsu_core::screens::levels::{LevelAction, LevelSelect};
-use lukuloitsu_core::screens::practice::{PracticeAction, PracticeScreen};
-use lukuloitsu_core::screens::progress_map;
-use lukuloitsu_core::screens::title::{TitleAction, TitleScreen};
 use persistence::Persistence;
 
 /// Something the app wants done outside itself.
@@ -49,7 +43,7 @@ pub enum Effect {
 }
 
 /// What is on screen.
-enum Screen {
+pub enum Screen {
     Title,
     /// Choosing the level to start from.
     Levels(LevelSelect),
@@ -86,6 +80,13 @@ impl Step {
 
 pub struct App {
     screen: Screen,
+    /// Everything else, so that a screen can be worked on (`&mut Screen`)
+    /// while the rest of the app is used.
+    context: Context,
+}
+
+/// What the screens share: the rest of the app.
+struct Context {
     /// The title screen keeps its scroll position between visits.
     title: TitleScreen,
     controls: TouchControls,
@@ -103,7 +104,7 @@ pub struct App {
 }
 
 /// The area a menu screen shows.
-fn menu_rect() -> Rect {
+pub fn menu_rect() -> Rect {
     Rect::new(0.0, 0.0, ARENA_W, ARENA_H)
 }
 
@@ -122,21 +123,57 @@ impl App {
         let saved = data.save(now);
         let app = App {
             screen: Screen::Title,
-            title: TitleScreen::new(touch_mode),
-            controls: TouchControls::default(),
-            data,
-            touch_mode,
-            can_quit,
-            time: 0.0,
-            toasts: Toasts::default(),
+            context: Context {
+                title: TitleScreen::new(touch_mode),
+                controls: TouchControls::default(),
+                data,
+                touch_mode,
+                can_quit,
+                time: 0.0,
+                toasts: Toasts::default(),
+            },
         };
         (app, vec![saved])
+    }
+
+    /// What is on screen.
+    pub fn screen(&self) -> &Screen {
+        &self.screen
+    }
+
+    /// The title screen, which keeps its scroll position between visits.
+    pub fn title(&self) -> &TitleScreen {
+        &self.context.title
+    }
+
+    pub fn controls(&self) -> &TouchControls {
+        &self.context.controls
+    }
+
+    /// What is known about the player.
+    pub fn progress(&self) -> &Progress {
+        &self.context.data.progress
+    }
+
+    pub fn toasts(&self) -> &Toasts {
+        &self.context.toasts
+    }
+
+    /// Whether the touch controls are shown.
+    pub fn touch_mode(&self) -> bool {
+        self.context.touch_mode
+    }
+
+    /// Seconds of frames shown so far, which the menu screens' animations
+    /// follow.
+    pub fn time(&self) -> f64 {
+        self.context.time
     }
 
     /// Whether the player has sound switched on: the music and the sound
     /// effects both.
     pub fn music_on(&self) -> bool {
-        self.data.progress.music_on
+        self.context.data.progress.music_on
     }
 
     /// Whether the screen wants music playing, if the player allows it:
@@ -150,21 +187,21 @@ impl App {
 
     /// Plays one frame, returning what should be done about it.
     pub fn update(&mut self, frame: &Frame) -> Vec<Effect> {
+        let context = &mut self.context;
         let mut effects = Vec::new();
-        self.time += f64::from(frame.dt);
-        self.toasts.update(frame.dt.min(MAX_FRAME_SECONDS));
+        context.time += f64::from(frame.dt);
+        context.toasts.update(frame.dt.min(MAX_FRAME_SECONDS));
         if frame.pressed(KeyCode::Tab) {
-            effects.push(self.data.toggle_music());
+            effects.push(context.data.toggle_music());
         }
 
-        // The screen is taken out while it works, so it and the rest of
-        // the app can both be borrowed.
-        let mut screen = std::mem::replace(&mut self.screen, Screen::Title);
-        let step = self.update_screen(&mut screen, frame);
+        let step = context.update_screen(&mut self.screen, frame);
         effects.extend(step.effects);
-        self.screen = step.next.unwrap_or(screen);
+        if let Some(next) = step.next {
+            self.screen = next;
+        }
 
-        self.award_badges(frame, &mut effects);
+        context.award_badges(frame, &mut effects);
         // The sound switch (still called music in the save file) silences
         // the sound effects too, not just the music.
         if !self.music_on() {
@@ -172,7 +209,9 @@ impl App {
         }
         effects
     }
+}
 
+impl Context {
     fn update_screen(&mut self, screen: &mut Screen, frame: &Frame) -> Step {
         // Esc leaves the game or a menu screen, and quits from the title.
         let escape = frame.pressed(KeyCode::Escape);
@@ -337,55 +376,6 @@ impl App {
 
     fn new_game(&self, level: u32) -> Game {
         Game::new(self.touch_mode, level)
-    }
-
-    /// Draws the current screen.
-    pub fn draw(&self) {
-        let progress = &self.data.progress;
-        match &self.screen {
-            Screen::Title => {
-                let view = view::begin(menu_rect());
-                title::draw(&self.title, progress, view, self.time as f32);
-                view::mask_outside(view, menu_rect(), BLACK);
-            }
-            Screen::Levels(levels) => {
-                let view = view::begin(menu_rect());
-                levels::draw(levels);
-                view::mask_outside(view, menu_rect(), BLACK);
-            }
-            Screen::Progress => {
-                let view = view::begin(menu_rect());
-                progress::draw(progress, self.touch_mode);
-                view::mask_outside(view, menu_rect(), BLACK);
-            }
-            Screen::Badges(screen) => {
-                let view = view::begin(menu_rect());
-                badge_screen::draw(screen, progress, self.touch_mode);
-                view::mask_outside(view, menu_rect(), BLACK);
-            }
-            Screen::Practice(practice) => {
-                let content = touch::content_rect(self.touch_mode);
-                let view = view::begin(content);
-                practice::draw(practice, self.time as f32);
-                if self.touch_mode {
-                    touch_render::draw(&self.controls, self.music_on(), false, false);
-                }
-                view::mask_outside(view, content, BLACK);
-            }
-            Screen::Game(game) => {
-                let content = touch::content_rect(self.touch_mode);
-                let view = view::begin(content);
-                game_render::draw(&game.scene(), view);
-                if self.touch_mode {
-                    touch_render::draw(&self.controls, self.music_on(), game.is_paused(), true);
-                }
-                view::mask_outside(view, content, BLACK);
-            }
-        }
-        // The notice goes over whatever is showing; the camera set for that
-        // screen is still in place, and the arena's middle is the same in
-        // all of them.
-        toast::draw(&self.toasts, ARENA_W);
     }
 }
 

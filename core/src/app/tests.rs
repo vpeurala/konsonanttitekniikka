@@ -4,7 +4,7 @@ use super::*;
 use crate::badges::Stats;
 use crate::game::GameEvent;
 use crate::memory::Memory;
-use macroquad::prelude::vec2;
+use glam::vec2;
 
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
@@ -256,7 +256,7 @@ fn answers_are_not_worth_a_save_by_themselves() {
 #[test]
 fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
     let mut app = app();
-    app.data.progress.stats.monsters = 1;
+    app.context.data.progress.stats.monsters = 1;
     let effects = app.update(&frame());
     assert!(effects.contains(&Effect::Play(Sfx::Badge)));
     assert_eq!(counted(&effects), vec!["merkki/monsters-1"]);
@@ -267,7 +267,10 @@ fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
             .badges
             .contains_key("monsters-1")
     );
-    assert_eq!(app.toasts.current().map(|(b, _)| b.id), Some("monsters-1"));
+    assert_eq!(
+        app.context.toasts.current().map(|(b, _)| b.id),
+        Some("monsters-1")
+    );
     // Nothing more happens on the next frame.
     let again = app.update(&frame());
     assert!(counted(&again).is_empty());
@@ -277,34 +280,37 @@ fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
 #[test]
 fn several_badges_at_once_each_get_their_notice_in_turn() {
     let mut app = app();
-    app.data.progress.stats.monsters = 10;
+    app.context.data.progress.stats.monsters = 10;
     let effects = app.update(&frame());
     assert_eq!(
         counted(&effects),
         vec!["merkki/monsters-1", "merkki/monsters-10"]
     );
     assert_eq!(saves(&effects), 1, "one save for the lot");
-    assert_eq!(app.toasts.current().map(|(b, _)| b.id), Some("monsters-1"));
+    assert_eq!(
+        app.context.toasts.current().map(|(b, _)| b.id),
+        Some("monsters-1")
+    );
 }
 
 #[test]
 fn the_sound_switch_silences_the_badge_sound_but_not_the_badge() {
     let mut app = app();
     app.update(&press(KeyCode::Tab));
-    app.data.progress.stats.monsters = 1;
+    app.context.data.progress.stats.monsters = 1;
     let effects = app.update(&frame());
     assert!(!effects.iter().any(|e| matches!(e, Effect::Play(_))));
-    assert!(app.data.progress.badges.contains_key("monsters-1"));
-    assert!(app.toasts.current().is_some());
+    assert!(app.context.data.progress.badges.contains_key("monsters-1"));
+    assert!(app.context.toasts.current().is_some());
 }
 
 #[test]
 fn badges_earned_before_they_existed_are_given_quietly() {
     let mut app = veteran(6);
-    assert!(app.data.progress.badges.contains_key("levels-5"));
+    assert!(app.context.data.progress.badges.contains_key("levels-5"));
     let effects = app.update(&frame());
     assert!(!effects.contains(&Effect::Play(Sfx::Badge)));
-    assert!(app.toasts.current().is_none());
+    assert!(app.context.toasts.current().is_none());
     assert!(counted(&effects).is_empty());
 }
 
@@ -318,7 +324,7 @@ fn learning_pairs_earns_their_badge_at_once() {
             learned.record_answer(*pair, 1.0, false, START);
         }
     }
-    app.data.progress.memory = learned;
+    app.context.data.progress.memory = learned;
     let effects = app.update(&frame());
     assert!(counted(&effects).contains(&"merkki/pairs-digits".to_owned()));
 }
@@ -357,7 +363,7 @@ fn sound_effects_are_passed_on() {
     app.update(&press(KeyCode::Enter));
     // Typing with nothing on screen makes a click.
     let effects = app.update(&Frame {
-        typed: vec![crate::input::keyboard::Key::Char('1')],
+        typed: vec![Key::Char('1')],
         ..frame()
     });
     assert!(effects.contains(&Effect::Play(Sfx::Type)));
@@ -366,7 +372,7 @@ fn sound_effects_are_passed_on() {
 #[test]
 fn switching_the_sound_off_silences_the_sound_effects_too() {
     let typing = || Frame {
-        typed: vec![crate::input::keyboard::Key::Char('1')],
+        typed: vec![Key::Char('1')],
         ..frame()
     };
     let mut app = app();
@@ -434,7 +440,7 @@ fn the_progress_screen_shows_what_was_learned_without_saving_first() {
     app.update(&press(KeyCode::H));
     app.update(&press(KeyCode::Space));
     assert_eq!(
-        app.data.progress.memory.records().count(),
+        app.context.data.progress.memory.records().count(),
         1,
         "kept live in the app"
     );
@@ -444,14 +450,18 @@ fn the_progress_screen_shows_what_was_learned_without_saving_first() {
 fn menu_animations_follow_the_frames_shown() {
     let mut app = app();
     idle(&mut app, START, 2.0);
-    assert!((app.time - 2.0).abs() < 0.01, "{}", app.time);
+    assert!(
+        (app.context.time - 2.0).abs() < 0.01,
+        "{}",
+        app.context.time
+    );
 }
 
 #[test]
 fn starting_counts_today_as_a_day_played_and_saves_it() {
     let (app, effects) = App::start(Progress::default(), false, true, START);
-    assert_eq!(app.data.progress.streak, 1);
-    assert_eq!(app.data.progress.streak_day, day_of(START));
+    assert_eq!(app.context.data.progress.streak, 1);
+    assert_eq!(app.context.data.progress.streak_day, day_of(START));
     let saved = last_saved(&effects).expect("the launch is saved");
     assert_eq!(saved.streak, 1);
 }

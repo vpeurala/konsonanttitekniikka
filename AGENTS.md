@@ -77,29 +77,31 @@ enforces the purity described below: if you need macroquad in `core/`, the
 code belongs in the shell instead. It hands the shell small plain types to
 work with: `Sfx`, `Key`, `Color` (only for sparks), `Tone` (how a message
 feels; the shell picks the colour) and `game::Scene`, a read-only picture of a
-game that `src/game_render.rs` draws. The root crate is the shell: `main.rs`,
-the app and its screens, drawing, audio, touch, saving to disk. `main.rs`
+game that `src/gfx/game_render.rs` draws. The root crate is the shell: `main.rs`,
+drawing, audio, reading the window, saving to disk. `main.rs`
 re-exports the core modules by name, so shell code says `crate::pairs::...`.
 A plain `cargo test` or `cargo clippy` covers both crates (`default-members`).
 
 The shell is grouped by what its parts are for (bare file names in the list
 below are inside these folders): `input/` (`frame`, `keyboard`, `lifecycle`,
-`touch`), `screens/` (`title`, `levels`, `practice`, `progress`,
-`badge_screen`, `toast`), `gfx/` (`fonts`, `view`, `pictures`, `sprites`,
-`badge_art`, `icon`, `game_render`), `sound/` (`audio`, `music`) and
-`platform/` (`save`, `analytics`, `web`), plus `app`, `booklet` and `main`.
+`touch`: reading the window into a `Frame`), `screens/` (`title`, `levels`,
+`practice`, `progress`, `badge_screen`, `toast`: drawing only, the screens
+themselves are in core), `gfx/` (`fonts`, `view`, `pictures`, `sprites`,
+`badge_art`, `icon`, `game_render`, `touch_render`), `sound/` (`audio`,
+`music`) and `platform/` (`save`, `analytics`, `web`), plus `app_render`,
+`booklet`, `cli` and `main`.
 
 **Pure core, impure shell.** Side effects live only in the outermost layer.
 `main.rs` is the shell: each frame it reads input into a `Frame`
-(`frame.rs`, the one place that asks the window and the clock), passes it
-to `App::update` (`app.rs`), performs the `Effect`s that come back (sounds,
-saving, statistics, quitting), and calls `App::draw`. Everything between is
+(`input/frame.rs`, the one place that asks the window and the clock), passes
+it to `App::update` (`core/src/app.rs`), performs the `Effect`s that come back
+(sounds, saving, statistics, quitting), and draws the app (`app_render.rs`). Everything between is
 a pure state machine that takes input as arguments and reports what it
 wants done as return values, so it is tested by running made-up frames
-through it (see `src/app/tests.rs` and `src/game/tests.rs`). Keep it that
+through it (see `core/src/app/tests.rs` and `core/src/game/tests.rs`). Keep it that
 way: don't call `is_key_pressed`, `get_frame_time`, `date::now` or measure
 text inside the core; add a field to `Frame` or `game::Input` instead.
-Drawing (`draw` methods, `src/game_render.rs`, sprites, pictures) reads state
+Drawing (the shell's `draw` functions, `gfx/game_render.rs`, sprites, pictures) reads state
 and never changes it. Layout maths that drawing needs is kept in pure
 functions (`slot_rects`, `cell_rect`, `legend_layout`, `Enemy::keep_on_screen`)
 so it can be tested without a screen; do the same for new layouts.
@@ -107,17 +109,20 @@ so it can be tested without a screen; do the same for new layouts.
 - `main.rs`: the shell, described above. `cli.rs` parses the command line (play,
   or one of the `--render-*` commands) into a `Command`. `App::start` is how
   the app begins: it counts the day played and returns the launch's save.
-- `app.rs`: which screen is showing (title, level choice, game, practice,
+- `core/src/app.rs`: which screen is showing (title, level choice, game, practice,
   progress) and the `Effect`s; each screen has its own method returning a
-  `Step` (where to go next, what to do outside). `app/persistence.rs` holds
+  `Step` (where to go next, what to do outside); the screens are worked on
+  apart from the rest of the app (`Context`), so no placeholder is needed while
+  one runs. `app/persistence.rs` holds
   the live `Progress` (its `Memory` included). The game and practice only
   read the memory and report what she learned as `Lesson`s (`Outputs::lessons`),
   which `App` learns into it; `app/events.rs` says
   what game events mean for the counters and the statistics. `Effect::Save`
   carries the save file's text; `analytics::Event` is what gets counted, and
   the Finnish paths and titles are made there.
-- `frame.rs`: `Frame`, one frame of input, and `Inputs::read`, which makes
-  it.
+- `core/src/input.rs`: `Frame`, one frame of input, with `KeyCode` and touch
+  `Phase` of its own; `input/frame.rs` in the shell has `Inputs::read`, which
+  makes it from the window.
 - `core/src/game/`: the game itself. Monsters show a number or a word; typed digits
   go to the number slot and letters to the word slot, each answering the
   monsters showing the other kind. Backspace empties both slots.
@@ -198,26 +203,29 @@ so it can be tested without a screen; do the same for new layouts.
   Players from before badges get theirs quietly in `App::new`. To add a
   badge, add a line to the table (and raise its length); the tests check
   ids, order and that nothing is met from the start.
-  `badge_screen.rs` is the screen (rows by category, layout in pure
-  functions), `badge_art.rs` draws the medals (a ribbon, a disc in the tier's
+  `screens/badge_screen.rs` is the screen (rows by category, layout in pure
+  functions), `gfx/badge_art.rs` draws the medals (a ribbon, a disc in the tier's
   metal and an `Emblem`, a small picture of the badge's own; `emblem_of` maps
   every badge id to a different one, and a test fails if two share or one is
-  missing) and `toast.rs` is the notice.
+  missing) and `toast.rs` is the notice (its drawing is `screens/toast.rs` in
+  the shell).
   The "sound" switch (Tab) is still `music_on` in the save.
-- `practice.rs`, `progress.rs`, `title.rs`: the other screens. The progress
+- `screens/`: the other screens, in core (`title`, `levels`, `practice`,
+  `progress_map`), each with its layout as pure functions; the shell's
+  `screens/*.rs` only draw them. The progress
   map shows how well a pair is known by colour and by 1–3 dots, so colour
   blindness doesn't hide it.
-- `touch.rs`: the on-screen controls. A full Finnish QWERTY keyboard split
+- `touch.rs` (core): the on-screen controls; `gfx/touch_render.rs` draws them. A full Finnish QWERTY keyboard split
   into two panels beside the arena, keys the game doesn't use greyed out; a
   joystick; pause and music buttons. Touches are read from the ordered event
-  stream, because a quick tap can start and end within one frame; the mouse
-  counts as a finger.
+  stream (`input/touch.rs`, shell), because a quick tap can start and end
+  within one frame; the mouse counts as a finger.
 - `keyboard.rs`: typing by physical key position, as on a Finnish keyboard, so
   Ä and Ö work on any layout.
-- `view.rs`: a fixed 800×600 virtual arena, scaled to fit the window. In touch
-  mode the content also includes the keypad panels at negative x and beyond
-  800. `View::fit` is pure; `view::begin` sets the camera and is for
-  drawing only.
+- `view.rs` (core): a fixed 800×600 virtual arena, scaled to fit the window. In
+  touch mode the content also includes the keypad panels at negative x and
+  beyond 800. `View::fit` is pure; the shell's `gfx/view.rs` `begin` sets the
+  camera and is for drawing only.
 - `rng.rs`: seeded randomness in separate streams, so every game introduces
   the same pairs in the same order.
 - `audio.rs`, `music.rs`: all sounds are synthesized at startup. The music is

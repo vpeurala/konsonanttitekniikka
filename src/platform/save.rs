@@ -4,7 +4,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
-pub use lukuloitsu_core::progress::{Progress, day_of};
+pub use lukuloitsu_core::progress::Progress;
 
 /// Where the save file lives, if saving is possible on this platform.
 #[cfg(not(target_arch = "wasm32"))]

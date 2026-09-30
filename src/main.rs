@@ -1,6 +1,6 @@
 #![cfg_attr(test, allow(clippy::float_cmp))]
 
-mod app;
+mod app_render;
 mod booklet;
 mod cli;
 mod gfx;
@@ -10,13 +10,13 @@ mod screens;
 mod sound;
 
 // The rules live in the core crate; these names keep the paths short.
-use lukuloitsu_core::{badges, curriculum, game, long_numbers, memory, obstacles, pairs, progress};
+use lukuloitsu_core::{badges, curriculum, long_numbers, memory, obstacles, pairs, progress};
 use macroquad::prelude::*;
 
-use app::{App, Effect};
 use cli::Command;
 use gfx::{fonts, icon};
 use input::{frame::Inputs, touch};
+use lukuloitsu_core::app::{App, Effect};
 use platform::{analytics, save};
 use sound::{
     audio::{self, Audio},
@@ -79,7 +79,7 @@ async fn play() {
         }
         audio.set_music_on(app.music_on());
         audio.set_music(app.wants_music());
-        app.draw();
+        app_render::draw(&app);
         next_frame().await
     }
 }
