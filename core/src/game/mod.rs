@@ -35,7 +35,7 @@ use display::Display;
 pub use display::{Banner, Feedback, Tone};
 pub use enemy::Enemy;
 use player::Player;
-use rules::*;
+use rules::{STEP_SECONDS, Timestep, spawn_interval};
 pub use scene::{Scene, SlotView};
 use stage::Stage;
 use vitals::Vitals;
@@ -287,7 +287,7 @@ impl Game {
             self.spawn_timer -= dt;
             if self.spawn_timer <= 0.0 {
                 self.spawn_timer = spawn_interval(self.stage.time);
-                out.extend(self.spawn_enemy(input.now, memory));
+                self.spawn_enemy(input.now, memory);
             }
         }
         out

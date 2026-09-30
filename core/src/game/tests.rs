@@ -1,6 +1,7 @@
 //! Playing whole games without a screen: the simulation is fed inputs and
 //! its outputs are checked.
 
+use super::rules::*;
 use super::*;
 use crate::arena::ARENA_W;
 use crate::long_numbers::{self, Question};

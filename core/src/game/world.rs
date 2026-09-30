@@ -10,7 +10,10 @@ use std::collections::HashMap;
 use glam::Vec2;
 
 use super::enemy::{Enemy, EnemyId};
-use super::rules::*;
+use super::rules::{
+    BOSS_COLLISION_KNOCKBACK, BOSS_HARMLESS_SECONDS, BOSS_HIT_FLASH_SECONDS, BOSS_HIT_KNOCKBACK,
+    PLAYER_RADIUS, SPELL_SPEED,
+};
 use crate::arena::{ARENA_H, ARENA_W, girl_hand};
 use crate::long_numbers::Question;
 use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer};
@@ -102,6 +105,9 @@ pub enum ImpactTarget {
     Nothing,
 }
 
+#[cfg(test)]
+mod test_support;
+
 pub struct World {
     enemies: Vec<Enemy>,
     spells: Vec<Spell>,
@@ -143,22 +149,6 @@ impl World {
 
     pub fn obstacles(&self) -> &[Obstacle] {
         &self.obstacles
-    }
-
-    /// The enemy called `id`, if it is still in play.
-    #[cfg(test)]
-    pub fn enemy(&self, id: EnemyId) -> Option<&Enemy> {
-        self.enemies.iter().find(|e| e.id == id)
-    }
-
-    #[cfg(test)]
-    pub(super) fn enemies_mut(&mut self) -> &mut Vec<Enemy> {
-        &mut self.enemies
-    }
-
-    #[cfg(test)]
-    pub(super) fn appearances(&self) -> &HashMap<Appearance, u32> {
-        &self.appearances
     }
 
     /// Adds `enemy` to the world, giving it an id of its own.

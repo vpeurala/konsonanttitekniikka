@@ -5,7 +5,10 @@
 use super::answer::{InputOutcome, Slot, resolve_input};
 use super::display::Tone;
 use super::enemy::{Enemy, EnemyId};
-use super::rules::*;
+use super::rules::{
+    COLLISION_PALETTE, ENEMY_RADIUS, KILL_PALETTE, LEVEL_BREAK_SECONDS, PORTAL_PALETTE,
+    SPELL_PALETTE, points_to_clear, stars_for,
+};
 use super::spawn::SpawnContext;
 use super::stage::Stage;
 use super::world::{ContactKind, Hit, HitOutcome, ImpactTarget, SpellEvent};
@@ -132,7 +135,7 @@ impl Game {
         }
     }
 
-    pub(super) fn spawn_enemy(&mut self, now: f64, memory: &Memory) -> Outputs {
+    pub(super) fn spawn_enemy(&mut self, now: f64, memory: &Memory) {
         let ctx = SpawnContext {
             curriculum: &self.curriculum,
             memory,
@@ -143,7 +146,6 @@ impl Game {
         if let Some(portal) = self.world.spawn_enemy(&ctx, &mut self.rng) {
             self.display.effects.explode(portal, 24.0, &PORTAL_PALETTE);
         }
-        Outputs::default()
     }
 
     fn summon_boss(&mut self, now: f64, memory: &Memory) -> Outputs {

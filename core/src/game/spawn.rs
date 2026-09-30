@@ -3,7 +3,10 @@
 use glam::{Vec2, vec2};
 
 use super::enemy::Enemy;
-use super::rules::*;
+use super::rules::{
+    MAX_ENEMIES, MIN_PORTAL_SPAWN_DISTANCE, MIN_SPAWN_DISTANCE, NEW_PAIR_SHARE, PORTAL_SPAWN_SHARE,
+    SPAWN_ATTEMPTS, boss_hits,
+};
 use super::world::World;
 use crate::arena::{ARENA_H, ARENA_W};
 use crate::curriculum::Curriculum;
