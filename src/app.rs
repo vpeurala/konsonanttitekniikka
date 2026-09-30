@@ -19,7 +19,7 @@ use crate::input::frame::Frame;
 use crate::input::keyboard::Key;
 use crate::input::touch::{self, Button, TouchControls, TouchInput};
 use crate::platform::analytics;
-use crate::progress::Progress;
+use crate::progress::{Progress, day_of};
 use crate::screens::badge_screen::BadgeScreen;
 use crate::screens::levels::{LevelAction, LevelSelect};
 use crate::screens::practice::{PracticeAction, PracticeScreen};
@@ -104,19 +104,29 @@ fn menu_rect() -> Rect {
 }
 
 impl App {
-    /// The app at its title screen, with `progress` loaded from the
-    /// device, at time `now`.
-    pub fn new(progress: Progress, touch_mode: bool, can_quit: bool, now: f64) -> Self {
-        App {
+    /// The app at its title screen, launched at time `now` with `progress`
+    /// loaded from the device. Today counts as a day played, which is
+    /// saved right away.
+    pub fn start(
+        mut progress: Progress,
+        touch_mode: bool,
+        can_quit: bool,
+        now: f64,
+    ) -> (Self, Vec<Effect>) {
+        progress.record_play_day(day_of(now));
+        let mut data = Persistence::new(progress, now);
+        let saved = data.save(now);
+        let app = App {
             screen: Screen::Title,
             title: TitleScreen::new(touch_mode),
             controls: TouchControls::default(),
-            data: Persistence::new(progress, now),
+            data,
             touch_mode,
             can_quit,
             time: 0.0,
             toasts: Toasts::default(),
-        }
+        };
+        (app, vec![saved])
     }
 
     /// Whether the player has sound switched on: the music and the sound

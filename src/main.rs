@@ -2,6 +2,7 @@
 
 mod app;
 mod booklet;
+mod cli;
 mod gfx;
 mod input;
 mod platform;
@@ -15,6 +16,7 @@ use lukuloitsu_core::{
 use macroquad::prelude::*;
 
 use app::{App, Effect};
+use cli::Command;
 use gfx::{fonts, icon};
 use input::{frame::Inputs, touch};
 use platform::{analytics, save};
@@ -39,60 +41,42 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
     fonts::init();
-    // `cargo run -- --render-icons` regenerates the app icon files.
-    if std::env::args().any(|a| a == "--render-icons") {
-        icon::render_all(env!("CARGO_MANIFEST_DIR"));
-        return;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match Command::parse(&args) {
+        Command::Play => play().await,
+        Command::RenderIcons => icon::render_all(env!("CARGO_MANIFEST_DIR")),
+        Command::RenderMusic { path } => {
+            std::fs::write(&path, audio::wav(&music::music()))
+                .expect("the music file should be writable");
+            println!("wrote {path}");
+        }
+        Command::RenderBooklet { path } => {
+            booklet::write(&path);
+            println!("wrote {path}");
+        }
     }
-    // `cargo run --release -- --render-music FILE.wav` writes the music
-    // loop to a file, for listening to it outside the game.
-    let args: Vec<String> = std::env::args().collect();
-    if let Some(i) = args.iter().position(|a| a == "--render-music") {
-        let path = args.get(i + 1).map_or("music.wav", String::as_str);
-        std::fs::write(path, audio::wav(&music::music()))
-            .expect("the music file should be writable");
-        println!("wrote {path}");
-        return;
-    }
-    // `cargo run --release -- --render-booklet FILE.html` writes the user
-    // instruction booklet, which `scripts/booklet.sh` turns into a PDF.
-    if let Some(i) = args.iter().position(|a| a == "--render-booklet") {
-        let path = args.get(i + 1).map_or("opas.html", String::as_str);
-        booklet::write(path);
-        println!("wrote {path}");
-        return;
-    }
+}
+
+/// Runs the game until the player quits.
+async fn play() {
     // Touches are handled directly, so they shouldn't also act as a mouse.
     simulate_mouse_with_touch(false);
     let touch_mode = touch::enabled();
-    let audio = Audio::load().await;
+    let mut audio = Audio::load().await;
     #[cfg(target_arch = "wasm32")]
     platform::web::loaded();
-    let mut progress = save::load();
-    progress.record_play_day(save::day_of(miniquad::date::now()));
-    save::store(&progress.to_text());
-    let mut audio = audio;
-
-    let mut app = App::new(
-        progress,
+    let (mut app, launch) = App::start(
+        save::load(),
         touch_mode,
         // A web page can't be quit, only left.
         !cfg!(target_arch = "wasm32"),
-        miniquad::date::now(),
+        Inputs::now(),
     );
     let inputs = Inputs::new();
 
+    perform(launch, &mut audio);
     loop {
-        let mut quit = false;
-        for effect in app.update(&inputs.read()) {
-            match effect {
-                Effect::Play(sfx) => audio.play(sfx),
-                Effect::Save(text) => save::store(&text),
-                Effect::Count(event) => analytics::send(&event),
-                Effect::Quit => quit = true,
-            }
-        }
-        if quit {
+        if perform(app.update(&inputs.read()), &mut audio) {
             break;
         }
         audio.set_music_on(app.music_on());
@@ -100,4 +84,18 @@ async fn main() {
         app.draw();
         next_frame().await
     }
+}
+
+/// Does what the app asked for, and says whether it asked to quit.
+fn perform(effects: Vec<Effect>, audio: &mut Audio) -> bool {
+    let mut quit = false;
+    for effect in effects {
+        match effect {
+            Effect::Play(sfx) => audio.play(sfx),
+            Effect::Save(text) => save::store(&text),
+            Effect::Count(event) => analytics::send(&event),
+            Effect::Quit => quit = true,
+        }
+    }
+    quit
 }

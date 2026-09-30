@@ -92,13 +92,19 @@ impl Inputs {
         }
     }
 
+    /// The current time, in seconds since 1970, for what happens before
+    /// the first frame.
+    pub fn now() -> f64 {
+        miniquad::date::now()
+    }
+
     /// This frame's input. Must be called once every frame, so nothing
     /// typed or touched piles up.
     pub fn read(&self) -> Frame {
         let dt = get_frame_time();
         Frame {
             dt,
-            now: miniquad::date::now(),
+            now: Self::now(),
             away: lifecycle::was_away(self.lifecycle.minimized(), dt),
             screen: vec2(screen_width(), screen_height()),
             typed: self.keyboard.typed(),

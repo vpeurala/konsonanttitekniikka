@@ -104,7 +104,9 @@ and never changes it. Layout maths that drawing needs is kept in pure
 functions (`slot_rects`, `cell_rect`, `legend_layout`, `Enemy::keep_on_screen`)
 so it can be tested without a screen; do the same for new layouts.
 
-- `main.rs`: the shell, described above, and the `--render-*` commands.
+- `main.rs`: the shell, described above. `cli.rs` parses the command line (play,
+  or one of the `--render-*` commands) into a `Command`. `App::start` is how
+  the app begins: it counts the day played and returns the launch's save.
 - `app.rs`: which screen is showing (title, level choice, game, practice,
   progress) and the `Effect`s; each screen has its own method returning a
   `Step` (where to go next, what to do outside). `app/persistence.rs` holds

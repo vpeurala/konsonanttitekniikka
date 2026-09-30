@@ -10,7 +10,7 @@ const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
 
 fn app_with(progress: Progress, can_quit: bool) -> App {
-    App::new(progress, false, can_quit, START)
+    App::start(progress, false, can_quit, START).0
 }
 
 fn app() -> App {
@@ -445,4 +445,13 @@ fn menu_animations_follow_the_frames_shown() {
     let mut app = app();
     idle(&mut app, START, 2.0);
     assert!((app.time - 2.0).abs() < 0.01, "{}", app.time);
+}
+
+#[test]
+fn starting_counts_today_as_a_day_played_and_saves_it() {
+    let (app, effects) = App::start(Progress::default(), false, true, START);
+    assert_eq!(app.data.progress.streak, 1);
+    assert_eq!(app.data.progress.streak_day, day_of(START));
+    let saved = last_saved(&effects).expect("the launch is saved");
+    assert_eq!(saved.streak, 1);
 }
