@@ -62,7 +62,9 @@ impl Game {
     }
 
     /// A dead-end slot is only shown in red at first. Typing past it costs
-    /// energy, which leaves room to fix a typo with backspace.
+    /// energy, which leaves room to fix a typo with backspace. Both slots
+    /// are then emptied and the key starts afresh, so a leftover letter
+    /// can't spoil the word she is really typing.
     fn type_into(&mut self, slot: Slot, c: char, now: f64, memory: &mut Known) -> Outputs {
         let mut out = Outputs::default();
         if self.is_dead_end(slot) {
@@ -73,8 +75,7 @@ impl Game {
                 format!("Väärin: {}", self.typed.get(slot).to_uppercase()),
                 Tone::Wrong,
             );
-            self.typed.get_mut(slot).clear();
-            return out;
+            self.typed.clear();
         }
 
         self.typed.get_mut(slot).push(c);

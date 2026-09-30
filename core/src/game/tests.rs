@@ -225,7 +225,19 @@ fn a_wrong_key_costs_energy_after_the_first_dead_end() {
     let outputs = game.update(&typing("1"));
     assert_eq!(game.vitals.energy(), MAX_ENERGY - WRONG_PENALTY);
     assert!(outputs.sfx.contains(&Sfx::Wrong));
-    assert!(game.typed.get(Slot::Number).is_empty());
+    // The key starts afresh in the emptied slot.
+    assert_eq!(game.typed.get(Slot::Number), "1");
+}
+
+#[test]
+fn a_wrong_key_empties_both_slots_so_the_next_word_starts_clean() {
+    let mut game = game();
+    // With no monsters, both slots are dead ends at once.
+    game.update(&typing("1"));
+    game.update(&typing("s"));
+    game.update(&typing("1"));
+    assert_eq!(game.vitals.energy(), MAX_ENERGY - WRONG_PENALTY);
+    assert!(game.typed.get(Slot::Word).is_empty());
 }
 
 #[test]
