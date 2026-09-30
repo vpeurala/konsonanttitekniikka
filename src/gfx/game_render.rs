@@ -4,7 +4,7 @@
 use lukuloitsu_core::color;
 use lukuloitsu_core::effects::Effects;
 use lukuloitsu_core::game::rules::*;
-use lukuloitsu_core::game::{Enemy, Scene, Slot, SlotView, SpellTarget, Tone};
+use lukuloitsu_core::game::{Banner, Enemy, Scene, Slot, SlotView, SpellTarget, Tone};
 use macroquad::prelude::*;
 
 use crate::gfx::fonts::{self, Style, draw_centered_text};
@@ -130,6 +130,21 @@ fn accent(slot: Slot) -> Color {
 /// Draws the whole game.
 pub fn draw(scene: &Scene, view: View) {
     clear_background(BACKGROUND);
+    draw_arena(scene);
+    draw_hud(scene);
+    draw_flash(scene.effects, view);
+    if scene.is_over {
+        draw_game_over(scene);
+    } else if scene.is_paused {
+        draw_pause(scene);
+    } else if let Some(banner) = scene.banner {
+        draw_banner(banner);
+    }
+}
+
+/// Draws what is in the arena: the level's furniture, the monsters and
+/// their labels, her, the spells and the sparks, and what she has typed.
+fn draw_arena(scene: &Scene) {
     let time = scene.time;
     // Under everything else, so monsters are never hidden behind it.
     draw_new_pairs(scene);
@@ -167,78 +182,101 @@ pub fn draw(scene: &Scene, view: View) {
     for spell in scene.spells {
         draw_spell(spell.pos, time);
     }
+}
 
-    draw_hud(scene);
-    draw_flash(scene.effects, view);
+/// The screen after the game is lost.
+fn draw_game_over(scene: &Scene) {
+    draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.7));
+    let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 2.0);
+    fonts::draw_centered("Peli päättyi!", cx, cy - 60.0, 56, WHITE, Style::Heading);
+    draw_centered_text(
+        &format!("Pisteet: {}", scene.score),
+        cx,
+        cy - 5.0,
+        36,
+        WHITE,
+    );
+    draw_centered_text(&format!("Taso {}", scene.level), cx, cy + 35.0, 36, WHITE);
+    let hint = if scene.touch {
+        "Napauta aloittaaksesi alusta"
+    } else {
+        "Paina Enter"
+    };
+    draw_centered_text(hint, cx, cy + 85.0, 28, LIGHTGRAY);
+}
 
-    if scene.is_over {
-        draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.7));
-        let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 2.0);
-        fonts::draw_centered("Peli päättyi!", cx, cy - 60.0, 56, WHITE, Style::Heading);
-        draw_centered_text(
-            &format!("Pisteet: {}", scene.score),
-            cx,
-            cy - 5.0,
-            36,
-            WHITE,
-        );
-        draw_centered_text(&format!("Taso {}", scene.level), cx, cy + 35.0, 36, WHITE);
-        let hint = if scene.touch {
-            "Napauta aloittaaksesi alusta"
-        } else {
-            "Paina Enter"
-        };
-        draw_centered_text(hint, cx, cy + 85.0, 28, LIGHTGRAY);
-    } else if scene.is_paused {
-        draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.6));
-        let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 2.0);
-        fonts::draw_centered("Tauko", cx, cy - 20.0, 64, WHITE, Style::Heading);
-        let hint = if scene.touch {
-            "Jatka napauttamalla"
-        } else {
-            "Jatka välilyönnillä"
-        };
-        draw_centered_text(hint, cx, cy + 35.0, 28, LIGHTGRAY);
-    } else if let Some(banner) = scene.banner {
-        let alpha = (banner.seconds_left / 0.5).min(1.0);
-        let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 3.0);
-        fonts::draw_centered(
-            &banner.title,
-            cx,
-            cy,
-            72,
-            Color {
-                a: alpha,
-                ..tone_color(banner.tone)
-            },
-            Style::Heading,
-        );
-        draw_centered_text(
-            &banner.subtitle,
-            cx,
-            cy + 50.0,
-            28,
-            Color { a: alpha, ..WHITE },
-        );
-        // The stars earned on the level just finished.
-        if let Some(stars) = banner.stars
-            && alpha > 0.5
-        {
-            for i in 0..3u8 {
-                let x = cx + (f32::from(i) - 1.0) * 46.0;
-                draw_star(vec2(x, cy + 100.0), 20.0, i < stars);
-            }
+/// The screen while the game is paused.
+fn draw_pause(scene: &Scene) {
+    draw_rectangle(0.0, 0.0, ARENA_W, ARENA_H, Color::new(0.0, 0.0, 0.0, 0.6));
+    let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 2.0);
+    fonts::draw_centered("Tauko", cx, cy - 20.0, 64, WHITE, Style::Heading);
+    let hint = if scene.touch {
+        "Jatka napauttamalla"
+    } else {
+        "Jatka välilyönnillä"
+    };
+    draw_centered_text(hint, cx, cy + 35.0, 28, LIGHTGRAY);
+}
+
+/// The big announcement across the arena, fading out.
+fn draw_banner(banner: &Banner) {
+    let alpha = (banner.seconds_left / 0.5).min(1.0);
+    let (cx, cy) = (ARENA_W / 2.0, ARENA_H / 3.0);
+    fonts::draw_centered(
+        &banner.title,
+        cx,
+        cy,
+        72,
+        Color {
+            a: alpha,
+            ..tone_color(banner.tone)
+        },
+        Style::Heading,
+    );
+    draw_centered_text(
+        &banner.subtitle,
+        cx,
+        cy + 50.0,
+        28,
+        Color { a: alpha, ..WHITE },
+    );
+    // The stars earned on the level just finished.
+    if let Some(stars) = banner.stars
+        && alpha > 0.5
+    {
+        for i in 0..3u8 {
+            let x = cx + (f32::from(i) - 1.0) * 46.0;
+            draw_star(vec2(x, cy + 100.0), 20.0, i < stars);
         }
     }
 }
 
+/// The energy bar, the score, the level's progress and the message under
+/// the slots.
 fn draw_hud(scene: &Scene) {
-    let bar_width = 200.0;
+    draw_energy(scene);
+    draw_score_and_level(scene);
+    if let Some(feedback) = scene.feedback {
+        fonts::draw_centered(
+            &feedback.text,
+            ARENA_W / 2.0,
+            ARENA_H - 30.0,
+            30,
+            tone_color(feedback.tone),
+            Style::Bold,
+        );
+    }
+}
+
+/// How wide the energy and level bars are.
+const BAR_WIDTH: f32 = 200.0;
+
+fn draw_energy(scene: &Scene) {
     let fill = (scene.energy / MAX_ENERGY).clamp(0.0, 1.0);
-    draw_rectangle(16.0, 16.0, bar_width, 16.0, DARKGRAY);
-    draw_rectangle(16.0, 16.0, bar_width * fill, 16.0, GREEN);
+    draw_rectangle(16.0, 16.0, BAR_WIDTH, 16.0, DARKGRAY);
+    draw_rectangle(16.0, 16.0, BAR_WIDTH * fill, 16.0, GREEN);
     // Marks the level wrong keys can't take her below.
-    let low_x = 16.0 + bar_width * LOW_ENERGY / MAX_ENERGY;
+    let low_x = 16.0 + BAR_WIDTH * LOW_ENERGY / MAX_ENERGY;
     draw_line(low_x, 12.0, low_x, 36.0, 2.0, WHITE);
     draw_text("Energia", 16.0, 54.0, 18.0, LIGHTGRAY);
     // The touch panel has buttons for these instead.
@@ -251,12 +289,15 @@ fn draw_hud(scene: &Scene) {
             GRAY,
         );
     }
+}
 
+/// The score in the top right corner, and the level's progress bar under
+/// it.
+fn draw_score_and_level(scene: &Scene) {
     let score = format!("Pisteet: {}", scene.score);
     let size = measure_text(&score, None, 24, 1.0);
     draw_text(&score, ARENA_W - size.width - 16.0, 32.0, 24.0, WHITE);
 
-    // Level progress bar under the score.
     let needed = scene.points_needed;
     let right = ARENA_W - 16.0;
     let progress = scene.points as f32 / needed as f32;
@@ -268,28 +309,16 @@ fn draw_hud(scene: &Scene) {
             format!("Taso {}: {}/{}", scene.level, scene.points, needed),
         )
     };
-    draw_rectangle(right - bar_width, 44.0, bar_width, 10.0, DARKGRAY);
+    draw_rectangle(right - BAR_WIDTH, 44.0, BAR_WIDTH, 10.0, DARKGRAY);
     draw_rectangle(
-        right - bar_width,
+        right - BAR_WIDTH,
         44.0,
-        bar_width * progress,
+        BAR_WIDTH * progress,
         10.0,
         bar_color,
     );
     let size = measure_text(&level, None, 18, 1.0);
     draw_text(&level, right - size.width, 74.0, 18.0, LIGHTGRAY);
-
-    let (cx, bottom) = (ARENA_W / 2.0, ARENA_H);
-    if let Some(feedback) = scene.feedback {
-        fonts::draw_centered(
-            &feedback.text,
-            cx,
-            bottom - 30.0,
-            30,
-            tone_color(feedback.tone),
-            Style::Bold,
-        );
-    }
 }
 
 /// Lists the pairs introduced on this level down the right edge. The

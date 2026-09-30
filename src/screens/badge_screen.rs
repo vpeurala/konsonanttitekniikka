@@ -19,6 +19,14 @@ const DIM: Color = Color::new(0.6, 0.6, 0.65, 1.0);
 
 pub fn draw(screen: &BadgeScreen, data: &Progress, touch: bool) {
     clear_background(BACKGROUND);
+    draw_list(screen, data);
+    // The heading and the panel are drawn last, over the list.
+    draw_heading(data, touch);
+    draw_panel(screen, data);
+}
+
+/// The medals, a row for each category, and the scrollbar.
+fn draw_list(screen: &BadgeScreen, data: &Progress) {
     let rows = rows();
     for (r, row) in rows.iter().enumerate() {
         let top = LIST_TOP + r as f32 * ROW_HEIGHT - screen.scroll();
@@ -48,8 +56,10 @@ pub fn draw(screen: &BadgeScreen, data: &Progress, touch: bool) {
         }
     }
     draw_scrollbar(screen, rows.len());
+}
 
-    // The heading and the panel are drawn last, over the list.
+/// The title, how many badges are earned, and the back button.
+fn draw_heading(data: &Progress, touch: bool) {
     draw_rectangle(0.0, 0.0, ARENA_W, LIST_TOP, BACKGROUND);
     fonts::draw_centered(
         "Kunniamerkit",
@@ -101,8 +111,6 @@ pub fn draw(screen: &BadgeScreen, data: &Progress, touch: bool) {
         "Nuolet: valitse   Esc: takaisin"
     };
     fonts::draw(hint, 16.0, 78.0, 16, DIM, Style::Body);
-
-    draw_panel(screen, data);
 }
 
 fn draw_scrollbar(screen: &BadgeScreen, rows: usize) {
@@ -172,26 +180,28 @@ fn draw_panel(screen: &BadgeScreen, data: &Progress) {
             Color::new(0.35, 0.85, 0.4, 1.0),
             Style::Bold,
         ),
-        None => {
-            let (now, goal) = badge.requirement.progress(&standing(data));
-            let (bar_w, bar_h) = (300.0, 14.0);
-            let y = PANEL_TOP + 104.0;
-            draw_rectangle(x, y, bar_w, bar_h, Color::new(0.25, 0.25, 0.32, 1.0));
-            draw_rectangle(
-                x,
-                y,
-                bar_w * now as f32 / goal as f32,
-                bar_h,
-                Color::new(0.96, 0.77, 0.2, 1.0),
-            );
-            fonts::draw(
-                &format!("{now} / {goal}"),
-                x + bar_w + 14.0,
-                y + 13.0,
-                20,
-                WHITE,
-                Style::Bold,
-            );
-        }
+        None => draw_progress_bar(x, PANEL_TOP + 104.0, badge, data),
     }
+}
+
+/// How far the player is from earning `badge`: a bar and the numbers.
+fn draw_progress_bar(x: f32, y: f32, badge: &Badge, data: &Progress) {
+    let (now, goal) = badge.requirement.progress(&standing(data));
+    let (bar_w, bar_h) = (300.0, 14.0);
+    draw_rectangle(x, y, bar_w, bar_h, Color::new(0.25, 0.25, 0.32, 1.0));
+    draw_rectangle(
+        x,
+        y,
+        bar_w * now as f32 / goal as f32,
+        bar_h,
+        Color::new(0.96, 0.77, 0.2, 1.0),
+    );
+    fonts::draw(
+        &format!("{now} / {goal}"),
+        x + bar_w + 14.0,
+        y + 13.0,
+        20,
+        WHITE,
+        Style::Bold,
+    );
 }

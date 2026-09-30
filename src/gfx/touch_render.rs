@@ -26,42 +26,10 @@ pub fn draw(controls: &TouchControls, music_on: bool, paused: bool, show_stick: 
     draw_line(ARENA_W, 0.0, ARENA_W, ARENA_H, 2.0, edge);
 
     draw_button(button_rect(Button::Pause), |r| {
-        let c = r.center();
-        if paused {
-            draw_triangle(
-                c + vec2(-8.0, -12.0),
-                c + vec2(-8.0, 12.0),
-                c + vec2(12.0, 0.0),
-                WHITE,
-            );
-        } else {
-            draw_rectangle(c.x - 10.0, c.y - 12.0, 7.0, 24.0, WHITE);
-            draw_rectangle(c.x + 3.0, c.y - 12.0, 7.0, 24.0, WHITE);
-        }
+        draw_pause_icon(r.center(), paused)
     });
     draw_button(button_rect(Button::Music), |r| {
-        let c = r.center();
-        let color = if music_on { WHITE } else { GRAY };
-        // A loudspeaker: a box, a cone and two waves.
-        draw_rectangle(c.x - 15.0, c.y - 5.0, 8.0, 10.0, color);
-        draw_triangle(
-            vec2(c.x - 8.0, c.y - 5.0),
-            vec2(c.x - 8.0, c.y + 5.0),
-            vec2(c.x + 1.0, c.y + 14.0),
-            color,
-        );
-        draw_triangle(
-            vec2(c.x - 8.0, c.y - 5.0),
-            vec2(c.x + 1.0, c.y - 14.0),
-            vec2(c.x + 1.0, c.y + 14.0),
-            color,
-        );
-        for radius in [8.0, 14.0] {
-            draw_wave(vec2(c.x + 1.0, c.y), radius, color);
-        }
-        if !music_on {
-            draw_line(c.x - 16.0, c.y - 16.0, c.x + 16.0, c.y + 16.0, 3.0, RED);
-        }
+        draw_speaker_icon(r.center(), music_on);
     });
 
     let keys = keypad();
@@ -107,6 +75,46 @@ fn draw_stick(controls: &TouchControls) {
         STICK_RADIUS * 0.45,
         Color::new(1.0, 1.0, 1.0, alpha),
     );
+}
+
+/// Play when paused, pause when playing.
+fn draw_pause_icon(c: Vec2, paused: bool) {
+    if paused {
+        draw_triangle(
+            c + vec2(-8.0, -12.0),
+            c + vec2(-8.0, 12.0),
+            c + vec2(12.0, 0.0),
+            WHITE,
+        );
+    } else {
+        draw_rectangle(c.x - 10.0, c.y - 12.0, 7.0, 24.0, WHITE);
+        draw_rectangle(c.x + 3.0, c.y - 12.0, 7.0, 24.0, WHITE);
+    }
+}
+
+/// A loudspeaker, crossed out when the sound is off.
+fn draw_speaker_icon(c: Vec2, music_on: bool) {
+    let color = if music_on { WHITE } else { GRAY };
+    // A loudspeaker: a box, a cone and two waves.
+    draw_rectangle(c.x - 15.0, c.y - 5.0, 8.0, 10.0, color);
+    draw_triangle(
+        vec2(c.x - 8.0, c.y - 5.0),
+        vec2(c.x - 8.0, c.y + 5.0),
+        vec2(c.x + 1.0, c.y + 14.0),
+        color,
+    );
+    draw_triangle(
+        vec2(c.x - 8.0, c.y - 5.0),
+        vec2(c.x + 1.0, c.y - 14.0),
+        vec2(c.x + 1.0, c.y + 14.0),
+        color,
+    );
+    for radius in [8.0, 14.0] {
+        draw_wave(vec2(c.x + 1.0, c.y), radius, color);
+    }
+    if !music_on {
+        draw_line(c.x - 16.0, c.y - 16.0, c.x + 16.0, c.y + 16.0, 3.0, RED);
+    }
 }
 
 /// A key's colors, by kind: digits blue like the number slot, consonants
