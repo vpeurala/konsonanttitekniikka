@@ -141,6 +141,23 @@ so it can be tested without a screen; do the same for new layouts.
   skipped and absurd numbers clamped or dropped (tests read thousands of
   garbage files). Saves from before a field existed must keep loading. On
   the web it goes to local storage.
+- `badges.rs`: the badges (kunniamerkit), all in one table, `BADGES`: id,
+  Finnish name, category, tier and a `Requirement`. `Stats` are the lifetime
+  counters the save keeps (monsters, bosses, long numbers, quick answers,
+  practice cards, flawless levels, best combo); everything else a
+  requirement asks about (learned pairs, levels, three-star levels, the
+  day streak) is worked out from the save and the live `Memory` into a
+  `Standing`. `award` records newly earned badges, once, with the day, and
+  never takes one back. The game reports counts as `GameEvent`s
+  (`Answered`, `MonsterDefeated`, `FlawlessLevel`, and `LevelCompleted` for
+  a boss); `App` adds them to the stats and, at the end of each frame,
+  awards badges: a toast, `Sfx::Badge`, a `merkki/<id>` count and a save.
+  Players from before badges get theirs quietly in `App::new`. To add a
+  badge, add a line to the table (and raise its length); the tests check
+  ids, order and that nothing is met from the start.
+  `badge_screen.rs` is the screen (rows by category, layout in pure
+  functions), `badge_art.rs` draws the medals and `toast.rs` is the notice.
+  The "sound" switch (Tab) is still `music_on` in the save.
 - `practice.rs`, `progress.rs`, `title.rs`: the other screens. The progress
   map shows how well a pair is known by colour and by 1–3 dots, so colour
   blindness doesn't hide it.
@@ -200,7 +217,8 @@ so it can be tested without a screen; do the same for new layouts.
 - Statistics: GoatCounter, site code `lukuloitsu`
   (https://lukuloitsu.goatcounter.com). It doesn't count localhost. Events
   are paths like `peli-alkoi/taso-1`, `taso-lapaisty/5`,
-  `peli-paattyi/taso-4`, `harjoittelu` and `edistyminen`.
+  `peli-paattyi/taso-4`, `harjoittelu`, `edistyminen`, `kunniamerkit` and
+  `merkki/<badge id>` when a badge is earned.
 - The domain is at DNSimple and points to Netlify.
 
 ### Android

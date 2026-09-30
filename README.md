@@ -45,6 +45,10 @@ odd digit left over at the end: 201 is KOHO JÄÄ, and 1377 is JOULU SUSI.
 - **Harjoittele** (Practice): calm flash cards, no monsters.
 - **Edistyminen** (Progress): all 110 pairs coloured by how well you know them,
   with stars earned and days played in a row.
+- **Kunniamerkit** (Badges): 47 medals to earn, from the first monster
+  defeated to fifty levels cleared. They count monsters and bosses defeated,
+  levels, pairs learned, answers in a row, days played and more; an earned
+  badge is never taken away.
 
 Pairs you know less well come up more often, and every pair comes back when it
 is due for review (spaced repetition). Progress is saved on the device, or in

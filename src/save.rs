@@ -12,6 +12,8 @@
 //! best-level 4
 //! stars 1 3
 //! streak 20356 5
+//! stat monsters 120
+//! badge monsters-100 20357
 //! pair 22 0.3512 1790000000 7
 //! ```
 
@@ -19,6 +21,7 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
+use crate::badges::{self, Stats};
 use crate::memory::{Memory, PairRecord};
 use crate::pairs;
 
@@ -40,6 +43,11 @@ pub struct SaveData {
     /// row ended with it.
     pub streak_day: i64,
     pub streak: u32,
+    /// Lifetime counters that badges ask about.
+    pub stats: Stats,
+    /// The badges earned, by id, with the day each was earned (days since
+    /// 1970).
+    pub badges: BTreeMap<String, i64>,
 }
 
 impl Default for SaveData {
@@ -51,6 +59,8 @@ impl Default for SaveData {
             stars: BTreeMap::new(),
             streak_day: 0,
             streak: 0,
+            stats: Stats::default(),
+            badges: BTreeMap::new(),
         }
     }
 }
@@ -64,6 +74,14 @@ impl SaveData {
             text += &format!("stars {level} {stars}\n");
         }
         text += &format!("streak {} {}\n", self.streak_day, self.streak);
+        for (name, value) in self.stats.fields() {
+            if value > 0 {
+                text += &format!("stat {name} {value}\n");
+            }
+        }
+        for (id, day) in &self.badges {
+            text += &format!("badge {id} {day}\n");
+        }
         for (number, r) in &self.pairs {
             text += &format!(
                 "pair {number} {:.4} {:.0} {} {}\n",
@@ -99,6 +117,16 @@ impl SaveData {
                     if let (Ok(day), Ok(count)) = (day.parse(), count.parse()) {
                         data.streak_day = day;
                         data.streak = count;
+                    }
+                }
+                ["stat", name, value] => {
+                    if let Ok(value) = value.parse() {
+                        data.stats.set(name, value);
+                    }
+                }
+                ["badge", id, day] => {
+                    if let (Some(badge), Ok(day)) = (badges::find(id), day.parse()) {
+                        data.badges.insert(badge.id.to_owned(), day);
                     }
                 }
                 // The streak came later, so older saves lack it.
@@ -251,6 +279,9 @@ mod tests {
         };
         data.stars.insert(1, 3);
         data.stars.insert(2, 1);
+        data.stats.monsters = 120;
+        data.stats.best_combo = 31;
+        data.badges.insert("monsters-100".to_string(), 20_357);
         data.pairs.insert(
             "22".to_string(),
             PairRecord {
@@ -449,5 +480,42 @@ mod tests {
         );
         let data = SaveData::from_text(&text);
         assert_eq!(data.pairs.keys().collect::<Vec<_>>(), vec!["25"]);
+    }
+
+    #[test]
+    fn stats_and_badges_survive_a_round_trip() {
+        let data = SaveData::from_text(&sample().to_text());
+        assert_eq!(data.stats.monsters, 120);
+        assert_eq!(data.stats.best_combo, 31);
+        assert_eq!(data.badges.get("monsters-100"), Some(&20_357));
+        assert_eq!(data, sample());
+    }
+
+    #[test]
+    fn unknown_stats_and_badges_and_broken_numbers_are_skipped() {
+        let text = format!(
+            "{HEADER}\nstat mystery 5\nstat monsters many\nstat bosses 3\n\
+             badge no-such-badge 5\nbadge bosses-1 someday\nbadge levels-5 7\n\
+             stat monsters 99999999999\n"
+        );
+        let data = SaveData::from_text(&text);
+        assert_eq!(data.stats.bosses, 3);
+        assert_eq!(data.stats.monsters, 0);
+        assert_eq!(data.badges.len(), 1);
+        assert_eq!(data.badges.get("levels-5"), Some(&7));
+    }
+
+    #[test]
+    fn a_huge_counter_is_capped() {
+        let data = SaveData::from_text(&format!("{HEADER}\nstat monsters 4000000000\n"));
+        assert_eq!(data.stats.monsters, badges::MAX_COUNT);
+    }
+
+    #[test]
+    fn saves_from_before_badges_still_load() {
+        let data = SaveData::from_text(&format!("{HEADER}\nmusic on\nbest-level 3\n"));
+        assert_eq!(data.stats, Stats::default());
+        assert!(data.badges.is_empty());
+        assert_eq!(data.best_level, 3);
     }
 }

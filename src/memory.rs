@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::pairs::{self, Pair, PairId};
 
 /// Answering this soon after a pair appears shows she knows it.
-const FAST_SECONDS: f32 = 3.0;
+pub const FAST_SECONDS: f32 = 3.0;
 /// Answering this late, or never, shows she doesn't know it yet.
 const SLOW_SECONDS: f32 = 12.0;
 /// The best an answer given while the hint was showing can count as.
@@ -36,6 +36,12 @@ const LONGEST_INTERVAL: f64 = 21.0 * DAY;
 /// in a row, and then by this factor with each one more.
 const STREAK_BEFORE_GROWTH: u32 = 5;
 const STREAK_GROWTH: f64 = 1.5;
+
+/// Whether an answer was quick: given within `FAST_SECONDS` of the pair
+/// appearing, without a hint.
+pub fn is_quick(seconds: f32, with_hint: bool) -> bool {
+    !with_hint && seconds <= FAST_SECONDS
+}
 
 /// How good an answer was, from 0 (no better than not answering) to 1
 /// (answered at once, without a hint).

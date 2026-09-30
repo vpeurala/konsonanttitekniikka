@@ -10,14 +10,17 @@
 use macroquad::prelude::{BLACK, KeyCode, Rect};
 
 use crate::audio::Sfx;
+use crate::badge_screen::BadgeScreen;
+use crate::badges::{self, Stats};
 use crate::frame::Frame;
 use crate::game::{self, Game, GameEvent};
 use crate::levels::{LevelAction, LevelSelect};
 use crate::memory::Memory;
 use crate::practice::{PracticeAction, PracticeScreen};
 use crate::progress::ProgressScreen;
-use crate::save::SaveData;
+use crate::save::{self, SaveData};
 use crate::title::{TitleAction, TitleScreen};
+use crate::toast::Toasts;
 use crate::touch::{self, Button, TouchControls, TouchInput};
 use crate::view::{self, ARENA_H, ARENA_W, View};
 
@@ -55,6 +58,7 @@ enum Screen {
     Game(Box<Game>),
     Practice(Box<PracticeScreen>),
     Progress(ProgressScreen),
+    Badges(Box<BadgeScreen>),
 }
 
 pub struct App {
@@ -75,6 +79,8 @@ pub struct App {
     time: f64,
     /// When progress was last saved, in seconds since 1970.
     last_save: f64,
+    /// Notices of badges just earned.
+    toasts: Toasts,
 }
 
 /// The area a menu screen shows.
@@ -85,17 +91,22 @@ fn menu_rect() -> Rect {
 impl App {
     /// The app at its title screen, with `progress` loaded from the
     /// device, at time `now`.
-    pub fn new(progress: SaveData, touch_mode: bool, can_quit: bool, now: f64) -> Self {
+    pub fn new(mut progress: SaveData, touch_mode: bool, can_quit: bool, now: f64) -> Self {
+        let memory = progress.memory();
+        // Badges the player already qualifies for, from before badges
+        // existed, are given quietly; the badge screen shows them.
+        badges::award(&mut progress, &memory, save::day_of(now));
         App {
             screen: Screen::Title,
             title: TitleScreen::new(touch_mode),
             controls: TouchControls::default(),
-            memory: progress.memory(),
+            memory,
             progress,
             touch_mode,
             can_quit,
             time: 0.0,
             last_save: now,
+            toasts: Toasts::default(),
         }
     }
 
@@ -118,6 +129,7 @@ impl App {
     pub fn update(&mut self, frame: &Frame) -> Vec<Effect> {
         let mut effects = Vec::new();
         self.time += f64::from(frame.dt);
+        self.toasts.update(frame.dt.min(0.25));
         // Esc leaves the game or a menu screen, and quits from the title.
         let escape = frame.pressed(KeyCode::Escape);
         if frame.pressed(KeyCode::Tab) {
@@ -157,6 +169,10 @@ impl App {
                         effects.push(Effect::count("edistyminen", "Edistyminen"));
                         next = Some(Screen::Progress(ProgressScreen));
                     }
+                    TitleAction::Badges => {
+                        effects.push(Effect::count("kunniamerkit", "Kunniamerkit"));
+                        next = Some(Screen::Badges(Box::default()));
+                    }
                 }
             }
 
@@ -182,6 +198,13 @@ impl App {
                 }
             }
 
+            Screen::Badges(screen) => {
+                let view = View::fit(menu_rect(), frame.screen);
+                if screen.update(frame, &frame.pointers(&view)) {
+                    next = Some(Screen::Title);
+                }
+            }
+
             Screen::Practice(practice) => {
                 let view = View::fit(touch::content_rect(self.touch_mode), frame.screen);
                 let input = touch_input(&mut self.controls, self.touch_mode, frame, &view);
@@ -192,8 +215,13 @@ impl App {
                 keys.extend(input.keys.iter().copied());
                 // The pause button leaves practice.
                 let back = escape || input.buttons.contains(&Button::Pause);
+                let correct_before = practice.correct();
                 let action =
                     practice.update(frame, &keys, input.arena_taps, back, &mut self.memory);
+                let stats = &mut self.progress.stats;
+                for _ in correct_before..practice.correct() {
+                    Stats::bump(&mut stats.practice_correct);
+                }
                 effects.extend(practice.take_sfx().into_iter().map(Effect::Play));
                 let leaving = matches!(action, PracticeAction::Back);
                 save(
@@ -259,12 +287,38 @@ impl App {
         if let Some(next) = next {
             self.screen = next;
         }
+        self.award_badges(frame, &mut effects);
         // The sound switch (still called music in the save file) silences
         // the sound effects too, not just the music.
         if !self.progress.music_on {
             effects.retain(|effect| !matches!(effect, Effect::Play(_)));
         }
         effects
+    }
+
+    /// Gives the badges the player has just earned: a notice, a sound, a
+    /// count for the statistics, and saving right away.
+    fn award_badges(&mut self, frame: &Frame, effects: &mut Vec<Effect>) {
+        // A game keeps the newest memory until it is copied here.
+        let memory = match &self.screen {
+            Screen::Game(game) => game.memory(),
+            _ => &self.memory,
+        };
+        let earned = badges::award(&mut self.progress, memory, save::day_of(frame.now));
+        if earned.is_empty() {
+            return;
+        }
+        for badge in earned {
+            self.toasts.push(badge);
+            effects.push(Effect::Play(Sfx::Badge));
+            effects.push(Effect::count(
+                format!("merkki/{}", badge.id),
+                format!("Kunniamerkki: {}", badge.name),
+            ));
+        }
+        self.progress.set_memory(memory);
+        effects.push(Effect::Save(Box::new(self.progress.clone())));
+        self.last_save = frame.now;
     }
 
     fn new_game(&self, level: u32) -> Game {
@@ -289,6 +343,11 @@ impl App {
                 screen.draw(&self.progress, &self.memory, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
+            Screen::Badges(screen) => {
+                let view = view::begin(menu_rect());
+                screen.draw(&self.progress, &self.memory, self.touch_mode);
+                view::mask_outside(view, menu_rect(), BLACK);
+            }
             Screen::Practice(practice) => {
                 let content = touch::content_rect(self.touch_mode);
                 let view = view::begin(content);
@@ -308,6 +367,10 @@ impl App {
                 view::mask_outside(view, content, BLACK);
             }
         }
+        // The notice goes over whatever is showing; the camera set for that
+        // screen is still in place, and the arena's middle is the same in
+        // all of them.
+        self.toasts.draw(ARENA_W);
     }
 }
 
@@ -360,6 +423,25 @@ fn record_event(progress: &mut SaveData, event: GameEvent, effects: &mut Vec<Eff
             ));
             false
         }
+        GameEvent::Answered { quick, long, combo } => {
+            let stats = &mut progress.stats;
+            if quick {
+                Stats::bump(&mut stats.quick_answers);
+            }
+            if long {
+                Stats::bump(&mut stats.long_answers);
+            }
+            stats.best_combo = stats.best_combo.max(combo).min(badges::MAX_COUNT);
+            false
+        }
+        GameEvent::MonsterDefeated => {
+            Stats::bump(&mut progress.stats.monsters);
+            false
+        }
+        GameEvent::FlawlessLevel => {
+            Stats::bump(&mut progress.stats.flawless_levels);
+            false
+        }
         GameEvent::Over { level } => {
             effects.push(Effect::count(
                 format!("peli-paattyi/taso-{level}"),
@@ -372,6 +454,7 @@ fn record_event(progress: &mut SaveData, event: GameEvent, effects: &mut Vec<Eff
                 format!("taso-lapaisty/{level}"),
                 format!("Taso {level} läpäisty ({stars} tähteä)"),
             ));
+            Stats::bump(&mut progress.stats.bosses);
             progress.record_level(level, stars);
             true
         }

@@ -213,6 +213,136 @@ fn a_finished_level_is_counted_remembered_and_saved() {
 }
 
 #[test]
+fn game_events_are_added_to_the_lifetime_stats() {
+    let mut progress = SaveData::default();
+    let mut effects = Vec::new();
+    let answered = |quick, long, combo| GameEvent::Answered { quick, long, combo };
+    for event in [
+        GameEvent::MonsterDefeated,
+        GameEvent::MonsterDefeated,
+        answered(true, false, 2),
+        answered(false, true, 5),
+        answered(false, false, 3),
+        GameEvent::FlawlessLevel,
+        GameEvent::LevelCompleted { level: 1, stars: 3 },
+    ] {
+        record_event(&mut progress, event, &mut effects);
+    }
+    assert_eq!(
+        progress.stats,
+        Stats {
+            monsters: 2,
+            bosses: 1,
+            long_answers: 1,
+            quick_answers: 1,
+            practice_correct: 0,
+            flawless_levels: 1,
+            best_combo: 5,
+        }
+    );
+}
+
+#[test]
+fn answers_are_not_worth_a_save_by_themselves() {
+    let mut progress = SaveData::default();
+    let mut effects = Vec::new();
+    for event in [
+        GameEvent::MonsterDefeated,
+        GameEvent::Answered {
+            quick: true,
+            long: false,
+            combo: 1,
+        },
+    ] {
+        assert!(!record_event(&mut progress, event, &mut effects));
+    }
+    assert!(effects.is_empty());
+}
+
+#[test]
+fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
+    let mut app = app();
+    app.progress.stats.monsters = 1;
+    let effects = app.update(&frame());
+    assert!(effects.contains(&Effect::Play(Sfx::Badge)));
+    assert_eq!(counted(&effects), vec!["merkki/monsters-1"]);
+    assert_eq!(saves(&effects), 1);
+    assert!(
+        last_saved(&effects)
+            .unwrap()
+            .badges
+            .contains_key("monsters-1")
+    );
+    assert_eq!(app.toasts.current().map(|(b, _)| b.id), Some("monsters-1"));
+    // Nothing more happens on the next frame.
+    let again = app.update(&frame());
+    assert!(counted(&again).is_empty());
+    assert_eq!(saves(&again), 0);
+}
+
+#[test]
+fn several_badges_at_once_each_get_their_notice_in_turn() {
+    let mut app = app();
+    app.progress.stats.monsters = 10;
+    let effects = app.update(&frame());
+    assert_eq!(
+        counted(&effects),
+        vec!["merkki/monsters-1", "merkki/monsters-10"]
+    );
+    assert_eq!(saves(&effects), 1, "one save for the lot");
+    assert_eq!(app.toasts.current().map(|(b, _)| b.id), Some("monsters-1"));
+}
+
+#[test]
+fn the_sound_switch_silences_the_badge_sound_but_not_the_badge() {
+    let mut app = app();
+    app.update(&press(KeyCode::Tab));
+    app.progress.stats.monsters = 1;
+    let effects = app.update(&frame());
+    assert!(!effects.iter().any(|e| matches!(e, Effect::Play(_))));
+    assert!(app.progress.badges.contains_key("monsters-1"));
+    assert!(app.toasts.current().is_some());
+}
+
+#[test]
+fn badges_earned_before_they_existed_are_given_quietly() {
+    let mut app = veteran(6);
+    assert!(app.progress.badges.contains_key("levels-5"));
+    let effects = app.update(&frame());
+    assert!(!effects.contains(&Effect::Play(Sfx::Badge)));
+    assert!(app.toasts.current().is_none());
+    assert!(counted(&effects).is_empty());
+}
+
+#[test]
+fn learning_pairs_in_a_game_earns_their_badge_before_the_memory_is_copied() {
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    let mut learned = Memory::default();
+    for pair in &crate::pairs::PAIRS[..10] {
+        for _ in 0..8 {
+            learned.record_answer(*pair, 1.0, false, START);
+        }
+    }
+    let Screen::Game(game) = &mut app.screen else {
+        panic!("a game should be showing");
+    };
+    **game = Game::new(false, learned, 1);
+    let effects = app.update(&frame());
+    assert!(counted(&effects).contains(&"merkki/pairs-digits"));
+}
+
+#[test]
+fn k_opens_the_badges_and_escape_comes_back() {
+    let mut app = app();
+    let effects = app.update(&press(KeyCode::K));
+    assert!(matches!(app.screen, Screen::Badges(_)));
+    assert_eq!(counted(&effects), vec!["kunniamerkit"]);
+    app.update(&press(KeyCode::Escape));
+    assert!(on_title(&app));
+}
+
+#[test]
 fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
     let mut progress = SaveData::default();
     let mut effects = Vec::new();

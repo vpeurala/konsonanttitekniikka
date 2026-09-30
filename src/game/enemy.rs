@@ -10,7 +10,7 @@ use super::rules::{
     BOSS_RADIUS, BOSS_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED, enemy_speed, shows_hint,
 };
 use crate::long_numbers::Question;
-use crate::memory::Memory;
+use crate::memory::{self, Memory};
 use crate::view::{ARENA_H, ARENA_W};
 
 pub(super) const LABEL_FONT_SIZE: u16 = 22;
@@ -214,6 +214,13 @@ impl Enemy {
         for &pair in pairs {
             memory.record_answer(pair, seconds, self.shows_hint(), now);
         }
+    }
+
+    /// Whether the answer, if given now, is a quick one: at once, without
+    /// a hint. A long number's time is shared out between its pairs.
+    pub fn is_quick(&self) -> bool {
+        let seconds = self.shown_for / self.question.pairs().len() as f32;
+        memory::is_quick(seconds, self.shows_hint())
     }
 
     /// Records a miss for each pair of the question, at time `now`.

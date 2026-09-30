@@ -3,6 +3,7 @@
 //! never typed in, so the booklet can't disagree with the game.
 
 use super::{Assets, Page, escape, letter_tiles};
+use crate::badges::BADGES;
 use crate::curriculum::NEW_PAIRS_PER_LEVEL;
 use crate::levels::LEVELS_PER_CHECKPOINT;
 use crate::long_numbers::{Question, first_long_level};
@@ -439,7 +440,11 @@ fn levels_and_practice() -> Page {
          <p>Peli seuraa, kuinka nopeasti vastaat. Parit, joita et vielä osaa, tulevat vastaan useammin. \
          Kun osaat parin hyvin, se lepää hetken ja palaa, kun sen kertaaminen on taas ajankohtaista: \
          tunneista päiviin, ja hyvin osatuilla pareilla jopa viikkoihin. Peli laskee myös, kuinka monta päivää \
-         putkeen olet pelannut.</p></div>{}",
+         putkeen olet pelannut.</p></div>\
+         <div class=\"box gold compact\" style=\"margin-right:46mm\"><h3>Kunniamerkit</h3>\
+         <p>Pelissä on {} kunniamerkkiä, helpoista aivan vaikeisiin. Ne kertovat hirviöistä, \
+         tasoista, opituista pareista ja pelipäivistä. Katso ne aloitusnäytön <kbd>K</kbd>-napista. \
+         Ansaittua merkkiä ei oteta pois.</p></div>{}",
         inline_star(),
         inline_star(),
         inline_star(),
@@ -449,6 +454,7 @@ fn levels_and_practice() -> Page {
         LEVELS_PER_CHECKPOINT,
         1 + LEVELS_PER_CHECKPOINT,
         1 + 2 * LEVELS_PER_CHECKPOINT,
+        BADGES.len(),
         character("girl", "right:10mm;bottom:12mm;width:64mm;height:64mm"),
     );
     Page { class: "", body }

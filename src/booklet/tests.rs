@@ -157,3 +157,12 @@ fn the_level_numbers_come_from_the_game() {
     assert!(html.contains(&format!("Tasolta {first_long} alkaen")));
     assert!(html.contains(&format!("{PAIR_COUNT} paria")));
 }
+
+#[test]
+fn the_page_about_badges_gives_their_number_from_the_game() {
+    let html = html(&fake_assets());
+    assert!(html.contains(&format!(
+        "Pelissä on {} kunniamerkkiä",
+        crate::badges::BADGES.len()
+    )));
+}

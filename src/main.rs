@@ -1,6 +1,9 @@
 mod analytics;
 mod app;
 mod audio;
+mod badge_art;
+mod badge_screen;
+mod badges;
 mod booklet;
 mod curriculum;
 mod effects;
@@ -24,6 +27,7 @@ mod rng;
 mod save;
 mod sprites;
 mod title;
+mod toast;
 mod touch;
 mod view;
 #[cfg(target_arch = "wasm32")]

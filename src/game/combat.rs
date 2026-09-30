@@ -2,9 +2,9 @@
 
 use macroquad::prelude::{Vec2, YELLOW};
 
-use super::Game;
 use super::enemy::{Enemy, EnemyId};
 use super::rules::*;
+use super::{Game, GameEvent};
 use crate::audio::Sfx;
 use crate::obstacles::{push_out, steer};
 use crate::sprites::girl_hand;
@@ -44,6 +44,12 @@ impl Game {
             return;
         };
         self.enemies[index].record_answer(&mut self.memory, self.now);
+        self.combo += 1;
+        self.out.events.push(GameEvent::Answered {
+            quick: self.enemies[index].is_quick(),
+            long: self.enemies[index].question.is_long(),
+            combo: self.combo,
+        });
         let next = self.enemies[index]
             .boss
             .as_mut()
@@ -57,6 +63,9 @@ impl Game {
             }
             None => {
                 let enemy = self.enemies.remove(index);
+                if !enemy.is_boss() {
+                    self.out.events.push(GameEvent::MonsterDefeated);
+                }
                 let target_pos = enemy.pos;
                 self.cast_spell(SpellTarget::Doomed(enemy), target_pos);
             }
@@ -204,6 +213,7 @@ impl Game {
             self.show_question(&enemy.question, YELLOW);
         }
         if hurt {
+            self.mistake();
             self.clear_typed();
         }
     }

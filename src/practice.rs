@@ -119,6 +119,11 @@ impl PracticeScreen {
     }
 
     /// The sound effects triggered since the previous call.
+    /// How many cards have been answered right.
+    pub fn correct(&self) -> u32 {
+        self.correct
+    }
+
     pub fn take_sfx(&mut self) -> Vec<Sfx> {
         std::mem::take(&mut self.sfx)
     }

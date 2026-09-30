@@ -87,6 +87,14 @@ pub enum GameEvent {
     Over { level: u32 },
     /// A level was finished (its boss beaten) with this many stars.
     LevelCompleted { level: u32, stars: u8 },
+    /// A monster was answered right. `combo` is how many answers in a row
+    /// that makes, without a wrong key or a hit in between.
+    Answered { quick: bool, long: bool, combo: u32 },
+    /// An ordinary monster (not a boss) was defeated.
+    MonsterDefeated,
+    /// The level just finished, reported right before `LevelCompleted`, had
+    /// no wrong key and no hit.
+    FlawlessLevel,
 }
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
@@ -109,14 +117,27 @@ struct Pending {
 }
 
 /// How the current level is going; starts over with every level.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Stage {
     /// Points scored.
     points: u32,
+    /// Whether no wrong key has been typed and nothing has hit her.
+    flawless: bool,
     /// Seconds spent.
     time: f32,
     /// Whether the boss has been summoned and not yet beaten.
     boss_fight: bool,
+}
+
+impl Default for Stage {
+    fn default() -> Self {
+        Stage {
+            points: 0,
+            flawless: true,
+            time: 0.0,
+            boss_fight: false,
+        }
+    }
 }
 
 pub struct Game {
@@ -130,6 +151,8 @@ pub struct Game {
     spells: Vec<Spell>,
     typed: Typed,
     energy: f32,
+    /// Right answers in a row, without a wrong key or a hit in between.
+    combo: u32,
     score: u32,
     level: u32,
     /// How the current level is going.
@@ -179,6 +202,7 @@ impl Game {
             spells: Vec::new(),
             typed: Typed::default(),
             energy: MAX_ENERGY,
+            combo: 0,
             score: 0,
             level: 1,
             stage: Stage::default(),
@@ -350,6 +374,12 @@ impl Game {
         }
     }
 
+    /// A wrong key or a hit ends the combo and the level's clean record.
+    fn mistake(&mut self) {
+        self.combo = 0;
+        self.stage.flawless = false;
+    }
+
     fn clear_typed(&mut self) {
         self.typed.clear();
     }
@@ -387,6 +417,7 @@ impl Game {
     /// energy, which leaves room to fix a typo with backspace.
     fn type_into(&mut self, slot: Slot, c: char) {
         if self.is_dead_end(slot) {
+            self.mistake();
             self.energy = after_wrong_key(self.energy);
             self.out.sfx.push(Sfx::Wrong);
             self.display.say(
@@ -451,14 +482,15 @@ impl Game {
     /// level starts from a clear slate.
     fn complete_level(&mut self, pos: Vec2) {
         let stars = stars_for(self.energy / MAX_ENERGY);
+        if self.stage.flawless {
+            self.out.events.push(GameEvent::FlawlessLevel);
+        }
         self.out.events.push(GameEvent::LevelCompleted {
             level: self.level,
             stars,
         });
         self.level += 1;
-        self.stage.points = 0;
-        self.stage.time = 0.0;
-        self.stage.boss_fight = false;
+        self.stage = Stage::default();
         self.spawn_timer = LEVEL_BREAK_SECONDS;
         for enemy in self.enemies.drain(..) {
             self.display

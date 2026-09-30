@@ -62,12 +62,14 @@ pub fn mastery_tier(difficulty: f32) -> u8 {
     }
 }
 
+/// Whether `pair` counts as learned.
+pub fn is_learned(memory: &Memory, pair: &Pair) -> bool {
+    memory.record(pair).is_some_and(|r| r.difficulty < LEARNED)
+}
+
 /// How many pairs count as learned.
 pub fn learned_count(memory: &Memory) -> usize {
-    PAIRS
-        .iter()
-        .filter(|p| memory.record(p).is_some_and(|r| r.difficulty < LEARNED))
-        .count()
+    PAIRS.iter().filter(|p| is_learned(memory, p)).count()
 }
 
 #[derive(Default)]

@@ -24,6 +24,8 @@ pub enum Sfx {
     GameOver,
     Boss,
     Thunder,
+    /// A badge was earned.
+    Badge,
 }
 
 pub struct Audio {
@@ -39,6 +41,7 @@ pub struct Audio {
     game_over: Sound,
     boss: Sound,
     thunder: Sound,
+    badge: Sound,
 }
 
 impl Audio {
@@ -56,6 +59,7 @@ impl Audio {
             game_over: load(&game_over()).await,
             boss: load(&boss()).await,
             thunder: load(&thunder()).await,
+            badge: load(&badge()).await,
         }
     }
 
@@ -70,6 +74,7 @@ impl Audio {
             Sfx::GameOver => (&self.game_over, 0.9),
             Sfx::Boss => (&self.boss, 1.0),
             Sfx::Thunder => (&self.thunder, 1.0),
+            Sfx::Badge => (&self.badge, 0.9),
         };
         play_sound(
             sound,
@@ -317,6 +322,16 @@ fn level_up() -> Vec<f32> {
     out
 }
 
+/// A short, cheerful chime: two quick notes and a held one.
+fn badge() -> Vec<f32> {
+    let notes = [(79, 0.1), (84, 0.1), (91, 0.5)];
+    let mut out = melody(Wave::Triangle, &notes, 0.2);
+    for s in &mut out {
+        *s *= 0.5;
+    }
+    out
+}
+
 /// A slow, sad descent.
 fn game_over() -> Vec<f32> {
     let notes = [(67, 0.3), (66, 0.3), (65, 0.3), (64, 0.9)];
@@ -395,6 +410,7 @@ mod tests {
             game_over(),
             boss(),
             thunder(),
+            badge(),
         ] {
             let peak = sound.iter().fold(0.0f32, |m, s| m.max(s.abs()));
             assert!(peak <= 1.0, "peak {peak}");

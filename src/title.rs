@@ -68,26 +68,28 @@ pub enum TitleAction {
     StartGame,
     Practice,
     Progress,
+    Badges,
 }
 
 /// Where the menu buttons' centers are, before scrolling.
 const MENU_Y: f32 = 262.0;
 /// The room the menu and the status line under it take.
 const MENU_SPACE: f32 = 105.0;
-const BUTTON_W: f32 = 200.0;
+const BUTTON_W: f32 = 170.0;
 const BUTTON_H: f32 = 54.0;
-const BUTTON_GAP: f32 = 30.0;
+const BUTTON_GAP: f32 = 20.0;
 
 /// The menu: each button's label, key and action.
-const MENU: [(&str, &str, TitleAction); 3] = [
+const MENU: [(&str, &str, TitleAction); 4] = [
     ("Pelaa", "Enter", TitleAction::StartGame),
     ("Harjoittele", "H", TitleAction::Practice),
     ("Edistyminen", "E", TitleAction::Progress),
+    ("Kunniamerkit", "K", TitleAction::Badges),
 ];
 
 /// Where menu button `i` is, with the content scrolled by `scroll`.
 fn button_rect(i: usize, scroll: f32) -> Rect {
-    let total = 3.0 * BUTTON_W + 2.0 * BUTTON_GAP;
+    let total = MENU.len() as f32 * BUTTON_W + (MENU.len() - 1) as f32 * BUTTON_GAP;
     let x = (ARENA_W - total) / 2.0 + i as f32 * (BUTTON_W + BUTTON_GAP);
     Rect::new(x, MENU_Y - BUTTON_H / 2.0 - scroll, BUTTON_W, BUTTON_H)
 }
@@ -110,6 +112,9 @@ impl TitleScreen {
         }
         if frame.pressed(KeyCode::E) {
             return TitleAction::Progress;
+        }
+        if frame.pressed(KeyCode::K) {
+            return TitleAction::Badges;
         }
         // Dragging scrolls the list; a tap on a menu button picks it.
         for p in pointers {
@@ -238,7 +243,7 @@ impl TitleScreen {
             draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
             draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 3.0, edge);
             let c = rect.center();
-            fonts::draw_centered(label, c.x, c.y - 4.0, 28, WHITE, Style::Heading);
+            fonts::draw_centered(label, c.x, c.y - 4.0, 24, WHITE, Style::Heading);
             // The keyboard shortcut, for those with a keyboard.
             if !self.touch {
                 fonts::draw_centered(key, c.x, c.y + 17.0, 13, DIM, Style::Body);
@@ -578,6 +583,7 @@ mod tests {
             title.update(&pressed(KeyCode::E), &[]),
             TitleAction::Progress
         );
+        assert_eq!(title.update(&pressed(KeyCode::K), &[]), TitleAction::Badges);
         assert_eq!(title.update(&pressed(KeyCode::X), &[]), TitleAction::Stay);
     }
 

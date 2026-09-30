@@ -33,7 +33,7 @@ jobs:
 
   # Test coverage, sent to Codecov for the README badge. Files that only draw
   # or start the app (pictures, sprites, the icon, fonts, the render code,
-  # the booklet's picture rendering, main, analytics) are left out: the tests can't run them without a screen,
+  # the medals' drawing, the booklet's picture rendering, main, analytics) are left out: the tests can't run them without a screen,
   # and counting them would hide how well the game's logic is tested.
   coverage:
 
@@ -48,7 +48,7 @@ jobs:
     - name: Measure coverage
       run: >
         cargo llvm-cov --lcov --output-path lcov.info
-        --ignore-filename-regex 'src/(main|fonts|icon|pictures|sprites|analytics)\.rs|src/game/render\.rs|src/booklet/images\.rs'
+        --ignore-filename-regex 'src/(main|fonts|icon|pictures|sprites|analytics|badge_art)\.rs|src/game/render\.rs|src/booklet/images\.rs'
     - name: Upload to Codecov
       uses: codecov/codecov-action@v7
       with:

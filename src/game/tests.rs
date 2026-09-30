@@ -382,6 +382,166 @@ fn beating_the_boss_completes_the_level() {
     );
 }
 
+/// Every answer of a boss fight, typed one after another.
+fn beat_the_boss(game: &mut Game, level: u32) -> Log {
+    game.add_points(points_to_clear(level));
+    let mut log = Log::default();
+    for _ in 0..boss_hits(level) {
+        let answer = game.enemies[0].answer().to_owned();
+        log.add(game.update(&typing(&answer)));
+    }
+    log.append(idle(game, 1.5));
+    log
+}
+
+fn answered(log: &Log) -> Vec<(bool, bool, u32)> {
+    log.events
+        .iter()
+        .filter_map(|e| match e {
+            GameEvent::Answered { quick, long, combo } => Some((*quick, *long, *combo)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_defeated_monster_is_reported_once_with_its_answer() {
+    let mut game = game();
+    with_monster(&mut game);
+    let answer = game.enemies[0].answer().to_owned();
+    let log = play(&mut game, 1.0, &typing(&answer));
+    let defeated = log
+        .events
+        .iter()
+        .filter(|e| **e == GameEvent::MonsterDefeated)
+        .count();
+    assert_eq!(defeated, 1);
+    assert_eq!(answered(&log).len(), 1);
+}
+
+#[test]
+fn answers_in_a_row_build_a_combo_and_a_wrong_key_ends_it() {
+    let mut game = game();
+    let mut log = Log::default();
+    for _ in 0..3 {
+        with_monster(&mut game);
+        let answer = game.enemies[0].answer().to_owned();
+        log.add(game.update(&typing(&answer)));
+    }
+    let combos: Vec<u32> = answered(&log).iter().map(|a| a.2).collect();
+    assert_eq!(combos, [1, 2, 3]);
+
+    // No monster's answer starts with "h", and the second key is the
+    // mistake: the first only shows red.
+    with_monster(&mut game);
+    game.update(&typing("hh"));
+    assert_eq!(game.combo, 0);
+    with_monster(&mut game);
+    let answer = game.enemies.last().unwrap().answer().to_owned();
+    let after = game.update(&typing(&answer));
+    assert_eq!(
+        answered(&Log {
+            events: after.events,
+            sfx: vec![]
+        })[0]
+            .2,
+        1
+    );
+}
+
+#[test]
+fn a_hit_by_a_monster_ends_the_combo_too() {
+    let mut game = game();
+    with_monster(&mut game);
+    let answer = game.enemies[0].answer().to_owned();
+    game.update(&typing(&answer));
+    assert_eq!(game.combo, 1);
+    with_collision(&mut game);
+    game.update(&frame());
+    assert_eq!(game.combo, 0);
+}
+
+#[test]
+fn an_answer_at_once_without_a_hint_is_quick_and_a_late_one_is_not() {
+    let mut game = game();
+    with_monster(&mut game);
+    let answer = game.enemies[0].answer().to_owned();
+    let quick = game.update(&typing(&answer));
+    assert!(
+        answered(&Log {
+            events: quick.events,
+            sfx: vec![]
+        })[0]
+            .0
+    );
+
+    with_monster(&mut game);
+    game.enemies[0].shown_for = 10.0;
+    let answer = game.enemies[0].answer().to_owned();
+    let slow = game.update(&typing(&answer));
+    assert!(
+        !answered(&Log {
+            events: slow.events,
+            sfx: vec![]
+        })[0]
+            .0
+    );
+}
+
+#[test]
+fn a_boss_is_not_counted_as_a_monster_but_its_hits_are_answers() {
+    let mut game = game();
+    let log = beat_the_boss(&mut game, 1);
+    assert_eq!(answered(&log).len(), boss_hits(1));
+    assert!(!log.events.contains(&GameEvent::MonsterDefeated));
+}
+
+#[test]
+fn a_clean_level_is_reported_as_flawless_right_before_it_completes() {
+    let mut game = game();
+    let log = beat_the_boss(&mut game, 1);
+    let flawless = log
+        .events
+        .iter()
+        .position(|e| *e == GameEvent::FlawlessLevel)
+        .expect("a clean level is flawless");
+    assert!(matches!(
+        log.events[flawless + 1],
+        GameEvent::LevelCompleted { .. }
+    ));
+}
+
+#[test]
+fn a_wrong_key_or_a_hit_spoils_the_level_but_the_next_starts_clean() {
+    let mut game = game();
+    with_monster(&mut game);
+    game.update(&typing("hh"));
+    assert!(!game.stage.flawless);
+    // Only the boss is left to answer.
+    game.enemies.clear();
+    let spoiled = beat_the_boss(&mut game, 1);
+    assert!(!spoiled.events.contains(&GameEvent::FlawlessLevel));
+    assert!(game.stage.flawless, "the next level starts clean");
+
+    let mut game = game_from(1);
+    with_collision(&mut game);
+    game.update(&frame());
+    assert!(!game.stage.flawless);
+}
+
+#[test]
+fn long_numbers_are_reported_as_long_answers() {
+    let mut game = game_from(22);
+    let mut log = Log::default();
+    game.add_points(points_to_clear(22));
+    for _ in 0..boss_hits(22) {
+        let answer = game.enemies[0].answer().to_owned();
+        log.add(game.update(&typing(&answer)));
+    }
+    let long = answered(&log).iter().filter(|a| a.1).count();
+    assert!(long > 0, "{:?}", answered(&log));
+}
+
 #[test]
 fn stars_depend_on_the_energy_left() {
     let mut game = game();
