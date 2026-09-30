@@ -51,6 +51,15 @@ pub enum PracticeAction {
     Back,
 }
 
+/// What a frame of practice asks the outside world to do, as `Game`'s
+/// `Outputs` do.
+pub struct PracticeOutcome {
+    pub action: PracticeAction,
+    pub sfx: Vec<Sfx>,
+    /// Cards answered right this frame.
+    pub answered_right: u32,
+}
+
 pub struct PracticeScreen {
     pool: Vec<Pair>,
     rng: Rng,
@@ -118,19 +127,26 @@ impl PracticeScreen {
         }
     }
 
-    /// The sound effects triggered since the previous call.
-    /// How many cards have been answered right.
-    pub fn correct(&self) -> u32 {
-        self.correct
-    }
-
-    pub fn take_sfx(&mut self) -> Vec<Sfx> {
-        std::mem::take(&mut self.sfx)
-    }
-
     /// Handles this frame's typed `keys`, taps on the card (`taps`) and
     /// whether the player asked to go back.
     pub fn update(
+        &mut self,
+        frame: &Frame,
+        keys: &[Key],
+        taps: usize,
+        back: bool,
+        memory: &mut Memory,
+    ) -> PracticeOutcome {
+        let correct_before = self.correct;
+        let action = self.step(frame, keys, taps, back, memory);
+        PracticeOutcome {
+            action,
+            sfx: std::mem::take(&mut self.sfx),
+            answered_right: self.correct - correct_before,
+        }
+    }
+
+    fn step(
         &mut self,
         frame: &Frame,
         keys: &[Key],
@@ -365,8 +381,13 @@ mod tests {
         PracticeScreen::new(level, memory, false, NOW)
     }
 
-    fn step(screen: &mut PracticeScreen, memory: &mut Memory, frame: &Frame, keys: &[Key]) {
-        screen.update(frame, keys, 0, false, memory);
+    fn step(
+        screen: &mut PracticeScreen,
+        memory: &mut Memory,
+        frame: &Frame,
+        keys: &[Key],
+    ) -> Vec<Sfx> {
+        screen.update(frame, keys, 0, false, memory).sfx
     }
 
     /// A key that starts no answer of this card, and is the right kind.
@@ -385,10 +406,9 @@ mod tests {
         let mut memory = Memory::default();
         let mut practice = screen(1, &memory);
         let (pair, answer) = (practice.pair, practice.answer());
-        step(&mut practice, &mut memory, &frame(DT), &chars(&answer));
+        let sfx = step(&mut practice, &mut memory, &frame(DT), &chars(&answer));
         assert!(matches!(practice.state, State::Correct(_)));
         assert_eq!((practice.correct, practice.answered), (1, 1));
-        let sfx = practice.take_sfx();
         assert!(sfx.contains(&Sfx::Cast));
         assert!(sfx.contains(&Sfx::Type));
         let record = memory.record(&pair).expect("the answer is remembered");
@@ -436,10 +456,10 @@ mod tests {
         let mut practice = screen(1, &memory);
         let pair = practice.pair;
         let wrong = wrong_key(&practice);
-        step(&mut practice, &mut memory, &frame(DT), &[wrong]);
+        let sfx = step(&mut practice, &mut memory, &frame(DT), &[wrong]);
         assert!(matches!(practice.state, State::Revealed(_)));
         assert_eq!((practice.correct, practice.answered), (0, 1));
-        assert!(practice.take_sfx().contains(&Sfx::Wrong));
+        assert!(sfx.contains(&Sfx::Wrong));
         assert!(memory.difficulty(&pair) > 0.5, "a miss makes it harder");
     }
 
@@ -448,7 +468,7 @@ mod tests {
         let mut memory = Memory::default();
         let mut practice = screen(1, &memory);
         let wrong_kind = if practice.shows_word { 'k' } else { '7' };
-        step(
+        let sfx = step(
             &mut practice,
             &mut memory,
             &frame(DT),
@@ -456,7 +476,7 @@ mod tests {
         );
         assert_eq!(practice.state, State::Asking);
         assert!(practice.typed.is_empty());
-        assert!(practice.take_sfx().is_empty());
+        assert!(sfx.is_empty());
         assert_eq!(memory.records().count(), 0);
     }
 
@@ -553,15 +573,21 @@ mod tests {
         let mut memory = Memory::default();
         let mut practice = screen(1, &memory);
         assert!(matches!(
-            practice.update(&pressed(KeyCode::Escape), &[], 0, false, &mut memory),
+            practice
+                .update(&pressed(KeyCode::Escape), &[], 0, false, &mut memory)
+                .action,
             PracticeAction::Back
         ));
         assert!(matches!(
-            practice.update(&frame(DT), &[], 0, true, &mut memory),
+            practice
+                .update(&frame(DT), &[], 0, true, &mut memory)
+                .action,
             PracticeAction::Back
         ));
         assert!(matches!(
-            practice.update(&frame(DT), &[], 0, false, &mut memory),
+            practice
+                .update(&frame(DT), &[], 0, false, &mut memory)
+                .action,
             PracticeAction::Stay
         ));
     }

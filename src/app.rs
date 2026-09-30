@@ -28,6 +28,7 @@ use crate::toast::Toasts;
 use crate::touch::{self, Button, TouchControls, TouchInput};
 use crate::view::{self, ARENA_H, ARENA_W, View};
 use events::analytics_of;
+use lukuloitsu_core::game::rules::MAX_FRAME_SECONDS;
 use persistence::Persistence;
 
 /// Something the app wants done outside itself.
@@ -137,7 +138,7 @@ impl App {
     pub fn update(&mut self, frame: &Frame) -> Vec<Effect> {
         let mut effects = Vec::new();
         self.time += f64::from(frame.dt);
-        self.toasts.update(frame.dt.min(0.25));
+        self.toasts.update(frame.dt.min(MAX_FRAME_SECONDS));
         if frame.pressed(KeyCode::Tab) {
             effects.push(self.data.toggle_music());
         }
@@ -226,13 +227,11 @@ impl App {
         let (input, keys) = self.arena_input(frame, &mut step.effects);
         // The pause button leaves practice.
         let back = escape || input.buttons.contains(&Button::Pause);
-        let correct_before = practice.correct();
-        let action = practice.update(frame, &keys, input.arena_taps, back, &mut self.data.memory);
-        self.data
-            .count_practice_correct(practice.correct() - correct_before);
+        let outcome = practice.update(frame, &keys, input.arena_taps, back, &mut self.data.memory);
+        self.data.count_practice_correct(outcome.answered_right);
         step.effects
-            .extend(practice.take_sfx().into_iter().map(Effect::Play));
-        let leaving = matches!(action, PracticeAction::Back);
+            .extend(outcome.sfx.into_iter().map(Effect::Play));
+        let leaving = matches!(outcome.action, PracticeAction::Back);
         step.effects
             .extend(self.data.save_if_due(frame.now, leaving));
         if leaving {

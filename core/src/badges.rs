@@ -37,37 +37,43 @@ pub struct Stats {
     pub best_combo: u32,
 }
 
+/// Lists each counter once, with its name in the save file, and makes the
+/// methods that read and write them by name from that one list.
+macro_rules! counters {
+    ($(($field:ident, $name:literal)),* $(,)?) => {
+        impl Stats {
+            /// How many counters there are.
+            pub const COUNT: usize = [$($name),*].len();
+
+            /// Every counter with its name in the save file.
+            pub fn fields(&self) -> [(&'static str, u32); Stats::COUNT] {
+                [$(($name, self.$field)),*]
+            }
+
+            /// Sets the counter called `name`. Returns false if there is none.
+            pub fn set(&mut self, name: &str, value: u32) -> bool {
+                let value = value.min(MAX_COUNT);
+                match name {
+                    $($name => self.$field = value,)*
+                    _ => return false,
+                }
+                true
+            }
+        }
+    };
+}
+
+counters! {
+    (monsters, "monsters"),
+    (bosses, "bosses"),
+    (long_answers, "long-answers"),
+    (quick_answers, "quick-answers"),
+    (practice_correct, "practice-correct"),
+    (flawless_levels, "flawless-levels"),
+    (best_combo, "best-combo"),
+}
+
 impl Stats {
-    /// Every counter with its name in the save file.
-    pub fn fields(&self) -> [(&'static str, u32); 7] {
-        [
-            ("monsters", self.monsters),
-            ("bosses", self.bosses),
-            ("long-answers", self.long_answers),
-            ("quick-answers", self.quick_answers),
-            ("practice-correct", self.practice_correct),
-            ("flawless-levels", self.flawless_levels),
-            ("best-combo", self.best_combo),
-        ]
-    }
-
-    /// Sets the counter called `name`. Returns false if there is none.
-    pub fn set(&mut self, name: &str, value: u32) -> bool {
-        let value = value.min(MAX_COUNT);
-        let field = match name {
-            "monsters" => &mut self.monsters,
-            "bosses" => &mut self.bosses,
-            "long-answers" => &mut self.long_answers,
-            "quick-answers" => &mut self.quick_answers,
-            "practice-correct" => &mut self.practice_correct,
-            "flawless-levels" => &mut self.flawless_levels,
-            "best-combo" => &mut self.best_combo,
-            _ => return false,
-        };
-        *field = value;
-        true
-    }
-
     /// Adds one to a counter, up to `MAX_COUNT`.
     pub fn bump(counter: &mut u32) {
         *counter = counter.saturating_add(1).min(MAX_COUNT);

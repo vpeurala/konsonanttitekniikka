@@ -214,23 +214,22 @@ impl Game {
             obstacles: Vec::new(),
             paused: false,
             touch,
-            start_level: 1,
+            start_level: start_level.max(1),
             now: 0.0,
             timestep: Timestep::default(),
             pending: Pending::default(),
             play_time: 0.0,
         };
-        game.start_at(start_level);
+        game.start_at();
         game.out
             .events
             .push(GameEvent::Started { level: game.level });
         game
     }
 
-    /// Skips ahead to `level`, with every pair of the levels before it
+    /// Skips ahead to the start level, with every pair of the levels before it
     /// already met.
-    fn start_at(&mut self, level: u32) {
-        self.start_level = level.max(1);
+    fn start_at(&mut self) {
         while self.level < self.start_level {
             self.level += 1;
             self.curriculum.next_level();
@@ -430,10 +429,13 @@ impl Game {
                 .filter(|(i, _)| hits.contains(i))
                 .map(|(_, e)| e.id)
                 .collect();
-            let first = self
-                .enemy(ids[0])
+            let Some(first) = ids
+                .first()
+                .and_then(|&id| self.enemy(id))
                 .map(|e| e.question.clone())
-                .expect("a hit enemy is in the game");
+            else {
+                return;
+            };
             for id in ids {
                 self.hit_enemy(id, memory);
             }
