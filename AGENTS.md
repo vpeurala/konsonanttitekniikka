@@ -1,6 +1,7 @@
 # Notes for AI agents
 
-Read [README.md](README.md) first for what the game is. This file is what an
+Read [README.md](README.md) first for what the game is, and
+[docs/DEVELOPING.md](docs/DEVELOPING.md) for the longer human-oriented guide. This file is what an
 agent working on the code needs to know on top of that: the rules, how the
 code fits together, and pitfalls already found the hard way.
 

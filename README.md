@@ -113,6 +113,9 @@ nothing. The game says so itself at the end of its title screen, and
 it in more detail, in Finnish. Dependencies are kept fresh by Dependabot and
 checked against the RustSec advisory database by `cargo audit` in CI.
 
+Working on the code? [docs/DEVELOPING.md](docs/DEVELOPING.md) explains the
+domain, the architecture and the reasoning behind it.
+
 Made by Ville Peurala.
 
 ## License
