@@ -4,9 +4,9 @@
 use glam::Vec2;
 
 use super::answer::Slot;
-use super::combat::Spell;
 use super::display::{Banner, Feedback};
 use super::enemy::Enemy;
+use super::world::Spell;
 use super::{Game, rules};
 use crate::effects::Effects;
 use crate::obstacles::Obstacle;
@@ -63,23 +63,23 @@ impl Game {
             dead_end: self.is_dead_end(slot),
         };
         Scene {
-            player: self.player,
-            player_moving: self.player_moving,
+            player: self.player.pos,
+            player_moving: self.player.moving,
             casting: self.display.cast.map(|(toward, _)| toward),
             time: self.play_time as f32,
-            enemies: &self.enemies,
-            spells: &self.spells,
-            portals: &self.portals,
-            obstacles: &self.obstacles,
+            enemies: self.world.enemies(),
+            spells: self.world.spells(),
+            portals: self.world.portals(),
+            obstacles: self.world.obstacles(),
             effects: &self.display.effects,
             banner: self.display.banner.as_ref(),
             feedback: self.display.feedback.as_ref(),
             is_over: self.is_over(),
             is_paused: self.paused,
             touch: self.touch,
-            score: self.score,
+            score: self.vitals.score(),
             level: self.level,
-            energy: self.energy,
+            energy: self.vitals.energy(),
             points: self.stage.points,
             points_needed: rules::points_to_clear(self.level),
             boss_fight: self.stage.boss_fight,

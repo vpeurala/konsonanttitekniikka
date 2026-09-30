@@ -111,20 +111,31 @@ so it can be tested without a screen; do the same for new layouts.
 - `core/src/game/`: the game itself. Monsters show a number or a word; typed digits
   go to the number slot and letters to the word slot, each answering the
   monsters showing the other kind. Backspace empties both slots.
-  `Game::update(&Input) -> Outputs` is the only way in; `Outputs` carry
-  sound effects and `GameEvent`s (started, level completed, game over) for
-  saving and analytics. The game advances in fixed steps of 1/120 s
-  (`Timestep`), however long the frames are, so it plays out the same at any
-  frame rate; a frame counts as at most 0.25 s, and typing waits in
-  `Pending` for the next step, so a slow frame can't skip past a hit and a
-  fast one can't lose a key.
+  `Game::update(&Input, &mut Memory) -> Outputs` is the only way in; `Outputs`
+  carry sound effects and `GameEvent`s (started, level completed, game over)
+  for saving and analytics, and every step inside returns the `Outputs` it
+  caused instead of writing to a hidden buffer. The game advances in fixed
+  steps of 1/120 s (`Timestep`), however long the frames are, so it plays out
+  the same at any frame rate; a frame counts as at most 0.25 s, and typing
+  waits in `Pending` for the next step, so a slow frame can't skip past a hit
+  and a fast one can't lose a key.
+  Its state is a few small parts behind their own boundaries: `Player`,
+  `Vitals` (energy, combo, score) and `Stage` are `Copy` values whose every
+  change returns a new value (`vitals = vitals.hurt()`), and `World`
+  (`world.rs`, with `spawn.rs`) owns the monsters, spells, portals and
+  obstacles. A `World` knows nothing of energy, sounds, sparks or memory: it
+  moves things and answers with reports (`Hit`, `Contact`, `SpellEvent`,
+  `Summoned`), and `play.rs` turns those into changes to her state, sounds and
+  things to show. Randomness is the one thing lent out: parts that need luck
+  take `&mut Rng`, and the order of the draws is part of the behaviour, so
+  keep it when editing.
   Label widths come from a fixed table of Nunito Bold's letter widths
   (`metrics.rs`), not from measuring text, so the simulation never depends
-  on the font machinery. Split into `rules.rs` (numbers and pure rules),
+  on the font machinery. Also `rules.rs` (numbers and pure rules),
   `answer.rs` (matching what was typed), `display.rs` (sparks, banners and
-  messages, which the rules tell to show but never read), `enemy.rs`,
-  `metrics.rs`, `spawn.rs`, `combat.rs` (spells, collisions, movement) and
-  `scene.rs` (the read-only `Scene` for drawing; `src/game_render.rs` in the shell is the only code that draws it).
+  messages, which the rules tell to show but never read), `enemy.rs` and
+  `scene.rs` (the read-only `Scene` for drawing; `src/game_render.rs` in the
+  shell is the only code that draws it).
 - `booklet/`: the user instruction booklet, `--render-booklet FILE.html`:
   one self-contained HTML file (fonts and PNG pictures embedded as base64),
   16 A4 pages in Finnish, colourful, decorated with the game's characters.

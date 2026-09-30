@@ -2,8 +2,12 @@
 //! its outputs are checked.
 
 use super::*;
-use crate::long_numbers;
+use crate::arena::ARENA_W;
+use crate::long_numbers::{self, Question};
 use crate::pairs::PAIRS;
+use enemy::EnemyId;
+use glam::vec2;
+use world::Appearance;
 
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
@@ -24,12 +28,16 @@ impl Rig {
         &self.memory
     }
 
-    fn hit_enemy(&mut self, id: EnemyId) {
-        self.game.hit_enemy(id, &mut self.memory);
+    fn hit_enemy(&mut self, id: EnemyId) -> Outputs {
+        let player = self.game.player.pos;
+        let Some(hit) = self.game.world.hit(id, player) else {
+            return Outputs::default();
+        };
+        self.game.learn_from(&hit, START, &mut self.memory)
     }
 
-    fn add_points(&mut self, points: u32) {
-        self.game.add_points(points, &self.memory);
+    fn add_points(&mut self, points: u32) -> Outputs {
+        self.game.add_points(points, START, &self.memory)
     }
 }
 
@@ -108,15 +116,15 @@ fn idle(game: &mut Rig, seconds: f32) -> Log {
 /// it hurts her on the next frame.
 fn with_collision(game: &mut Rig) {
     let mut enemy = Enemy::new(Question::single(PAIRS[0]), false, 0, 0.0);
-    enemy.pos = game.player;
-    game.admit(enemy);
+    enemy.pos = game.player.pos;
+    game.world.admit(enemy);
 }
 
 /// A game with one monster far from the player.
 fn with_monster(game: &mut Rig) {
     let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), false, 0, 0.0);
     enemy.pos = vec2(50.0, 50.0);
-    game.admit(enemy);
+    game.world.admit(enemy);
 }
 
 #[test]
@@ -132,17 +140,17 @@ fn a_new_game_reports_that_it_started() {
 fn monsters_start_coming_after_a_moment() {
     let mut game = game();
     idle(&mut game, 0.5);
-    assert!(game.enemies.is_empty());
+    assert!(game.world.enemies().is_empty());
     idle(&mut game, 1.0);
-    assert!(!game.enemies.is_empty());
+    assert!(!game.world.enemies().is_empty());
 }
 
 #[test]
 fn monsters_never_appear_close_to_the_player() {
     let mut game = game();
     idle(&mut game, 1.2);
-    for enemy in &game.enemies {
-        assert!(enemy.pos.distance(game.player) >= 200.0);
+    for enemy in game.world.enemies() {
+        assert!(enemy.pos.distance(game.player.pos) >= 200.0);
     }
 }
 
@@ -150,24 +158,27 @@ fn monsters_never_appear_close_to_the_player() {
 fn typing_a_monsters_answer_casts_a_spell_and_scores() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     let mut log = Log::default();
     log.add(game.update(&typing(&answer)));
-    assert!(game.enemies.is_empty(), "the monster is out of play");
-    assert_eq!(game.score, 1);
+    assert!(
+        game.world.enemies().is_empty(),
+        "the monster is out of play"
+    );
+    assert_eq!(game.vitals.score(), 1);
     assert_eq!(game.stage.points, 1);
     assert!(log.sfx.contains(&Sfx::Cast));
     // The spell explodes it a moment later.
     assert!(idle(&mut game, 1.0).sfx.contains(&Sfx::Explode));
-    assert!(game.spells.is_empty());
+    assert!(game.world.spells().is_empty());
 }
 
 #[test]
 fn a_right_answer_is_remembered() {
     let mut game = game();
     with_monster(&mut game);
-    let pair = game.enemies[0].question.first();
-    let answer = game.enemies[0].answer().to_owned();
+    let pair = game.world.enemies()[0].question.first();
+    let answer = game.world.enemies()[0].answer().to_owned();
     game.update(&typing(&answer));
     assert_eq!(game.memory().record(&pair).map(|r| r.times_seen), Some(1));
 }
@@ -178,12 +189,13 @@ fn a_wrong_key_costs_energy_after_the_first_dead_end() {
     // With no monsters, any character leads nowhere.
     let outputs = game.update(&typing("1"));
     assert_eq!(
-        game.energy, MAX_ENERGY,
+        game.vitals.energy(),
+        MAX_ENERGY,
         "a typo is free until she types past it"
     );
     assert!(!outputs.sfx.contains(&Sfx::Wrong));
     let outputs = game.update(&typing("1"));
-    assert_eq!(game.energy, MAX_ENERGY - WRONG_PENALTY);
+    assert_eq!(game.vitals.energy(), MAX_ENERGY - WRONG_PENALTY);
     assert!(outputs.sfx.contains(&Sfx::Wrong));
     assert!(game.typed.get(Slot::Number).is_empty());
 }
@@ -192,7 +204,7 @@ fn a_wrong_key_costs_energy_after_the_first_dead_end() {
 fn wrong_keys_alone_never_end_the_game() {
     let mut game = game();
     game.update(&typing(&"1".repeat(100)));
-    assert_eq!(game.energy, LOW_ENERGY);
+    assert_eq!(game.vitals.energy(), LOW_ENERGY);
     assert!(!game.is_over());
 }
 
@@ -226,8 +238,8 @@ fn a_monster_reaching_her_hurts_and_teaches() {
     let mut log = Log::default();
     log.add(game.update(&typing("1")));
     log.add(game.update(&frame()));
-    assert_eq!(game.energy, MAX_ENERGY - COLLISION_PENALTY);
-    assert!(game.enemies.is_empty());
+    assert_eq!(game.vitals.energy(), MAX_ENERGY - COLLISION_PENALTY);
+    assert!(game.world.enemies().is_empty());
     assert!(log.sfx.contains(&Sfx::Hurt));
     assert!(
         game.typed.get(Slot::Number).is_empty(),
@@ -241,7 +253,7 @@ fn a_monster_reaching_her_hurts_and_teaches() {
 #[test]
 fn the_game_ends_once_when_energy_runs_out() {
     let mut game = game();
-    game.energy = COLLISION_PENALTY;
+    game.vitals = game.vitals.with_energy(COLLISION_PENALTY);
     with_collision(&mut game);
     let mut log = Log::default();
     log.add(game.update(&frame()));
@@ -260,7 +272,7 @@ fn the_game_ends_once_when_energy_runs_out() {
 #[test]
 fn nothing_moves_after_the_game_is_over() {
     let mut game = game();
-    game.energy = 0.0;
+    game.vitals = game.vitals.with_energy(0.0);
     let before = game.player;
     let outputs = play(
         &mut game,
@@ -278,11 +290,11 @@ fn nothing_moves_after_the_game_is_over() {
 fn enter_starts_over_and_keeps_what_she_learned() {
     let mut game = game_from(3);
     with_monster(&mut game);
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     game.update(&typing(&answer));
     let learned = game.memory().records().count();
     assert_eq!(learned, 1);
-    game.energy = 0.0;
+    game.vitals = game.vitals.with_energy(0.0);
     game.level = 5;
 
     // Nothing but Enter or a tap restarts it.
@@ -293,7 +305,10 @@ fn enter_starts_over_and_keeps_what_she_learned() {
         ..frame()
     });
     assert!(!game.is_over());
-    assert_eq!((game.level, game.energy, game.score), (3, MAX_ENERGY, 0));
+    assert_eq!(
+        (game.level, game.vitals.energy(), game.vitals.score()),
+        (3, MAX_ENERGY, 0)
+    );
     assert_eq!(game.memory().records().count(), learned);
     assert_eq!(outputs.events, vec![GameEvent::Started { level: 3 }]);
 }
@@ -301,7 +316,7 @@ fn enter_starts_over_and_keeps_what_she_learned() {
 #[test]
 fn a_tap_also_starts_over() {
     let mut game = game();
-    game.energy = 0.0;
+    game.vitals = game.vitals.with_energy(0.0);
     game.update(&Input { taps: 1, ..frame() });
     assert!(!game.is_over());
 }
@@ -315,14 +330,14 @@ fn pausing_stops_time_and_drops_typing() {
         ..frame()
     });
     assert!(game.is_paused());
-    let (time, pos) = (game.stage.time, game.enemies[0].pos);
+    let (time, pos) = (game.stage.time, game.world.enemies()[0].pos);
     let animation = game.play_time;
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     play(&mut game, 1.0, &typing(&answer));
     assert_eq!(game.stage.time, time);
     assert_eq!(game.play_time, animation, "animations freeze too");
-    assert_eq!(game.enemies[0].pos, pos);
-    assert_eq!(game.score, 0, "typing during a pause does nothing");
+    assert_eq!(game.world.enemies()[0].pos, pos);
+    assert_eq!(game.vitals.score(), 0, "typing during a pause does nothing");
 
     game.update(&Input {
         pause: true,
@@ -356,7 +371,7 @@ fn coming_back_after_being_away_finds_the_game_paused() {
 #[test]
 fn an_over_game_is_not_paused_by_being_away() {
     let mut game = game();
-    game.energy = 0.0;
+    game.vitals = game.vitals.with_energy(0.0);
     game.update(&Input {
         away: true,
         ..frame()
@@ -368,13 +383,12 @@ fn an_over_game_is_not_paused_by_being_away() {
 fn scoring_enough_points_summons_the_boss() {
     let mut game = game();
     game.add_points(points_to_clear(1) - 1);
-    assert!(game.enemies.is_empty());
+    assert!(game.world.enemies().is_empty());
     let mut log = Log::default();
-    game.add_points(1);
-    log.add(std::mem::take(&mut game.out));
+    log.add(game.add_points(1));
     assert!(game.stage.boss_fight);
     assert!(log.sfx.contains(&Sfx::Boss));
-    let boss = &game.enemies[0];
+    let boss = &game.world.enemies()[0];
     assert!(boss.is_boss());
     assert_eq!(boss.boss.as_ref().map(|b| b.total), Some(boss_hits(1)));
 }
@@ -384,8 +398,8 @@ fn no_new_monsters_join_a_boss_fight() {
     let mut game = game();
     game.add_points(points_to_clear(1));
     idle(&mut game, 8.0);
-    assert!(game.enemies.iter().all(Enemy::is_boss));
-    assert_eq!(game.enemies.len(), 1);
+    assert!(game.world.enemies().iter().all(Enemy::is_boss));
+    assert_eq!(game.world.enemies().len(), 1);
 }
 
 #[test]
@@ -394,11 +408,15 @@ fn beating_the_boss_completes_the_level() {
     game.add_points(points_to_clear(1));
     let mut log = Log::default();
     for _ in 0..boss_hits(1) {
-        assert_eq!(game.enemies.len(), 1, "the boss stays until its last hit");
-        let answer = game.enemies[0].answer().to_owned();
+        assert_eq!(
+            game.world.enemies().len(),
+            1,
+            "the boss stays until its last hit"
+        );
+        let answer = game.world.enemies()[0].answer().to_owned();
         log.add(game.update(&typing(&answer)));
     }
-    assert!(game.enemies.is_empty());
+    assert!(game.world.enemies().is_empty());
     assert_eq!(game.level, 1, "the level ends when the last spell lands");
     log.append(idle(&mut game, 1.5));
 
@@ -428,7 +446,7 @@ fn beat_the_boss(game: &mut Rig, level: u32) -> Log {
     game.add_points(points_to_clear(level));
     let mut log = Log::default();
     for _ in 0..boss_hits(level) {
-        let answer = game.enemies[0].answer().to_owned();
+        let answer = game.world.enemies()[0].answer().to_owned();
         log.add(game.update(&typing(&answer)));
     }
     log.append(idle(game, 1.5));
@@ -449,7 +467,7 @@ fn answered(log: &Log) -> Vec<(bool, bool, u32)> {
 fn a_defeated_monster_is_reported_once_with_its_answer() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     let log = play(&mut game, 1.0, &typing(&answer));
     let defeated = log
         .events
@@ -466,7 +484,7 @@ fn answers_in_a_row_build_a_combo_and_a_wrong_key_ends_it() {
     let mut log = Log::default();
     for _ in 0..3 {
         with_monster(&mut game);
-        let answer = game.enemies[0].answer().to_owned();
+        let answer = game.world.enemies()[0].answer().to_owned();
         log.add(game.update(&typing(&answer)));
     }
     let combos: Vec<u32> = answered(&log).iter().map(|a| a.2).collect();
@@ -476,9 +494,9 @@ fn answers_in_a_row_build_a_combo_and_a_wrong_key_ends_it() {
     // mistake: the first only shows red.
     with_monster(&mut game);
     game.update(&typing("hh"));
-    assert_eq!(game.combo, 0);
+    assert_eq!(game.vitals.combo(), 0);
     with_monster(&mut game);
-    let answer = game.enemies.last().unwrap().answer().to_owned();
+    let answer = game.world.enemies().last().unwrap().answer().to_owned();
     let after = game.update(&typing(&answer));
     assert_eq!(
         answered(&Log {
@@ -494,19 +512,19 @@ fn answers_in_a_row_build_a_combo_and_a_wrong_key_ends_it() {
 fn a_hit_by_a_monster_ends_the_combo_too() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     game.update(&typing(&answer));
-    assert_eq!(game.combo, 1);
+    assert_eq!(game.vitals.combo(), 1);
     with_collision(&mut game);
     game.update(&frame());
-    assert_eq!(game.combo, 0);
+    assert_eq!(game.vitals.combo(), 0);
 }
 
 #[test]
 fn an_answer_at_once_without_a_hint_is_quick_and_a_late_one_is_not() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     let quick = game.update(&typing(&answer));
     assert!(
         answered(&Log {
@@ -517,8 +535,8 @@ fn an_answer_at_once_without_a_hint_is_quick_and_a_late_one_is_not() {
     );
 
     with_monster(&mut game);
-    game.enemies[0].shown_for = 10.0;
-    let answer = game.enemies[0].answer().to_owned();
+    game.world.enemies_mut()[0].shown_for = 10.0;
+    let answer = game.world.enemies()[0].answer().to_owned();
     let slow = game.update(&typing(&answer));
     assert!(
         !answered(&Log {
@@ -559,7 +577,7 @@ fn a_wrong_key_or_a_hit_spoils_the_level_but_the_next_starts_clean() {
     game.update(&typing("hh"));
     assert!(!game.stage.flawless);
     // Only the boss is left to answer.
-    game.enemies.clear();
+    game.world.enemies_mut().clear();
     let spoiled = beat_the_boss(&mut game, 1);
     assert!(!spoiled.events.contains(&GameEvent::FlawlessLevel));
     assert!(game.stage.flawless, "the next level starts clean");
@@ -576,7 +594,7 @@ fn long_numbers_are_reported_as_long_answers() {
     let mut log = Log::default();
     game.add_points(points_to_clear(22));
     for _ in 0..boss_hits(22) {
-        let answer = game.enemies[0].answer().to_owned();
+        let answer = game.world.enemies()[0].answer().to_owned();
         log.add(game.update(&typing(&answer)));
     }
     let long = answered(&log).iter().filter(|a| a.1).count();
@@ -586,11 +604,11 @@ fn long_numbers_are_reported_as_long_answers() {
 #[test]
 fn stars_depend_on_the_energy_left() {
     let mut game = game();
-    game.energy = 50.0;
+    game.vitals = game.vitals.with_energy(50.0);
     game.add_points(points_to_clear(1));
     let mut log = Log::default();
     for _ in 0..boss_hits(1) {
-        let answer = game.enemies[0].answer().to_owned();
+        let answer = game.world.enemies()[0].answer().to_owned();
         log.add(game.update(&typing(&answer)));
     }
     log.append(idle(&mut game, 1.5));
@@ -604,10 +622,10 @@ fn stars_depend_on_the_energy_left() {
 fn a_boss_hitting_her_bounces_back_and_hurts_once_in_a_while() {
     let mut game = game();
     game.add_points(points_to_clear(1));
-    game.enemies[0].pos = game.player + vec2(20.0, 0.0);
+    game.world.enemies_mut()[0].pos = game.player.pos + vec2(20.0, 0.0);
     game.update(&frame());
-    assert_eq!(game.energy, MAX_ENERGY - COLLISION_PENALTY);
-    assert!(game.enemies[0].pos.distance(game.player) > 100.0);
+    assert_eq!(game.vitals.energy(), MAX_ENERGY - COLLISION_PENALTY);
+    assert!(game.world.enemies()[0].pos.distance(game.player.pos) > 100.0);
     assert!(!game.is_over());
 }
 
@@ -637,13 +655,17 @@ fn the_same_inputs_play_the_same_game() {
             }));
         }
         let enemies: Vec<_> = game
-            .enemies
+            .world
+            .enemies()
             .iter()
             .map(|e| (e.pos, e.label.clone()))
             .collect();
         format!(
             "{:?} {:?} {:?} {}",
-            enemies, log.sfx, log.events, game.energy
+            enemies,
+            log.sfx,
+            log.events,
+            game.vitals.energy()
         )
     };
     assert_eq!(run(), run());
@@ -652,7 +674,7 @@ fn the_same_inputs_play_the_same_game() {
 #[test]
 fn the_arrow_keys_move_her_at_a_steady_speed() {
     let mut game = game();
-    let start = game.player;
+    let start = game.player.pos;
     play(
         &mut game,
         0.5,
@@ -661,14 +683,14 @@ fn the_arrow_keys_move_her_at_a_steady_speed() {
             ..frame()
         },
     );
-    assert!((game.player.x - start.x - PLAYER_SPEED * 0.5).abs() < 1.0);
-    assert_eq!(game.player.y, start.y);
+    assert!((game.player.pos.x - start.x - PLAYER_SPEED * 0.5).abs() < 1.0);
+    assert_eq!(game.player.pos.y, start.y);
 }
 
 #[test]
 fn diagonal_movement_is_no_faster() {
     let mut game = game();
-    let start = game.player;
+    let start = game.player.pos;
     play(
         &mut game,
         0.5,
@@ -677,7 +699,7 @@ fn diagonal_movement_is_no_faster() {
             ..frame()
         },
     );
-    let travelled = game.player.distance(start);
+    let travelled = game.player.pos.distance(start);
     assert!((travelled - PLAYER_SPEED * 0.5).abs() < 1.0);
 }
 
@@ -692,13 +714,13 @@ fn she_stays_inside_the_arena() {
             ..frame()
         },
     );
-    assert!(game.player.x <= ARENA_W && game.player.y >= 0.0);
+    assert!(game.player.pos.x <= ARENA_W && game.player.pos.y >= 0.0);
 }
 
 #[test]
 fn the_touch_stick_moves_her_by_how_far_it_is_pushed() {
     let mut game = game();
-    let start = game.player;
+    let start = game.player.pos;
     play(
         &mut game,
         0.5,
@@ -707,7 +729,7 @@ fn the_touch_stick_moves_her_by_how_far_it_is_pushed() {
             ..frame()
         },
     );
-    assert!((start.y - game.player.y - PLAYER_SPEED * 0.25).abs() < 1.0);
+    assert!((start.y - game.player.pos.y - PLAYER_SPEED * 0.25).abs() < 1.0);
 }
 
 #[test]
@@ -721,7 +743,7 @@ fn a_long_frame_plays_like_the_same_time_in_short_ones() {
         arrows,
         ..frame()
     });
-    assert!((short.player.x - long.player.x).abs() < 0.5);
+    assert!((short.player.pos.x - long.player.pos.x).abs() < 0.5);
     assert!((short.stage.time - long.stage.time).abs() < 0.01);
 }
 
@@ -739,7 +761,7 @@ fn a_stall_does_not_make_the_game_jump_ahead() {
 fn a_fast_spell_still_lands_in_a_long_frame() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     game.update(&typing(&answer));
     let log = play(
         &mut game,
@@ -749,7 +771,7 @@ fn a_fast_spell_still_lands_in_a_long_frame() {
             ..frame()
         },
     );
-    assert!(game.spells.is_empty());
+    assert!(game.world.spells().is_empty());
     assert!(log.sfx.contains(&Sfx::Explode));
 }
 
@@ -759,20 +781,20 @@ fn enemies_keep_their_ids_when_others_leave() {
     for x in [50.0, 150.0, 250.0] {
         let mut enemy = Enemy::new(Question::single(PAIRS[x as usize / 100]), false, 0, 0.0);
         enemy.pos = vec2(x, 50.0);
-        game.admit(enemy);
+        game.world.admit(enemy);
     }
-    let ids: Vec<EnemyId> = game.enemies.iter().map(|e| e.id).collect();
+    let ids: Vec<EnemyId> = game.world.enemies().iter().map(|e| e.id).collect();
     assert!(ids[0] != ids[1] && ids[1] != ids[2] && ids[0] != ids[2]);
 
     game.hit_enemy(ids[0]);
-    let left: Vec<EnemyId> = game.enemies.iter().map(|e| e.id).collect();
+    let left: Vec<EnemyId> = game.world.enemies().iter().map(|e| e.id).collect();
     assert_eq!(left, [ids[1], ids[2]]);
-    assert!(game.enemy(ids[0]).is_none());
-    assert_eq!(game.enemy(ids[2]).map(|e| e.pos.x), Some(250.0));
+    assert!(game.world.enemy(ids[0]).is_none());
+    assert_eq!(game.world.enemy(ids[2]).map(|e| e.pos.x), Some(250.0));
 
     // Hitting one that is already gone does nothing.
     game.hit_enemy(ids[0]);
-    assert_eq!(game.enemies.len(), 2);
+    assert_eq!(game.world.enemies().len(), 2);
 }
 
 /// Plays like a perfect typist who never moves: each frame, types the
@@ -781,7 +803,7 @@ fn enemies_keep_their_ids_when_others_leave() {
 fn autoplay(game: &mut Rig, max_seconds: f32, done: impl Fn(&Game) -> bool) -> Log {
     let mut log = Log::default();
     for _ in 0..(max_seconds / FRAME) as usize {
-        let input = match game.enemies.first() {
+        let input = match game.world.enemies().first() {
             Some(enemy) => typing(enemy.answer()),
             None => frame(),
         };
@@ -806,8 +828,7 @@ fn completed_levels(log: &Log) -> Vec<u32> {
 #[test]
 fn a_perfect_typist_plays_through_the_first_levels() {
     let mut game = game();
-    let mut log = autoplay(&mut game, 600.0, |g| g.level == 5);
-    log.add(std::mem::take(&mut game.out));
+    let log = autoplay(&mut game, 600.0, |g| g.level == 5);
 
     assert_eq!(game.level, 5, "four levels are cleared within ten minutes");
     assert_eq!(completed_levels(&log), [1, 2, 3, 4]);
@@ -818,10 +839,10 @@ fn a_perfect_typist_plays_through_the_first_levels() {
             .any(|e| matches!(e, GameEvent::Over { .. })),
         "a perfect typist never loses"
     );
-    assert_eq!(game.energy, MAX_ENERGY);
+    assert_eq!(game.vitals.energy(), MAX_ENERGY);
     assert!(log.sfx.contains(&Sfx::Boss), "every level ends in a boss");
     // Each level introduces pairs, and the typist met the level's pairs.
-    assert!(game.appearances.len() > 5);
+    assert!(game.world.appearances().len() > 5);
 }
 
 #[test]
@@ -832,7 +853,7 @@ fn the_first_long_number_level_can_be_cleared() {
 
     assert_eq!(completed_levels(&log), [start]);
     assert!(
-        game.appearances.contains_key(&Appearance::Long),
+        game.world.appearances().contains_key(&Appearance::Long),
         "the boss showed a long number"
     );
 }
@@ -868,13 +889,17 @@ fn play_at(fps: f32, seconds: f32) -> Rig {
 #[test]
 fn a_game_plays_out_the_same_at_any_frame_rate() {
     let reference = play_at(60.0, 20.0);
-    assert!(!reference.enemies.is_empty(), "something happened");
+    assert!(!reference.world.enemies().is_empty(), "something happened");
     for fps in [30.0, 120.0, 240.0] {
         let other = play_at(fps, 20.0);
         assert_eq!(other.player, reference.player, "{fps} fps");
         assert_eq!(other.play_time, reference.play_time, "{fps} fps");
-        assert_eq!(other.enemies.len(), reference.enemies.len(), "{fps} fps");
-        for (a, b) in other.enemies.iter().zip(&reference.enemies) {
+        assert_eq!(
+            other.world.enemies().len(),
+            reference.world.enemies().len(),
+            "{fps} fps"
+        );
+        for (a, b) in other.world.enemies().iter().zip(reference.world.enemies()) {
             assert_eq!(a.question.number(false), b.question.number(false));
             assert_eq!(a.pos, b.pos, "{fps} fps");
         }
@@ -885,12 +910,12 @@ fn a_game_plays_out_the_same_at_any_frame_rate() {
 fn typing_on_a_frame_too_short_for_a_step_is_not_lost() {
     let mut game = game();
     with_monster(&mut game);
-    let answer = game.enemies[0].answer().to_owned();
+    let answer = game.world.enemies()[0].answer().to_owned();
     // A frame at 1000 fps is a fraction of a step.
     let short = |input: Input| Input { dt: 0.001, ..input };
     for c in answer.chars() {
         game.update(&short(typing(&c.to_string())));
     }
     idle(&mut game, 0.1);
-    assert_eq!(game.score, 1);
+    assert_eq!(game.vitals.score(), 1);
 }

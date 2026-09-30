@@ -8,39 +8,39 @@
 //! by feeding it inputs. `render` only reads a `Game`.
 
 mod answer;
-mod combat;
 mod display;
 pub mod enemy;
 mod metrics;
-mod scene;
-pub use scene::{Scene, SlotView};
+mod play;
+mod player;
 pub mod rules;
+mod scene;
 mod spawn;
+mod stage;
+mod vitals;
+mod world;
 
-use std::collections::HashMap;
+use glam::Vec2;
 
-use glam::{Vec2, vec2};
-
-use crate::arena::{ARENA_H, ARENA_W};
 use crate::curriculum::Curriculum;
 use crate::key::Key;
-use crate::long_numbers::Question;
 use crate::memory::Memory;
-use crate::obstacles::{Obstacle, obstacles_for_level, push_out};
-use crate::pairs::{self, PairId};
-use crate::portals::portal_positions;
 use crate::rng::{Rng, Stream};
 use crate::sfx::Sfx;
 
 pub use answer::Slot;
 use answer::Typed;
 pub use answer::{InputOutcome, resolve_input};
-pub use combat::{Spell, SpellTarget};
 use display::Display;
 pub use display::{Banner, Feedback, Tone};
 pub use enemy::Enemy;
-use enemy::EnemyId;
+use player::Player;
 use rules::*;
+pub use scene::{Scene, SlotView};
+use stage::Stage;
+use vitals::Vitals;
+use world::World;
+pub use world::{Spell, SpellTarget};
 
 /// What the outside world says happened this frame.
 #[derive(Debug, Default, Clone)]
@@ -101,14 +101,6 @@ pub enum GameEvent {
     FlawlessLevel,
 }
 
-/// What counts appearances of a pair: each pair on its own, and all long
-/// numbers together.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Appearance {
-    Pair(PairId),
-    Long,
-}
-
 /// What was typed or tapped since the game last advanced. A frame can be
 /// shorter than a step, so these wait for the step that acts on them.
 #[derive(Debug, Default)]
@@ -118,59 +110,26 @@ struct Pending {
     confirm: bool,
 }
 
-/// How the current level is going; starts over with every level.
-#[derive(Debug)]
-struct Stage {
-    /// Points scored.
-    points: u32,
-    /// Whether no wrong key has been typed and nothing has hit her.
-    flawless: bool,
-    /// Seconds spent.
-    time: f32,
-    /// Whether the boss has been summoned and not yet beaten.
-    boss_fight: bool,
-}
-
-impl Default for Stage {
-    fn default() -> Self {
-        Stage {
-            points: 0,
-            flawless: true,
-            time: 0.0,
-            boss_fight: false,
-        }
-    }
-}
-
+/// The game. Its state is a handful of small values, each behind its own
+/// boundary: what is in the arena (`World`), how she is doing (`Vitals`,
+/// `Stage`, `Player`), what she has typed and what is on screen. `update`
+/// is the only way in, and everything that should happen outside comes
+/// back from it as `Outputs`.
 pub struct Game {
-    player: Vec2,
-    player_moving: bool,
-    enemies: Vec<Enemy>,
-    /// The id the next enemy to join gets.
-    next_enemy_id: u32,
-    /// How many times each pair has appeared in this game.
-    appearances: HashMap<Appearance, u32>,
-    spells: Vec<Spell>,
-    typed: Typed,
-    energy: f32,
-    /// Right answers in a row, without a wrong key or a hit in between.
-    combo: u32,
-    score: u32,
-    level: u32,
+    player: Player,
+    world: World,
+    vitals: Vitals,
     /// How the current level is going.
     stage: Stage,
+    level: u32,
+    curriculum: Curriculum,
+    typed: Typed,
     spawn_timer: f32,
-    /// What to tell the outside world, until `update` hands it over.
-    out: Outputs,
     /// What is shown without affecting play.
     display: Display,
-    /// Every gameplay decision's randomness, the same in every game.
+    /// Every gameplay decision's randomness, the same in every game. It is
+    /// the one thing lent out and changed by the parts that need luck.
     rng: Rng,
-    curriculum: Curriculum,
-    /// The current level's portals.
-    portals: Vec<Vec2>,
-    /// The current level's stones, trees and lakes.
-    obstacles: Vec<Obstacle>,
     /// Whether the game is paused with the space bar.
     paused: bool,
     /// Whether she plays with touch controls, which changes some texts.
@@ -178,8 +137,6 @@ pub struct Game {
     /// The level the game started from, where it starts again after a
     /// game over.
     start_level: u32,
-    /// The time of the latest frame, as `Input::now`.
-    now: f64,
     /// Cuts frames into the fixed steps the game advances in.
     timestep: Timestep,
     /// Typing and taps not acted on yet.
@@ -187,73 +144,49 @@ pub struct Game {
     /// Seconds the game has run, not counting pauses. Animations follow
     /// this rather than the clock, so a pause freezes them too.
     play_time: f64,
+    /// Whether the start of this game has been reported yet.
+    start_reported: bool,
 }
 
 impl Game {
     /// A new game starting from `start_level`.
     pub fn new(touch: bool, start_level: u32) -> Self {
-        let mut game = Game {
-            player: vec2(ARENA_W / 2.0, ARENA_H / 2.0),
-            player_moving: false,
-            enemies: Vec::new(),
-            next_enemy_id: 0,
-            appearances: HashMap::new(),
-            spells: Vec::new(),
-            typed: Typed::default(),
-            energy: MAX_ENERGY,
-            combo: 0,
-            score: 0,
-            level: 1,
-            stage: Stage::default(),
-            spawn_timer: 1.0,
-            out: Outputs::default(),
-            display: Display::default(),
-            rng: Rng::new(Stream::Gameplay, 0),
-            curriculum: Curriculum::new(),
-            portals: portal_positions(1, ARENA_W, ARENA_H),
-            obstacles: Vec::new(),
-            paused: false,
-            touch,
-            start_level: start_level.max(1),
-            now: 0.0,
-            timestep: Timestep::default(),
-            pending: Pending::default(),
-            play_time: 0.0,
-        };
-        game.start_at();
-        game.out
-            .events
-            .push(GameEvent::Started { level: game.level });
-        game
-    }
-
-    /// Skips ahead to the start level, with every pair of the levels before it
-    /// already met.
-    fn start_at(&mut self) {
-        while self.level < self.start_level {
-            self.level += 1;
-            self.curriculum.next_level();
+        let start_level = start_level.max(1);
+        let mut curriculum = Curriculum::new();
+        // Every pair of the levels before the start is already met.
+        for _ in 1..start_level {
+            curriculum.next_level();
         }
-        if self.level > 1 {
-            self.portals = portal_positions(self.level, ARENA_W, ARENA_H);
-            self.obstacles = obstacles_for_level(self.level, ARENA_W, ARENA_H, &self.portals);
-            self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
-            self.display.announce(
-                format!("Taso {}", self.level),
+        let world = World::for_level(start_level);
+        let mut display = Display::default();
+        if start_level > 1 {
+            display.announce(
+                format!("Taso {start_level}"),
                 "Onnea matkaan!".to_owned(),
                 Tone::Celebrate,
                 None,
             );
         }
-    }
-
-    /// Starts over from the level this game started from. What she has
-    /// learned carries over to the new game.
-    fn restart(&mut self) {
-        let mut out = std::mem::take(&mut self.out);
-        *self = Game::new(self.touch, self.start_level);
-        out.extend(std::mem::take(&mut self.out));
-        self.out = out;
+        Game {
+            // She may be standing where an obstacle is.
+            player: Player::at_center().pushed_out(world.obstacles()),
+            world,
+            vitals: Vitals::new(),
+            stage: Stage::default(),
+            level: start_level,
+            curriculum,
+            typed: Typed::default(),
+            spawn_timer: 1.0,
+            display,
+            rng: Rng::new(Stream::Gameplay, 0),
+            paused: false,
+            touch,
+            start_level,
+            timestep: Timestep::default(),
+            pending: Pending::default(),
+            play_time: 0.0,
+            start_reported: false,
+        }
     }
 
     pub fn is_paused(&self) -> bool {
@@ -261,7 +194,7 @@ impl Game {
     }
 
     pub fn is_over(&self) -> bool {
-        self.energy <= 0.0
+        self.vitals.is_out()
     }
 
     /// Pauses the game, unless it is already over.
@@ -271,11 +204,22 @@ impl Game {
         }
     }
 
+    /// Says a game has started, once: the first time it is asked, and again
+    /// after each restart.
+    fn report_start(&mut self) -> Outputs {
+        let mut out = Outputs::default();
+        if !self.start_reported {
+            self.start_reported = true;
+            out.events.push(GameEvent::Started { level: self.level });
+        }
+        out
+    }
+
     /// Plays one frame and returns what the outside world should do about
     /// it. What she answers right or wrong is learned into `memory`, which
     /// the game also reads to choose what comes next; the caller owns it.
     pub fn update(&mut self, input: &Input, memory: &mut Memory) -> Outputs {
-        self.now = input.now;
+        let mut out = self.report_start();
         // Coming back after being away finds the game paused, not lost.
         if input.away {
             self.pause();
@@ -297,36 +241,45 @@ impl Game {
             for step in 0..steps {
                 // What was typed is acted on in the first step only.
                 let acts = (step == 0).then(|| std::mem::take(&mut self.pending));
-                self.advance(STEP_SECONDS, input, acts, memory);
+                out.extend(self.advance(STEP_SECONDS, input, acts, memory));
             }
         }
-        std::mem::take(&mut self.out)
+        out
     }
 
     /// Advances the game by `dt` seconds, acting on what was typed or
     /// tapped (`acts`) if there is anything new.
-    fn advance(&mut self, dt: f32, input: &Input, acts: Option<Pending>, memory: &mut Memory) {
+    fn advance(
+        &mut self,
+        dt: f32,
+        input: &Input,
+        acts: Option<Pending>,
+        memory: &mut Memory,
+    ) -> Outputs {
+        let mut out = Outputs::default();
         self.play_time += f64::from(dt);
         self.display.update_motion(dt);
-        self.update_spells(dt);
+        out.extend(self.update_spells(dt));
 
         if self.is_over() {
             if acts.is_some_and(|a| a.confirm || a.taps > 0) {
-                self.restart();
+                out.extend(self.restart());
             }
-            return;
+            return out;
         }
 
-        self.stage.time += dt;
+        self.stage = self.stage.elapsed(dt);
         self.display.update_messages(dt);
 
-        self.move_player(dt, input.arrows, input.stick);
+        self.player = self
+            .player
+            .moved(dt, input.arrows, input.stick, self.world.obstacles());
         for key in acts.into_iter().flat_map(|a| a.keys) {
-            self.handle_key(key, memory);
+            out.extend(self.handle_key(key, input.now, memory));
         }
-        self.move_enemies(dt, memory);
+        out.extend(self.move_enemies(dt, input.now, memory));
         if self.is_over() {
-            self.out.events.push(GameEvent::Over { level: self.level });
+            out.events.push(GameEvent::Over { level: self.level });
         }
 
         // No new monsters join a boss fight.
@@ -334,192 +287,17 @@ impl Game {
             self.spawn_timer -= dt;
             if self.spawn_timer <= 0.0 {
                 self.spawn_timer = spawn_interval(self.stage.time);
-                self.spawn_enemy(memory);
+                out.extend(self.spawn_enemy(input.now, memory));
             }
         }
+        out
     }
 
-    /// Moves her with the arrow keys, or else with the touch joystick's
-    /// `stick` direction, whose length says how fast.
-    fn move_player(&mut self, dt: f32, arrows: Vec2, stick: Vec2) {
-        let velocity = if arrows != Vec2::ZERO {
-            arrows.normalize()
-        } else {
-            stick.clamp_length_max(1.0)
-        };
-        self.player_moving = velocity != Vec2::ZERO;
-        self.player += velocity * PLAYER_SPEED * dt;
-        self.player.x = self.player.x.clamp(PLAYER_RADIUS, ARENA_W - PLAYER_RADIUS);
-        self.player.y = self
-            .player
-            .y
-            .clamp(PLAYER_RADIUS * 1.5, ARENA_H - PLAYER_RADIUS * 1.5);
-        self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
-    }
-
-    fn handle_key(&mut self, key: Key, memory: &mut Memory) {
-        match key {
-            // Backspace starts over: it empties both slots.
-            Key::Backspace => self.clear_typed(),
-            Key::Char(c) if pairs::is_answer_char(c) => self.type_into(Slot::of_char(c), c, memory),
-            Key::Char(_) => {}
-        }
-    }
-
-    /// A wrong key or a hit ends the combo and the level's clean record.
-    fn mistake(&mut self) {
-        self.combo = 0;
-        self.stage.flawless = false;
-    }
-
-    fn clear_typed(&mut self) {
-        self.typed.clear();
-    }
-
-    /// The enemy called `id`, if it is still in play.
-    fn enemy(&self, id: EnemyId) -> Option<&Enemy> {
-        self.enemies.iter().find(|e| e.id == id)
-    }
-
-    /// Adds `enemy` to the game, giving it an id of its own.
-    fn admit(&mut self, mut enemy: Enemy) {
-        enemy.id = EnemyId(self.next_enemy_id);
-        self.next_enemy_id += 1;
-        self.enemies.push(enemy);
-    }
-
-    /// The enemies this slot can answer.
-    fn candidates(&self, slot: Slot) -> impl Iterator<Item = &Enemy> + Clone {
-        self.enemies.iter().filter(move |e| e.answer_slot() == slot)
-    }
-
-    /// What the slot's text means for the enemies it can answer.
-    fn outcome(&self, slot: Slot) -> InputOutcome {
-        resolve_input(
-            self.typed.get(slot),
-            self.candidates(slot).map(Enemy::answer),
-        )
-    }
-
-    fn is_dead_end(&self, slot: Slot) -> bool {
-        self.outcome(slot) == InputOutcome::DeadEnd
-    }
-
-    /// A dead-end slot is only shown in red at first. Typing past it costs
-    /// energy, which leaves room to fix a typo with backspace.
-    fn type_into(&mut self, slot: Slot, c: char, memory: &mut Memory) {
-        if self.is_dead_end(slot) {
-            self.mistake();
-            self.energy = after_wrong_key(self.energy);
-            self.out.sfx.push(Sfx::Wrong);
-            self.display.say(
-                format!("Väärin: {}", self.typed.get(slot).to_uppercase()),
-                Tone::Wrong,
-            );
-            self.typed.get_mut(slot).clear();
-            return;
-        }
-
-        self.typed.get_mut(slot).push(c);
-        self.out.sfx.push(Sfx::Type);
-        if let InputOutcome::Hit(hits) = self.outcome(slot) {
-            let ids: Vec<EnemyId> = self
-                .candidates(slot)
-                .enumerate()
-                .filter(|(i, _)| hits.contains(i))
-                .map(|(_, e)| e.id)
-                .collect();
-            let Some(first) = ids
-                .first()
-                .and_then(|&id| self.enemy(id))
-                .map(|e| e.question.clone())
-            else {
-                return;
-            };
-            for id in ids {
-                self.hit_enemy(id, memory);
-            }
-            self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
-            self.show_question(&first, Tone::Right);
-            self.typed.get_mut(slot).clear();
-            self.add_points(hits.len() as u32, memory);
-        }
-    }
-
-    /// Records that `question` is appearing, returning how many times it
-    /// had appeared before. Long numbers are counted together, so the first
-    /// few in a game get an early hint.
-    fn count_appearance(&mut self, question: &Question) -> u32 {
-        let key = if question.is_long() {
-            Appearance::Long
-        } else {
-            Appearance::Pair(question.first().id)
-        };
-        let count = self.appearances.entry(key).or_default();
-        *count += 1;
-        *count - 1
-    }
-
-    fn add_points(&mut self, points: u32, memory: &Memory) {
-        self.score += points;
-        if self.stage.boss_fight {
-            return;
-        }
-        self.stage.points += points;
-        if self.stage.points >= points_to_clear(self.level) {
-            self.stage.points = points_to_clear(self.level);
-            self.summon_boss(memory);
-        }
-    }
-
-    /// Starts the next level with a lightning strike at `pos`, where the
-    /// boss fell. Any monsters left on screen explode with it, so the next
-    /// level starts from a clear slate.
-    fn complete_level(&mut self, pos: Vec2) {
-        let stars = stars_for(self.energy / MAX_ENERGY);
-        if self.stage.flawless {
-            self.out.events.push(GameEvent::FlawlessLevel);
-        }
-        self.out.events.push(GameEvent::LevelCompleted {
-            level: self.level,
-            stars,
-        });
-        self.level += 1;
-        self.stage = Stage::default();
-        self.spawn_timer = LEVEL_BREAK_SECONDS;
-        for enemy in self.enemies.drain(..) {
-            self.display
-                .effects
-                .explode(enemy.pos, enemy.radius, &KILL_PALETTE);
-        }
-        self.clear_typed();
-        self.display.effects.lightning(pos);
-        self.out
-            .sfx
-            .extend([Sfx::Explode, Sfx::Thunder, Sfx::LevelUp]);
-        let new_pairs = self.curriculum.next_level();
-        self.portals = portal_positions(self.level, ARENA_W, ARENA_H);
-        self.obstacles = obstacles_for_level(self.level, ARENA_W, ARENA_H, &self.portals);
-        // She may be standing where a new obstacle appeared.
-        self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
-        let subtitle = if new_pairs > 0 {
-            format!("Hienoa! {new_pairs} uutta paria")
-        } else {
-            "Hienoa!".to_owned()
-        };
-        self.display.announce(
-            format!("Taso {}!", self.level),
-            subtitle,
-            Tone::Celebrate,
-            Some(stars),
-        );
-    }
-
-    fn show_question(&mut self, question: &Question, tone: Tone) {
-        self.display.say(
-            format!("{} = {}", question.words(), question.number(false)),
-            tone,
-        );
+    /// Starts over from the level this game started from. What she has
+    /// learned is not the game's to lose: it lives in the caller's memory.
+    fn restart(&mut self) -> Outputs {
+        *self = Game::new(self.touch, self.start_level);
+        self.report_start()
     }
 }
 

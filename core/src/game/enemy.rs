@@ -23,6 +23,7 @@ pub const HINT_FONT_SIZE: u16 = 20;
 pub const HINT_SPACE: f32 = 28.0;
 
 /// A boss's extra lives: the numbers it shows after its current one.
+#[derive(Clone)]
 pub struct BossLives {
     pub queue: VecDeque<Question>,
     pub total: usize,
@@ -38,6 +39,7 @@ pub struct BossLives {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnemyId(pub u32);
 
+#[derive(Clone)]
 pub struct Enemy {
     /// Set by `Game::admit` when the enemy joins the game.
     pub id: EnemyId,
