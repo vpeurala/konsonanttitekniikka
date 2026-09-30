@@ -644,7 +644,10 @@ fn long_numbers_are_reported_as_long_answers() {
 #[test]
 fn stars_depend_on_the_energy_left() {
     let mut game = game();
-    game.vitals = game.vitals.with_energy(50.0);
+    // Beating the boss gives some energy back too, so start low enough to
+    // end up in the middle.
+    let start = 50.0 - boss_hits(1) as f32 * hit_reward(1);
+    game.vitals = game.vitals.with_energy(start);
     game.add_points(points_to_clear(1));
     let mut log = Log::default();
     for _ in 0..boss_hits(1) {

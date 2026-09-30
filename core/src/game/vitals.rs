@@ -1,7 +1,7 @@
 //! How she is doing: energy, the run of right answers, the score. Every
 //! change makes a new `Vitals`, so what a change may touch is in its name.
 
-use super::rules::{COLLISION_PENALTY, HIT_REWARD, MAX_ENERGY, after_wrong_key};
+use super::rules::{COLLISION_PENALTY, MAX_ENERGY, after_wrong_key};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vitals {
@@ -55,10 +55,11 @@ impl Vitals {
         }
     }
 
-    /// The energy given for `hits` monsters answered at once.
-    pub fn rewarded(self, hits: usize) -> Vitals {
+    /// The energy given for `hits` monsters answered at once, `reward`
+    /// each.
+    pub fn rewarded(self, hits: usize, reward: f32) -> Vitals {
         Vitals {
-            energy: (self.energy + HIT_REWARD * hits as f32).min(MAX_ENERGY),
+            energy: (self.energy + reward * hits as f32).min(MAX_ENERGY),
             ..self
         }
     }
@@ -120,9 +121,9 @@ mod tests {
 
     #[test]
     fn a_reward_never_passes_the_maximum() {
-        assert_eq!(Vitals::new().rewarded(3).energy(), MAX_ENERGY);
+        assert_eq!(Vitals::new().rewarded(3, 5.0).energy(), MAX_ENERGY);
         let low = Vitals::new().with_energy(50.0);
-        assert_eq!(low.rewarded(2).energy(), 50.0 + 2.0 * HIT_REWARD);
+        assert_eq!(low.rewarded(2, 5.0).energy(), 60.0);
     }
 
     #[test]

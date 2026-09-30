@@ -36,7 +36,12 @@ pub fn shows_hint(earlier_appearances: u32, shown_for: f32, speed_fraction: f32)
 }
 
 pub const MAX_ENERGY: f32 = 100.0;
-pub const HIT_REWARD: f32 = 5.0;
+/// Energy given for defeating a monster on the first level, when a lot of
+/// energy comes back...
+const FIRST_LEVEL_HIT_REWARD: f32 = 15.0;
+/// ...falling evenly to this on `HIT_REWARD_FLOOR_LEVEL`, and staying there.
+const LOWEST_HIT_REWARD: f32 = 5.0;
+const HIT_REWARD_FLOOR_LEVEL: u32 = 30;
 pub const WRONG_PENALTY: f32 = 10.0;
 /// Wrong keys never take energy below this, so only collisions can end
 /// the game.
@@ -75,7 +80,7 @@ const SPAWN_INTERVAL_SHRINK: f32 = 0.05;
 /// ...and on the first level.
 const FIRST_LEVEL_SPAWN_INTERVAL_SHRINK: f32 = 0.03;
 /// The level from which spawns follow the later levels' numbers.
-const SPAWN_EASE_LEVEL: u32 = 11;
+const SPAWN_EASE_LEVEL: u32 = 21;
 
 pub const BOSS_RADIUS: f32 = 36.0;
 /// The first level's boss takes this many hits.
@@ -160,6 +165,17 @@ pub fn speed_growth(level: u32) -> f32 {
         SPEED_GROWTH,
         level,
         SPEED_GROWTH_LEVEL,
+    )
+}
+
+/// The energy one defeated monster gives back on `level`: plenty at first,
+/// then less and less.
+pub fn hit_reward(level: u32) -> f32 {
+    ramp(
+        FIRST_LEVEL_HIT_REWARD,
+        LOWEST_HIT_REWARD,
+        level,
+        HIT_REWARD_FLOOR_LEVEL,
     )
 }
 
@@ -324,17 +340,27 @@ mod tests {
 
     #[test]
     fn spawns_get_more_frequent_within_a_level_down_to_a_floor() {
-        for level in [1, 5, 11, 30] {
+        for level in [1, 5, SPAWN_EASE_LEVEL, 30] {
             assert!(spawn_interval(level, 10.0) < spawn_interval(level, 0.0));
             assert_eq!(spawn_interval(level, 1000.0), MIN_SPAWN_INTERVAL);
         }
-        assert_eq!(spawn_interval(11, 0.0), START_SPAWN_INTERVAL);
+        assert_eq!(spawn_interval(SPAWN_EASE_LEVEL, 0.0), START_SPAWN_INTERVAL);
+    }
+
+    #[test]
+    fn defeating_monsters_gives_back_less_energy_level_by_level_down_to_a_floor() {
+        assert_eq!(hit_reward(1), FIRST_LEVEL_HIT_REWARD);
+        for level in 1..HIT_REWARD_FLOOR_LEVEL {
+            assert!(hit_reward(level + 1) < hit_reward(level));
+        }
+        assert_eq!(hit_reward(HIT_REWARD_FLOOR_LEVEL), LOWEST_HIT_REWARD);
+        assert_eq!(hit_reward(1000), LOWEST_HIT_REWARD);
     }
 
     #[test]
     fn early_levels_spawn_less_often_than_later_ones() {
         for time in [0.0, 20.0, 40.0] {
-            assert!(spawn_interval(1, time) > spawn_interval(11, time));
+            assert!(spawn_interval(1, time) > spawn_interval(SPAWN_EASE_LEVEL, time));
             assert!(spawn_interval(5, time) >= spawn_interval(6, time));
         }
     }
