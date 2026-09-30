@@ -478,26 +478,57 @@ fn bars(section: &Section) -> usize {
     section.chords.split_whitespace().count()
 }
 
+/// The piece being mixed: sounds are added at beats, and anything that
+/// runs past the end wraps around to the start, so the loop is seamless.
+struct Mix {
+    out: Vec<f32>,
+}
+
+impl Mix {
+    fn new(total_bars: usize) -> Self {
+        Mix {
+            out: vec![0.0; sample_count(total_bars as f32 * 4.0 * BEAT)],
+        }
+    }
+
+    /// Adds a sound at `beat`, at volume `gain`.
+    fn add(&mut self, sound: &[f32], beat: f32, gain: f32) {
+        let total = self.out.len();
+        let start = sample_count(beat * BEAT);
+        for (i, s) in sound.iter().enumerate() {
+            self.out[(start + i) % total] += s * gain;
+        }
+    }
+}
+
+/// The drum sounds, made once and played wherever a pattern says.
+struct Kit {
+    kick: Vec<f32>,
+    snare: Vec<f32>,
+    closed_hat: Vec<f32>,
+    open_hat: Vec<f32>,
+    crash: Vec<f32>,
+    toms: [Vec<f32>; 3],
+}
+
+impl Kit {
+    fn new() -> Self {
+        Kit {
+            kick: kick(),
+            snare: snare(),
+            closed_hat: hiss(0x5eed_0002, 0.05, 0.012, 0.6),
+            open_hat: hiss(0x5eed_0003, 0.35, 0.12, 0.6),
+            crash: hiss(0x5eed_0004, 1.8, 0.7, 0.4),
+            toms: [tom(220.0), tom(165.0), tom(120.0)],
+        }
+    }
+}
+
 /// The whole piece, one loop long.
 pub fn music() -> Vec<f32> {
     let total_bars: usize = SECTIONS.iter().map(bars).sum();
-    let total = sample_count(total_bars as f32 * 4.0 * BEAT);
-    let mut out = vec![0.0; total];
-    // Adds a sound at `beat`, wrapping any tail past the end around to
-    // the start, so the loop is seamless.
-    let mut add = |sound: &[f32], beat: f32, gain: f32| {
-        let start = sample_count(beat * BEAT);
-        for (i, s) in sound.iter().enumerate() {
-            out[(start + i) % total] += s * gain;
-        }
-    };
-
-    let kick = kick();
-    let snare = snare();
-    let closed_hat = hiss(0x5eed_0002, 0.05, 0.012, 0.6);
-    let open_hat = hiss(0x5eed_0003, 0.35, 0.12, 0.6);
-    let crash = hiss(0x5eed_0004, 1.8, 0.7, 0.4);
-    let toms = [tom(220.0), tom(165.0), tom(120.0)];
+    let mut mix = Mix::new(total_bars);
+    let kit = Kit::new();
 
     let mut section_start = 0.0;
     for section in &SECTIONS {
@@ -506,119 +537,134 @@ pub fn music() -> Vec<f32> {
             .split_whitespace()
             .map(Chord::named)
             .collect();
-        let chord_at = |beat: f32| chords[((beat / 4.0) as usize).min(chords.len() - 1)];
         let bar_count = chords.len();
 
-        // The tune, and its harmony and echoes.
-        let mut beat = 0.0;
-        for (pitch, beats) in line(section.lead) {
-            if let Some(pitch) = pitch {
-                let at = section_start + beat;
-                let seconds = beats * BEAT * 0.92;
-                let (voice, gain) = if section.bells {
-                    (BELL, 0.3)
-                } else {
-                    (LEAD, 0.2)
-                };
-                let tone = play(voice, midi_to_freq(pitch), seconds);
-                add(&tone, at, gain);
-                if section.echo {
-                    add(&tone, at + 0.75, gain * 0.3);
-                    add(&tone, at + 1.5, gain * 0.12);
-                }
-                if section.harmony {
-                    let below = chord_at(beat).below(pitch);
-                    add(&play(HARMONY, midi_to_freq(below), seconds), at, 0.09);
-                }
-            }
-            beat += beats;
-        }
-
+        play_tune(&mut mix, section, &chords, section_start);
         for (bar, chord) in chords.iter().enumerate() {
             let bar_start = section_start + bar as f32 * 4.0;
-            let last = bar + 1 == bar_count;
-
-            // A soft pad of the chord, each note doubled slightly out of
-            // tune for a fuller sound.
-            for pitch in chord.notes_from(57, 3) {
-                for detune in [0.997, 1.003] {
-                    let tone = play(PAD, midi_to_freq(pitch) * detune, 4.0 * BEAT);
-                    add(&tone, bar_start, 0.035);
-                }
-            }
-
-            // The arpeggio, up and down the chord in sixteenths.
-            if section.arp_from > 0 {
-                let notes = chord.notes_from(section.arp_from, 4);
-                for step in 0..STEPS_PER_BAR {
-                    let pitch = notes[[0, 1, 2, 3, 2, 1][step % 6]];
-                    let tone = play(ARP, midi_to_freq(pitch), STEP * BEAT);
-                    add(&tone, bar_start + step as f32 * STEP, 0.06);
-                }
-            }
-
-            // The bass.
-            let pattern: Vec<char> = section.bass.chars().collect();
-            let hits: Vec<usize> = (0..STEPS_PER_BAR).filter(|&s| pattern[s] != '.').collect();
-            for (i, &step) in hits.iter().enumerate() {
-                let next = hits.get(i + 1).copied().unwrap_or(STEPS_PER_BAR);
-                let root = chord.bass();
-                let pitch = match pattern[step] {
-                    'O' => root + 12,
-                    '5' => root + 7,
-                    _ => root,
-                };
-                let seconds = (next - step) as f32 * STEP * BEAT * 0.9;
-                let at = bar_start + step as f32 * STEP;
-                add(&play(BASS, midi_to_freq(pitch), seconds), at, 0.3);
-                add(&play(BASS_BUZZ, midi_to_freq(pitch), seconds), at, 0.04);
-            }
-
-            // The drums.
+            play_pad(&mut mix, chord, bar_start);
+            play_arpeggio(&mut mix, section, chord, bar_start);
+            play_bass(&mut mix, section, chord, bar_start);
             let drums = match section.fill {
-                Some(fill) if last => fill,
+                Some(fill) if bar + 1 == bar_count => fill,
                 _ => section.drums[bar % section.drums.len()],
             };
-            for step in 0..STEPS_PER_BAR {
-                let at = bar_start + step as f32 * STEP;
-                let hit = |pattern: &str| pattern.as_bytes()[step];
-                if hit(drums.kick) == b'x' {
-                    add(&kick, at, 0.55);
-                }
-                if hit(drums.snare) == b'x' {
-                    let swell = if drums.crescendo {
-                        0.3 + 0.7 * step as f32 / STEPS_PER_BAR as f32
-                    } else {
-                        1.0
-                    };
-                    add(&snare, at, 0.3 * swell);
-                }
-                match hit(drums.hat) {
-                    b'c' => add(&closed_hat, at, 0.07),
-                    b'o' => add(&open_hat, at, 0.06),
-                    _ => {}
-                }
-                if let Some(tom) = (hit(drums.tom) as char)
-                    .to_digit(10)
-                    .and_then(|d| toms.get(d as usize - 1))
-                {
-                    add(tom, at, 0.35);
-                }
-            }
+            play_drums(&mut mix, &kit, &drums, bar_start);
         }
 
         if section.crash {
-            add(&crash, section_start, 0.12);
+            mix.add(&kit.crash, section_start, 0.12);
         }
         if section.riser {
             let last_bar = section_start + (bar_count - 1) as f32 * 4.0;
-            add(&riser(4.0 * BEAT), last_bar, 0.12);
+            mix.add(&riser(4.0 * BEAT), last_bar, 0.12);
         }
         section_start += bar_count as f32 * 4.0;
     }
 
-    limit(&mut out, 0.9);
-    out
+    limit(&mut mix.out, 0.9);
+    mix.out
+}
+
+/// The tune, and its harmony and echoes.
+fn play_tune(mix: &mut Mix, section: &Section, chords: &[Chord], section_start: f32) {
+    let chord_at = |beat: f32| chords[((beat / 4.0) as usize).min(chords.len() - 1)];
+    let mut beat = 0.0;
+    for (pitch, beats) in line(section.lead) {
+        if let Some(pitch) = pitch {
+            let at = section_start + beat;
+            let seconds = beats * BEAT * 0.92;
+            let (voice, gain) = if section.bells {
+                (BELL, 0.3)
+            } else {
+                (LEAD, 0.2)
+            };
+            let tone = play(voice, midi_to_freq(pitch), seconds);
+            mix.add(&tone, at, gain);
+            if section.echo {
+                mix.add(&tone, at + 0.75, gain * 0.3);
+                mix.add(&tone, at + 1.5, gain * 0.12);
+            }
+            if section.harmony {
+                let below = chord_at(beat).below(pitch);
+                mix.add(&play(HARMONY, midi_to_freq(below), seconds), at, 0.09);
+            }
+        }
+        beat += beats;
+    }
+}
+
+/// A soft pad of the chord, each note doubled slightly out of tune for a
+/// fuller sound.
+fn play_pad(mix: &mut Mix, chord: &Chord, bar_start: f32) {
+    for pitch in chord.notes_from(57, 3) {
+        for detune in [0.997, 1.003] {
+            let tone = play(PAD, midi_to_freq(pitch) * detune, 4.0 * BEAT);
+            mix.add(&tone, bar_start, 0.035);
+        }
+    }
+}
+
+/// The arpeggio, up and down the chord in sixteenths.
+fn play_arpeggio(mix: &mut Mix, section: &Section, chord: &Chord, bar_start: f32) {
+    if section.arp_from == 0 {
+        return;
+    }
+    let notes = chord.notes_from(section.arp_from, 4);
+    for step in 0..STEPS_PER_BAR {
+        let pitch = notes[[0, 1, 2, 3, 2, 1][step % 6]];
+        let tone = play(ARP, midi_to_freq(pitch), STEP * BEAT);
+        mix.add(&tone, bar_start + step as f32 * STEP, 0.06);
+    }
+}
+
+/// The bass, each note lasting until the next.
+fn play_bass(mix: &mut Mix, section: &Section, chord: &Chord, bar_start: f32) {
+    let pattern: Vec<char> = section.bass.chars().collect();
+    let hits: Vec<usize> = (0..STEPS_PER_BAR).filter(|&s| pattern[s] != '.').collect();
+    for (i, &step) in hits.iter().enumerate() {
+        let next = hits.get(i + 1).copied().unwrap_or(STEPS_PER_BAR);
+        let root = chord.bass();
+        let pitch = match pattern[step] {
+            'O' => root + 12,
+            '5' => root + 7,
+            _ => root,
+        };
+        let seconds = (next - step) as f32 * STEP * BEAT * 0.9;
+        let at = bar_start + step as f32 * STEP;
+        mix.add(&play(BASS, midi_to_freq(pitch), seconds), at, 0.3);
+        mix.add(&play(BASS_BUZZ, midi_to_freq(pitch), seconds), at, 0.04);
+    }
+}
+
+/// One bar of drums, from the patterns of each kit piece.
+fn play_drums(mix: &mut Mix, kit: &Kit, drums: &Drums, bar_start: f32) {
+    for step in 0..STEPS_PER_BAR {
+        let at = bar_start + step as f32 * STEP;
+        let hit = |pattern: &str| pattern.as_bytes()[step];
+        if hit(drums.kick) == b'x' {
+            mix.add(&kit.kick, at, 0.55);
+        }
+        if hit(drums.snare) == b'x' {
+            let swell = if drums.crescendo {
+                0.3 + 0.7 * step as f32 / STEPS_PER_BAR as f32
+            } else {
+                1.0
+            };
+            mix.add(&kit.snare, at, 0.3 * swell);
+        }
+        match hit(drums.hat) {
+            b'c' => mix.add(&kit.closed_hat, at, 0.07),
+            b'o' => mix.add(&kit.open_hat, at, 0.06),
+            _ => {}
+        }
+        if let Some(tom) = (hit(drums.tom) as char)
+            .to_digit(10)
+            .and_then(|d| kit.toms.get(d as usize - 1))
+        {
+            mix.add(tom, at, 0.35);
+        }
+    }
 }
 
 #[cfg(test)]

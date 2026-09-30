@@ -26,14 +26,25 @@ pub fn draw_girl(pos: Vec2, time: f32, moving: bool, casting: Option<Vec2>) {
 
     draw_ellipse(pos.x, pos.y + 22.0, 13.0, 4.0, 0.0, SHADOW);
 
-    // Legs and shoes, stepping in turn.
+    draw_girl_legs(x, y, step);
+    draw_girl_arms(pos, y, step, time, casting);
+    draw_girl_dress(x, y);
+    draw_girl_pigtails(x, y);
+    draw_girl_head(x, y);
+}
+
+/// Legs and shoes, stepping in turn.
+fn draw_girl_legs(x: f32, y: f32, step: f32) {
     for (side, lift) in [(-1.0, step.max(0.0)), (1.0, (-step).max(0.0))] {
         let foot_y = y + 20.0 - lift * 3.0;
         draw_line(x + side * 4.0, y + 12.0, x + side * 4.0, foot_y, 3.0, SKIN);
         draw_ellipse(x + side * 5.0, foot_y + 1.0, 4.0, 2.5, 0.0, SHOES);
     }
+}
 
-    // Arms swing against the legs; a casting arm points at its target.
+/// Arms swing against the legs; a casting arm points at its target.
+fn draw_girl_arms(pos: Vec2, y: f32, step: f32, time: f32, casting: Option<Vec2>) {
+    let x = pos.x;
     let cast_side = casting.map(|toward| side_toward(pos, toward));
     for side in [-1.0, 1.0] {
         let hand = match casting {
@@ -48,8 +59,10 @@ pub fn draw_girl(pos: Vec2, time: f32, moving: bool, casting: Option<Vec2>) {
             draw_circle(hand.x, hand.y, 3.0, WHITE);
         }
     }
+}
 
-    // Dress: a flared skirt with a collar and a belt.
+/// A flared skirt with a collar and a belt.
+fn draw_girl_dress(x: f32, y: f32) {
     draw_triangle(
         vec2(x, y - 6.0),
         vec2(x - 14.0, y + 14.0),
@@ -64,8 +77,10 @@ pub fn draw_girl(pos: Vec2, time: f32, moving: bool, casting: Option<Vec2>) {
         vec2(x, y - 2.0),
         DRESS_LIGHT,
     );
+}
 
-    // Pigtails with pink bows.
+/// Pigtails with pink bows.
+fn draw_girl_pigtails(x: f32, y: f32) {
     for side in [-1.0, 1.0] {
         let tail = vec2(x + side * 13.0, y - 15.0);
         draw_circle(tail.x, tail.y, 5.0, HAIR);
@@ -74,8 +89,10 @@ pub fn draw_girl(pos: Vec2, time: f32, moving: bool, casting: Option<Vec2>) {
         draw_triangle(bow, bow + vec2(4.0, -3.0), bow + vec2(4.0, 3.0), DRESS);
         draw_circle(bow.x, bow.y, 1.5, DRESS_LIGHT);
     }
+}
 
-    // Head: hair behind, face, then bangs.
+/// Hair behind, the face, bangs and a smile.
+fn draw_girl_head(x: f32, y: f32) {
     draw_circle(x, y - 16.0, 11.5, HAIR);
     draw_circle(x, y - 14.0, 10.0, SKIN);
     draw_ellipse(x, y - 22.0, 9.0, 4.0, 0.0, HAIR);
@@ -108,13 +125,19 @@ const MONSTER_MOUTH: Color = Color::new(0.35, 0.0, 0.05, 1.0);
 /// `pos` with roughly the given `radius`. `phase` keeps monsters from
 /// moving in sync.
 pub fn draw_monster(pos: Vec2, radius: f32, time: f32, phase: f32) {
-    const SPIKES: usize = 11;
     let t = time + phase;
     let (x, y) = (pos.x, pos.y);
 
     draw_ellipse(x, y + radius + 4.0, radius * 0.8, 4.0, 0.0, SHADOW);
 
-    // Body: a writhing star, drawn as a fan of triangles from the center.
+    draw_monster_body(pos, radius, t);
+    draw_monster_eyes(pos, radius, t);
+    draw_monster_grin(pos, radius);
+}
+
+/// A writhing star, drawn as a fan of triangles from the center.
+fn draw_monster_body(pos: Vec2, radius: f32, t: f32) {
+    const SPIKES: usize = 11;
     let point = |i: usize, scale: f32| {
         let spike = i.is_multiple_of(2);
         let wobble = (t * 6.0 + i as f32 * 1.7).sin() * 0.08;
@@ -127,8 +150,11 @@ pub fn draw_monster(pos: Vec2, radius: f32, time: f32, phase: f32) {
             draw_triangle(pos, point(i, scale), point(i + 1, scale), color);
         }
     }
+}
 
-    // Glowing, slanted eyes that flicker.
+/// Glowing, slanted eyes that flicker.
+fn draw_monster_eyes(pos: Vec2, radius: f32, t: f32) {
+    let (x, y) = (pos.x, pos.y);
     let flicker = 0.8 + 0.2 * (t * 9.0).sin();
     for side in [-1.0, 1.0] {
         let eye = vec2(x + side * radius * 0.35, y - radius * 0.2);
@@ -155,8 +181,11 @@ pub fn draw_monster(pos: Vec2, radius: f32, time: f32, phase: f32) {
             BLACK,
         );
     }
+}
 
-    // Jagged grin.
+/// A jagged grin.
+fn draw_monster_grin(pos: Vec2, radius: f32) {
+    let (x, y) = (pos.x, pos.y);
     let mouth_w = radius * 0.9;
     let mouth_y = y + radius * 0.3;
     draw_rectangle(
@@ -187,14 +216,21 @@ const CYCLOPS_IRIS: Color = Color::new(0.9, 0.1, 0.1, 1.0);
 /// whose eye follows `look_at`. `phase` keeps monsters from moving in
 /// sync.
 pub fn draw_cyclops(pos: Vec2, radius: f32, time: f32, phase: f32, look_at: Vec2) {
-    const SEGMENTS: usize = 24;
-    const TENTACLES: usize = 4;
     let t = time + phase;
     let (x, y) = (pos.x, pos.y);
 
     draw_ellipse(x, y + radius + 8.0, radius * 0.8, 4.0, 0.0, SHADOW);
 
-    // Tentacles hang below the body and sway.
+    draw_cyclops_tentacles(pos, radius, t);
+    draw_cyclops_body(pos, radius, t);
+    draw_cyclops_eye(pos, radius, t, look_at);
+    draw_cyclops_mouth(pos, radius);
+}
+
+/// Tentacles hang below the body and sway.
+fn draw_cyclops_tentacles(pos: Vec2, radius: f32, t: f32) {
+    const TENTACLES: usize = 4;
+    let (x, y) = (pos.x, pos.y);
     for i in 0..TENTACLES {
         let across = (i as f32 + 0.5) / TENTACLES as f32 * 2.0 - 1.0;
         let root = vec2(x + across * radius * 0.7, y + radius * 0.5);
@@ -208,8 +244,11 @@ pub fn draw_cyclops(pos: Vec2, radius: f32, time: f32, phase: f32, look_at: Vec2
             CYCLOPS_EDGE,
         );
     }
+}
 
-    // Body: a circle whose outline ripples.
+/// A circle whose outline ripples.
+fn draw_cyclops_body(pos: Vec2, radius: f32, t: f32) {
+    const SEGMENTS: usize = 24;
     let point = |i: usize, scale: f32| {
         let angle = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
         let ripple = 1.0 + 0.08 * (angle * 3.0 + t * 3.0).sin();
@@ -220,8 +259,11 @@ pub fn draw_cyclops(pos: Vec2, radius: f32, time: f32, phase: f32, look_at: Vec2
             draw_triangle(pos, point(i, scale), point(i + 1, scale), color);
         }
     }
+}
 
-    // One big eye, glaring at the target, blinking now and then.
+/// One big eye, glaring at the target, blinking now and then, under a heavy brow.
+fn draw_cyclops_eye(pos: Vec2, radius: f32, t: f32, look_at: Vec2) {
+    let (x, y) = (pos.x, pos.y);
     let eye = vec2(x, y - radius * 0.2);
     let blink = (t * 0.7).sin() > 0.97;
     let eye_height = if blink { 0.05 } else { 0.4 };
@@ -241,8 +283,11 @@ pub fn draw_cyclops(pos: Vec2, radius: f32, time: f32, phase: f32, look_at: Vec2
         3.0,
         BLACK,
     );
+}
 
-    // A wide mouth full of fangs.
+/// A wide mouth full of fangs.
+fn draw_cyclops_mouth(pos: Vec2, radius: f32) {
+    let (x, y) = (pos.x, pos.y);
     let mouth_y = y + radius * 0.35;
     let mouth_w = radius * 1.1;
     const FANGS: usize = 6;
@@ -296,7 +341,15 @@ pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
     draw_circle(x, y, r * 1.7 * pulse, BOSS_AURA);
     draw_ellipse(x, y + r * 1.25, r * 0.7, 5.0, 0.0, SHADOW);
 
-    // Bat wings: a fan of bony fingers with membrane between them.
+    draw_boss_wings(pos, r, flap);
+    draw_boss_body(pos, r, t);
+    draw_boss_crown(pos, r);
+    draw_boss_eyes(pos, r, t);
+    draw_boss_maw(pos, r);
+}
+
+/// Bat wings: a fan of bony fingers with membrane between them.
+fn draw_boss_wings(pos: Vec2, r: f32, flap: f32) {
     for side in [-1.0f32, 1.0] {
         let root = pos + vec2(side * r * 0.6, -r * 0.15);
         let fingers = [(-0.9, 1.35), (-0.35, 1.55), (0.2, 1.15)];
@@ -315,8 +368,10 @@ pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
             draw_circle(tip.x, tip.y, 2.5, BOSS_BONE);
         }
     }
+}
 
-    // Body: a round, gently rippling mass.
+/// A round, gently rippling mass.
+fn draw_boss_body(pos: Vec2, r: f32, t: f32) {
     const SEGMENTS: usize = 28;
     let point = |i: usize, scale: f32| {
         let angle = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
@@ -328,8 +383,11 @@ pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
             draw_triangle(pos, point(i, scale), point(i + 1, scale), color);
         }
     }
+}
 
-    // A golden crown with five spikes and a jewel.
+/// A golden crown with five spikes and a jewel.
+fn draw_boss_crown(pos: Vec2, r: f32) {
+    let (x, y) = (pos.x, pos.y);
     let band_w = r * 1.1;
     let band_h = r * 0.24;
     let band_top = y - r * 0.98;
@@ -356,8 +414,11 @@ pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
         CROWN_SHADE,
     );
     draw_circle(x, band_top + band_h / 2.0, r * 0.09, JEWEL);
+}
 
-    // Three glowing eyes: two below and one on the forehead.
+/// Three glowing eyes: two below and one on the forehead.
+fn draw_boss_eyes(pos: Vec2, r: f32, t: f32) {
+    let (x, y) = (pos.x, pos.y);
     let flicker = 0.85 + 0.15 * (t * 11.0).sin();
     let eyes = [
         (vec2(x - r * 0.38, y - r * 0.12), r * 0.17),
@@ -377,8 +438,11 @@ pub fn draw_boss(pos: Vec2, radius: f32, time: f32, phase: f32) {
         );
         draw_ellipse(eye.x, eye.y, size * 0.25, size * 0.85, 0.0, BLACK);
     }
+}
 
-    // A wide black maw with two long fangs and a row of small teeth.
+/// A wide black maw with two long fangs and a row of small teeth.
+fn draw_boss_maw(pos: Vec2, r: f32) {
+    let (x, y) = (pos.x, pos.y);
     let mouth_y = y + r * 0.42;
     let mouth_w = r * 0.95;
     draw_ellipse(x, mouth_y, mouth_w / 2.0, r * 0.2, 0.0, BLACK);
@@ -486,72 +550,81 @@ fn fill_fan(center: Vec2, points: &[Vec2], color: Color) {
 pub fn draw_obstacle(obstacle: &Obstacle, time: f32) {
     let (pos, r, shape) = (obstacle.pos, obstacle.radius, &obstacle.shape);
     match obstacle.kind {
-        Kind::Stone => {
-            draw_ellipse(
-                pos.x + 4.0,
-                pos.y + r * 0.6,
-                r * 1.05,
-                r * 0.45,
-                0.0,
-                SHADOW,
+        Kind::Stone => draw_stone(pos, r, shape),
+        Kind::Tree => draw_tree(pos, r, shape),
+        Kind::Lake => draw_lake(pos, r, shape, time),
+    }
+}
+
+/// A grey boulder with a highlight and a crack.
+fn draw_stone(pos: Vec2, r: f32, shape: &[f32]) {
+    draw_ellipse(
+        pos.x + 4.0,
+        pos.y + r * 0.6,
+        r * 1.05,
+        r * 0.45,
+        0.0,
+        SHADOW,
+    );
+    fill_fan(pos, &outline(pos, r, shape, 0.9, 1.1), STONE_DARK);
+    fill_fan(pos, &outline(pos, r, shape, 0.78, 0.95), STONE);
+    // A highlight on the upper left, and a crack.
+    let light = pos + vec2(-r * 0.3, -r * 0.3);
+    draw_ellipse(light.x, light.y, r * 0.35, r * 0.2, -30.0, STONE_LIGHT);
+    let crack = [
+        pos + vec2(r * 0.1, -r * 0.1),
+        pos + vec2(r * 0.25, r * 0.15),
+        pos + vec2(r * 0.15, r * 0.4),
+    ];
+    for pair in crack.windows(2) {
+        draw_line(pair[0].x, pair[0].y, pair[1].x, pair[1].y, 1.5, STONE_DARK);
+    }
+}
+
+/// A trunk under a canopy of overlapping leaf clusters.
+fn draw_tree(pos: Vec2, r: f32, shape: &[f32]) {
+    draw_ellipse(pos.x + 6.0, pos.y + r * 0.7, r * 1.1, r * 0.45, 0.0, SHADOW);
+    draw_rectangle(pos.x - r * 0.15, pos.y, r * 0.3, r * 0.75, TRUNK);
+    // A canopy of overlapping leaf clusters.
+    draw_circle(pos.x, pos.y, r, LEAVES_DARK);
+    for i in 0..5 {
+        let angle = i as f32 / 5.0 * std::f32::consts::TAU + shape[0] * 3.0;
+        let cluster = pos + Vec2::from_angle(angle) * r * 0.45;
+        draw_circle(
+            cluster.x,
+            cluster.y,
+            r * (0.45 + 0.15 * shape[i + 1]),
+            LEAVES,
+        );
+    }
+    draw_circle(pos.x - r * 0.25, pos.y - r * 0.3, r * 0.35, LEAVES_LIGHT);
+}
+
+/// A lake with a shore, a deeper middle and glints drifting across it.
+fn draw_lake(pos: Vec2, r: f32, shape: &[f32], time: f32) {
+    fill_fan(pos, &outline(pos, r, shape, 1.0, 1.12), SHORE);
+    fill_fan(pos, &outline(pos, r, shape, 0.88, 1.0), WATER);
+    fill_fan(pos, &outline(pos, r * 0.6, shape, 0.85, 1.0), WATER_DEEP);
+    // Glints drifting slowly across the surface.
+    for (i, s) in shape.iter().take(3).enumerate() {
+        let t = time * 0.3 + s * 10.0;
+        let glint = pos
+            + vec2(
+                (t + i as f32 * 2.0).sin() * r * 0.45,
+                (t * 0.7 + i as f32).cos() * r * 0.35,
             );
-            fill_fan(pos, &outline(pos, r, shape, 0.9, 1.1), STONE_DARK);
-            fill_fan(pos, &outline(pos, r, shape, 0.78, 0.95), STONE);
-            // A highlight on the upper left, and a crack.
-            let light = pos + vec2(-r * 0.3, -r * 0.3);
-            draw_ellipse(light.x, light.y, r * 0.35, r * 0.2, -30.0, STONE_LIGHT);
-            let crack = [
-                pos + vec2(r * 0.1, -r * 0.1),
-                pos + vec2(r * 0.25, r * 0.15),
-                pos + vec2(r * 0.15, r * 0.4),
-            ];
-            for pair in crack.windows(2) {
-                draw_line(pair[0].x, pair[0].y, pair[1].x, pair[1].y, 1.5, STONE_DARK);
-            }
-        }
-        Kind::Tree => {
-            draw_ellipse(pos.x + 6.0, pos.y + r * 0.7, r * 1.1, r * 0.45, 0.0, SHADOW);
-            draw_rectangle(pos.x - r * 0.15, pos.y, r * 0.3, r * 0.75, TRUNK);
-            // A canopy of overlapping leaf clusters.
-            draw_circle(pos.x, pos.y, r, LEAVES_DARK);
-            for i in 0..5 {
-                let angle = i as f32 / 5.0 * std::f32::consts::TAU + shape[0] * 3.0;
-                let cluster = pos + Vec2::from_angle(angle) * r * 0.45;
-                draw_circle(
-                    cluster.x,
-                    cluster.y,
-                    r * (0.45 + 0.15 * shape[i + 1]),
-                    LEAVES,
-                );
-            }
-            draw_circle(pos.x - r * 0.25, pos.y - r * 0.3, r * 0.35, LEAVES_LIGHT);
-        }
-        Kind::Lake => {
-            fill_fan(pos, &outline(pos, r, shape, 1.0, 1.12), SHORE);
-            fill_fan(pos, &outline(pos, r, shape, 0.88, 1.0), WATER);
-            fill_fan(pos, &outline(pos, r * 0.6, shape, 0.85, 1.0), WATER_DEEP);
-            // Glints drifting slowly across the surface.
-            for (i, s) in shape.iter().take(3).enumerate() {
-                let t = time * 0.3 + s * 10.0;
-                let glint = pos
-                    + vec2(
-                        (t + i as f32 * 2.0).sin() * r * 0.45,
-                        (t * 0.7 + i as f32).cos() * r * 0.35,
-                    );
-                let alpha = 0.4 + 0.3 * (time * 2.0 + i as f32).sin();
-                draw_line(
-                    glint.x - r * 0.12,
-                    glint.y,
-                    glint.x + r * 0.12,
-                    glint.y,
-                    2.0,
-                    Color {
-                        a: alpha,
-                        ..WATER_SHINE
-                    },
-                );
-            }
-        }
+        let alpha = 0.4 + 0.3 * (time * 2.0 + i as f32).sin();
+        draw_line(
+            glint.x - r * 0.12,
+            glint.y,
+            glint.x + r * 0.12,
+            glint.y,
+            2.0,
+            Color {
+                a: alpha,
+                ..WATER_SHINE
+            },
+        );
     }
 }
 
