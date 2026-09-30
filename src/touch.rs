@@ -349,10 +349,23 @@ impl TouchControls {
         draw_button(button_rect(Button::Music), |r| {
             let c = r.center();
             let color = if music_on { WHITE } else { GRAY };
-            // An eighth note.
-            draw_circle(c.x - 5.0, c.y + 9.0, 7.0, color);
-            draw_line(c.x + 1.5, c.y + 9.0, c.x + 1.5, c.y - 14.0, 3.0, color);
-            draw_line(c.x + 1.5, c.y - 14.0, c.x + 11.0, c.y - 7.0, 3.0, color);
+            // A loudspeaker: a box, a cone and two waves.
+            draw_rectangle(c.x - 15.0, c.y - 5.0, 8.0, 10.0, color);
+            draw_triangle(
+                vec2(c.x - 8.0, c.y - 5.0),
+                vec2(c.x - 8.0, c.y + 5.0),
+                vec2(c.x + 1.0, c.y + 14.0),
+                color,
+            );
+            draw_triangle(
+                vec2(c.x - 8.0, c.y - 5.0),
+                vec2(c.x + 1.0, c.y - 14.0),
+                vec2(c.x + 1.0, c.y + 14.0),
+                color,
+            );
+            for radius in [8.0, 14.0] {
+                draw_wave(vec2(c.x + 1.0, c.y), radius, color);
+            }
             if !music_on {
                 draw_line(c.x - 16.0, c.y - 16.0, c.x + 16.0, c.y + 16.0, 3.0, RED);
             }
@@ -487,6 +500,20 @@ fn draw_key(key: &KeySpec, rect: Rect, pressed: bool, font_size: u16) {
                 fill,
             );
         }
+    }
+}
+
+/// An arc of a sound wave, `radius` from `centre`, opening to the right.
+fn draw_wave(centre: Vec2, radius: f32, color: Color) {
+    const STEPS: usize = 5;
+    const SPREAD: f32 = 0.9;
+    let point = |i: usize| {
+        let angle = -SPREAD + 2.0 * SPREAD * i as f32 / STEPS as f32;
+        centre + vec2(angle.cos(), angle.sin()) * radius
+    };
+    for i in 0..STEPS {
+        let (a, b) = (point(i), point(i + 1));
+        draw_line(a.x, a.y, b.x, b.y, 2.5, color);
     }
 }
 

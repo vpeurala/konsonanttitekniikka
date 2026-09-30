@@ -99,7 +99,8 @@ impl App {
         }
     }
 
-    /// Whether the player has music switched on.
+    /// Whether the player has sound switched on: the music and the sound
+    /// effects both.
     pub fn music_on(&self) -> bool {
         self.progress.music_on
     }
@@ -257,6 +258,11 @@ impl App {
         }
         if let Some(next) = next {
             self.screen = next;
+        }
+        // The sound switch (still called music in the save file) silences
+        // the sound effects too, not just the music.
+        if !self.progress.music_on {
+            effects.retain(|effect| !matches!(effect, Effect::Play(_)));
         }
         effects
     }

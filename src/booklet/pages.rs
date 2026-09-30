@@ -380,7 +380,7 @@ fn how_to_play(assets: &Assets) -> Page {
          <tr><td><kbd>0</kbd>–<kbd>9</kbd>, kirjaimet</td><td>Kirjoita vastaus</td></tr>\
          <tr><td><kbd>Askelpalautin</kbd></td><td>Tyhjennä kirjoittamasi</td></tr>\
          <tr><td><kbd>Välilyönti</kbd></td><td>Tauko</td></tr>\
-         <tr><td><kbd>Tab</kbd></td><td>Musiikki päälle tai pois</td></tr>\
+         <tr><td><kbd>Tab</kbd></td><td>Äänet päälle tai pois</td></tr>\
          <tr><td><kbd>Esc</kbd></td><td>Takaisin</td></tr>\
          </table>\
          <p>Kosketusnäytöllä peli näyttää oman näppäimistön ja ohjaussauvan. Käännä laite silloin vaakasuuntaan. \

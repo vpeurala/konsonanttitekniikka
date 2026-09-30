@@ -246,6 +246,27 @@ fn sound_effects_are_passed_on() {
 }
 
 #[test]
+fn switching_the_sound_off_silences_the_sound_effects_too() {
+    let typing = || Frame {
+        typed: vec![crate::keyboard::Key::Char('1')],
+        ..frame()
+    };
+    let mut app = app();
+    app.update(&press(KeyCode::Enter));
+    app.update(&press(KeyCode::Tab));
+    assert!(!app.music_on());
+    let mut effects = app.update(&typing());
+    effects.extend(idle(&mut app, START, 5.0));
+    assert!(
+        !effects.iter().any(|e| matches!(e, Effect::Play(_))),
+        "{effects:?}"
+    );
+    // Everything but the sounds carries on, and switching back restores them.
+    app.update(&press(KeyCode::Tab));
+    assert!(app.update(&typing()).contains(&Effect::Play(Sfx::Type)));
+}
+
+#[test]
 fn the_same_frames_give_the_same_effects() {
     let run = || {
         let mut app = app();

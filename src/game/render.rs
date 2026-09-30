@@ -216,7 +216,7 @@ impl Game {
         // The touch panel has buttons for these instead.
         if !self.touch {
             draw_text(
-                "Tab: musiikki   Välilyönti: tauko",
+                "Tab: äänet   Välilyönti: tauko",
                 16.0,
                 ARENA_H - 16.0,
                 16.0,
