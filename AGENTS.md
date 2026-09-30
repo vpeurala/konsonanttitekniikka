@@ -8,7 +8,7 @@ code fits together, and pitfalls already found the hard way.
 
 - **Talk to the user in English. Everything in the game stays in Finnish**:
   menus, messages, banners, help texts.
-- **The pair list in `src/pairs.rs` is authoritative.** Never "fix" a word,
+- **The pair list in `core/src/pairs.rs` is authoritative.** Never "fix" a word,
   even if it looks odd; change a pair only when the user asks (44 became
   MUUMIO that way). Every pair has a picture in `src/pictures.rs`.
 - **Licenses.** The code is MIT OR Apache-2.0 (`LICENSE-MIT`,
@@ -68,6 +68,20 @@ code fits together, and pitfalls already found the hard way.
 
 ## How the code fits together
 
+**Two crates.** `core/` (`lukuloitsu-core`) holds the rules and state
+machines: `pairs`, `curriculum`, `long_numbers`, `memory`, `badges`, `levels`
+(the checkpoint rule), `save` (the file's format, not where it lives), `rng`,
+`effects`, `obstacles`, `portals` and the whole `game` simulation. It depends
+only on `glam` and has no graphics, sound, clock or input, so the compiler
+enforces the purity described below: if you need macroquad in `core/`, the
+code belongs in the shell instead. It hands the shell small plain types to
+work with: `Sfx`, `Key`, `Color` (only for sparks), `Tone` (how a message
+feels; the shell picks the colour) and `game::Scene`, a read-only picture of a
+game that `src/game_render.rs` draws. The root crate is the shell: `main.rs`,
+the app and its screens, drawing, audio, touch, saving to disk. `main.rs`
+re-exports the core modules by name, so shell code says `crate::pairs::...`.
+A plain `cargo test` or `cargo clippy` covers both crates (`default-members`).
+
 **Pure core, impure shell.** Side effects live only in the outermost layer.
 `main.rs` is the shell: each frame it reads input into a `Frame`
 (`frame.rs`, the one place that asks the window and the clock), passes it
@@ -78,18 +92,23 @@ wants done as return values, so it is tested by running made-up frames
 through it (see `src/app/tests.rs` and `src/game/tests.rs`). Keep it that
 way: don't call `is_key_pressed`, `get_frame_time`, `date::now` or measure
 text inside the core; add a field to `Frame` or `game::Input` instead.
-Drawing (`draw` methods, `game/render.rs`, sprites, pictures) reads state
+Drawing (`draw` methods, `src/game_render.rs`, sprites, pictures) reads state
 and never changes it. Layout maths that drawing needs is kept in pure
 functions (`slot_rects`, `cell_rect`, `legend_layout`, `Enemy::keep_on_screen`)
 so it can be tested without a screen; do the same for new layouts.
 
 - `main.rs`: the shell, described above, and the `--render-*` commands.
 - `app.rs`: which screen is showing (title, level choice, game, practice,
-  progress), progress and saving, and the `Effect`s. It holds the live
-  `Memory` and copies it into the save data only when saving.
+  progress) and the `Effect`s; each screen has its own method returning a
+  `Step` (where to go next, what to do outside). `app/persistence.rs` holds
+  the save data and the one live `Memory`, which the game and practice learn
+  into (it is passed to `Game::update`, never copied), and `app/events.rs` says
+  what game events mean for the counters and the statistics. `Effect::Save`
+  carries the save file's text; `analytics::Event` is what gets counted, and
+  the Finnish paths and titles are made there.
 - `frame.rs`: `Frame`, one frame of input, and `Inputs::read`, which makes
   it.
-- `game/`: the game itself. Monsters show a number or a word; typed digits
+- `core/src/game/`: the game itself. Monsters show a number or a word; typed digits
   go to the number slot and letters to the word slot, each answering the
   monsters showing the other kind. Backspace empties both slots.
   `Game::update(&Input) -> Outputs` is the only way in; `Outputs` carry
@@ -105,7 +124,7 @@ so it can be tested without a screen; do the same for new layouts.
   `answer.rs` (matching what was typed), `display.rs` (sparks, banners and
   messages, which the rules tell to show but never read), `enemy.rs`,
   `metrics.rs`, `spawn.rs`, `combat.rs` (spells, collisions, movement) and
-  `render.rs` (the only file that draws).
+  `scene.rs` (the read-only `Scene` for drawing; `src/game_render.rs` in the shell is the only code that draws it).
 - `booklet/`: the user instruction booklet, `--render-booklet FILE.html`:
   one self-contained HTML file (fonts and PNG pictures embedded as base64),
   16 A4 pages in Finnish, colourful, decorated with the game's characters.
@@ -183,7 +202,7 @@ so it can be tested without a screen; do the same for new layouts.
   everything drawn is code; there are no image assets besides the fonts in
   `assets/`.
 - `effects.rs`: sparks, rings and lightning as pure state that moves on with
-  time; `game/render.rs` draws it.
+  time; `src/game_render.rs` draws it.
 - `lifecycle.rs`: notices when the app was away, so the game pauses itself
   (`Frame::away`).
 - `web.rs`, `analytics.rs`: the browser version's link to the page.

@@ -10,32 +10,36 @@
 mod answer;
 mod combat;
 mod display;
-mod enemy;
+pub mod enemy;
 mod metrics;
-mod render;
-mod rules;
+mod scene;
+pub use scene::{Scene, SlotView};
+pub mod rules;
 mod spawn;
 
 use std::collections::HashMap;
 
-use macroquad::prelude::{Color, GOLD, GREEN, RED, Vec2, vec2};
+use glam::{Vec2, vec2};
 
-use crate::audio::Sfx;
+use crate::arena::{ARENA_H, ARENA_W};
 use crate::curriculum::Curriculum;
-use crate::keyboard::Key;
+use crate::key::Key;
 use crate::long_numbers::Question;
 use crate::memory::Memory;
 use crate::obstacles::{Obstacle, obstacles_for_level, push_out};
 use crate::pairs::{self, PairId};
 use crate::portals::portal_positions;
 use crate::rng::{Rng, Stream};
-use crate::view::{ARENA_H, ARENA_W};
+use crate::sfx::Sfx;
 
+pub use answer::Slot;
+use answer::Typed;
 pub use answer::{InputOutcome, resolve_input};
-use answer::{Slot, Typed};
-use combat::Spell;
+pub use combat::{Spell, SpellTarget};
 use display::Display;
-use enemy::{Enemy, EnemyId};
+pub use display::{Banner, Feedback, Tone};
+pub use enemy::Enemy;
+use enemy::EnemyId;
 use rules::*;
 
 /// What the outside world says happened this frame.
@@ -96,8 +100,6 @@ pub enum GameEvent {
     /// no wrong key and no hit.
     FlawlessLevel,
 }
-
-const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 
 /// What counts appearances of a pair: each pair on its own, and all long
 /// numbers together.
@@ -240,7 +242,7 @@ impl Game {
             self.display.announce(
                 format!("Taso {}", self.level),
                 "Onnea matkaan!".to_owned(),
-                GOLD,
+                Tone::Celebrate,
                 None,
             );
         }
@@ -413,7 +415,7 @@ impl Game {
             self.out.sfx.push(Sfx::Wrong);
             self.display.say(
                 format!("Väärin: {}", self.typed.get(slot).to_uppercase()),
-                RED,
+                Tone::Wrong,
             );
             self.typed.get_mut(slot).clear();
             return;
@@ -436,7 +438,7 @@ impl Game {
                 self.hit_enemy(id, memory);
             }
             self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
-            self.show_question(&first, GREEN);
+            self.show_question(&first, Tone::Right);
             self.typed.get_mut(slot).clear();
             self.add_points(hits.len() as u32, memory);
         }
@@ -503,14 +505,18 @@ impl Game {
         } else {
             "Hienoa!".to_owned()
         };
-        self.display
-            .announce(format!("Taso {}!", self.level), subtitle, GOLD, Some(stars));
+        self.display.announce(
+            format!("Taso {}!", self.level),
+            subtitle,
+            Tone::Celebrate,
+            Some(stars),
+        );
     }
 
-    fn show_question(&mut self, question: &Question, color: Color) {
+    fn show_question(&mut self, question: &Question, tone: Tone) {
         self.display.say(
             format!("{} = {}", question.words(), question.number(false)),
-            color,
+            tone,
         );
     }
 }

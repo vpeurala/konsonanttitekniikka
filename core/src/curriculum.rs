@@ -15,6 +15,12 @@ pub struct Curriculum {
     new: Vec<Pair>,
 }
 
+impl Default for Curriculum {
+    fn default() -> Self {
+        Curriculum::new()
+    }
+}
+
 impl Curriculum {
     /// The first level: all single-digit pairs, which are all new.
     pub fn new() -> Self {

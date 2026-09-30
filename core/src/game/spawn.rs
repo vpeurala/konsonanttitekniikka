@@ -1,16 +1,16 @@
 //! Bringing monsters and bosses into the arena.
 
 use crate::memory::Memory;
-use macroquad::prelude::{VIOLET, Vec2, vec2};
+use glam::{Vec2, vec2};
 
-use super::Game;
 use super::enemy::Enemy;
 use super::rules::*;
-use crate::audio::Sfx;
+use super::{Game, Tone};
+use crate::arena::{ARENA_H, ARENA_W};
 use crate::long_numbers::{self, Question};
 use crate::pairs::Pair;
 use crate::rng::Rng;
-use crate::view::{ARENA_H, ARENA_W};
+use crate::sfx::Sfx;
 
 impl Game {
     /// The unlocked pairs not currently on screen, including those of
@@ -164,7 +164,7 @@ impl Game {
             format!("Tarvitaan {count} osumaa")
         };
         self.display
-            .announce("Pomo saapuu!".to_owned(), subtitle, VIOLET, None);
+            .announce("Pomo saapuu!".to_owned(), subtitle, Tone::Boss, None);
     }
 }
 

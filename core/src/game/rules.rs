@@ -1,26 +1,26 @@
 //! The game's numbers and the pure rules built on them: how much energy
 //! things cost, how many points a level needs, how fast monsters move.
 
-use macroquad::prelude::{
+use crate::color::{
     Color, GOLD, MAGENTA, MAROON, ORANGE, PINK, RED, SKYBLUE, VIOLET, WHITE, YELLOW,
 };
 
-pub(super) const PLAYER_SPEED: f32 = 260.0;
-pub(super) const PLAYER_RADIUS: f32 = 16.0;
-pub(super) const ENEMY_RADIUS: f32 = 20.0;
-pub(super) const MAX_ENEMIES: usize = 6;
+pub const PLAYER_SPEED: f32 = 260.0;
+pub const PLAYER_RADIUS: f32 = 16.0;
+pub const ENEMY_RADIUS: f32 = 20.0;
+pub const MAX_ENEMIES: usize = 6;
 
 /// Enemies never appear closer than this to the player.
-pub(super) const MIN_SPAWN_DISTANCE: f32 = 300.0;
-pub(super) const SPAWN_ATTEMPTS: usize = 40;
+pub const MIN_SPAWN_DISTANCE: f32 = 300.0;
+pub const SPAWN_ATTEMPTS: usize = 40;
 
 /// A pair's first appearances in a game get an early hint.
-pub(super) const HINTED_APPEARANCES: u32 = 3;
+pub const HINTED_APPEARANCES: u32 = 3;
 /// How long an early hint waits after the pair is shown.
-pub(super) const EARLY_HINT_SECONDS: f32 = 2.0;
+pub const EARLY_HINT_SECONDS: f32 = 2.0;
 /// Any other enemy shows its answer once it is this fast, as a fraction of
 /// its top speed. With the current speeds that takes about 22 seconds.
-pub(super) const HINT_SPEED_FRACTION: f32 = 0.3;
+pub const HINT_SPEED_FRACTION: f32 = 0.3;
 
 /// Whether an enemy shows its answer. Every enemy starts without a hint.
 /// One of the first appearances of its pair in this game
@@ -35,80 +35,80 @@ pub fn shows_hint(earlier_appearances: u32, shown_for: f32, speed_fraction: f32)
     }
 }
 
-pub(super) const MAX_ENERGY: f32 = 100.0;
-pub(super) const HIT_REWARD: f32 = 5.0;
-pub(super) const WRONG_PENALTY: f32 = 10.0;
+pub const MAX_ENERGY: f32 = 100.0;
+pub const HIT_REWARD: f32 = 5.0;
+pub const WRONG_PENALTY: f32 = 10.0;
 /// Wrong keys never take energy below this, so only collisions can end
 /// the game.
-pub(super) const LOW_ENERGY: f32 = 20.0;
-pub(super) const COLLISION_PENALTY: f32 = 20.0;
+pub const LOW_ENERGY: f32 = 20.0;
+pub const COLLISION_PENALTY: f32 = 20.0;
 
-pub(super) const FEEDBACK_SECONDS: f32 = 2.5;
+pub const FEEDBACK_SECONDS: f32 = 2.5;
 
 const FIRST_LEVEL_POINTS: u32 = 10;
 /// How many more points each level needs than the one before...
 const LEVEL_POINTS_INCREASE: u32 = 5;
 /// ...up to this many, so no level drags on. Later levels get harder
 /// through faster spawns, tougher bosses and longer numbers instead.
-pub(super) const MAX_LEVEL_POINTS: u32 = 40;
-pub(super) const BANNER_SECONDS: f32 = 2.5;
+pub const MAX_LEVEL_POINTS: u32 = 40;
+pub const BANNER_SECONDS: f32 = 2.5;
 /// No new enemies appear for this long after a level starts.
-pub(super) const LEVEL_BREAK_SECONDS: f32 = 2.0;
+pub const LEVEL_BREAK_SECONDS: f32 = 2.0;
 
 /// A new enemy's speed.
-pub(super) const START_SPEED: f32 = 12.0;
+pub const START_SPEED: f32 = 12.0;
 /// Speed an enemy gains per second on screen, up to the player's speed.
 const SPEED_GROWTH: f32 = 3.0;
-pub(super) const START_SPAWN_INTERVAL: f32 = 4.0;
-pub(super) const MIN_SPAWN_INTERVAL: f32 = 1.2;
+pub const START_SPAWN_INTERVAL: f32 = 4.0;
+pub const MIN_SPAWN_INTERVAL: f32 = 1.2;
 /// Spawn interval lost per second spent on a level.
 const SPAWN_INTERVAL_SHRINK: f32 = 0.05;
 
-pub(super) const BOSS_RADIUS: f32 = 36.0;
+pub const BOSS_RADIUS: f32 = 36.0;
 /// The first level's boss takes this many hits.
 const BOSS_FIRST_HITS: usize = 3;
 /// Bosses take one more hit every this many levels.
 const BOSS_LEVELS_PER_EXTRA_HIT: u32 = 2;
-pub(super) const BOSS_MAX_HITS: usize = 10;
+pub const BOSS_MAX_HITS: usize = 10;
 /// The boss moves at this fraction of a normal enemy's speed.
-pub(super) const BOSS_SPEED_FACTOR: f32 = 0.6;
+pub const BOSS_SPEED_FACTOR: f32 = 0.6;
 /// How far a spell pushes the boss back.
-pub(super) const BOSS_HIT_KNOCKBACK: f32 = 50.0;
+pub const BOSS_HIT_KNOCKBACK: f32 = 50.0;
 /// How far the boss bounces back after running into the player.
-pub(super) const BOSS_COLLISION_KNOCKBACK: f32 = 220.0;
-pub(super) const BOSS_HIT_FLASH_SECONDS: f32 = 0.25;
+pub const BOSS_COLLISION_KNOCKBACK: f32 = 220.0;
+pub const BOSS_HIT_FLASH_SECONDS: f32 = 0.25;
 /// After running into the player, the boss can't hurt her again for this
 /// long, even if it is stuck next to her against an edge.
-pub(super) const BOSS_HARMLESS_SECONDS: f32 = 1.5;
+pub const BOSS_HARMLESS_SECONDS: f32 = 1.5;
 
-pub(super) const SPELL_SPEED: f32 = 700.0;
+pub const SPELL_SPEED: f32 = 700.0;
 /// How long she keeps her hand raised after casting.
-pub(super) const CAST_SECONDS: f32 = 0.35;
+pub const CAST_SECONDS: f32 = 0.35;
 
-pub(super) const KILL_PALETTE: [Color; 4] = [ORANGE, YELLOW, GOLD, WHITE];
-pub(super) const SPELL_PALETTE: [Color; 4] = [PINK, MAGENTA, VIOLET, WHITE];
-pub(super) const COLLISION_PALETTE: [Color; 3] = [RED, MAROON, ORANGE];
+pub const KILL_PALETTE: [Color; 4] = [ORANGE, YELLOW, GOLD, WHITE];
+pub const SPELL_PALETTE: [Color; 4] = [PINK, MAGENTA, VIOLET, WHITE];
+pub const COLLISION_PALETTE: [Color; 3] = [RED, MAROON, ORANGE];
 
 /// How often a new monster uses one of the level's new pairs, when one is
 /// free, so new pairs get extra practice.
-pub(super) const NEW_PAIR_SHARE: f32 = 0.5;
+pub const NEW_PAIR_SHARE: f32 = 0.5;
 
 /// How often a new monster comes out of a portal rather than a screen
 /// edge.
-pub(super) const PORTAL_SPAWN_SHARE: f32 = 0.75;
+pub const PORTAL_SPAWN_SHARE: f32 = 0.75;
 /// Monsters don't come out of a portal closer than this to the player.
-pub(super) const MIN_PORTAL_SPAWN_DISTANCE: f32 = 200.0;
-pub(super) const PORTAL_PALETTE: [Color; 3] = [VIOLET, SKYBLUE, WHITE];
+pub const MIN_PORTAL_SPAWN_DISTANCE: f32 = 200.0;
+pub const PORTAL_PALETTE: [Color; 3] = [VIOLET, SKYBLUE, WHITE];
 
 /// A frame longer than this counts as this long, so a stall doesn't make
 /// the game jump ahead.
-pub(super) const MAX_FRAME_SECONDS: f32 = 0.25;
+pub const MAX_FRAME_SECONDS: f32 = 0.25;
 /// The game always advances in steps of exactly this long, however long
 /// the frames are, so a game plays out the same on a slow phone and a fast
 /// monitor, and a fast spell or monster can't skip past what it should
 /// hit. It is short enough that a screen showing fewer or more frames
 /// than steps per second looks smooth without blending between steps.
-pub(super) const STEP_SECONDS: f32 = 1.0 / 120.0;
+pub const STEP_SECONDS: f32 = 1.0 / 120.0;
 /// How far short of a step still counts as one, to absorb rounding.
 const STEP_TOLERANCE: f32 = 1e-6;
 

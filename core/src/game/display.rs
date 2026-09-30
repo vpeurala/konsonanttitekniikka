@@ -3,23 +3,38 @@
 //! things to show; time moves it on; `render` reads it. Nothing here is
 //! ever read by the rules.
 
-use macroquad::prelude::{Color, Vec2};
+use glam::Vec2;
 
 use super::rules::{BANNER_SECONDS, CAST_SECONDS, FEEDBACK_SECONDS};
 use crate::effects::Effects;
 
+/// How a message feels, which the shell turns into a colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tone {
+    /// Something went right.
+    Right,
+    /// Something went wrong.
+    Wrong,
+    /// A celebration, like a new level.
+    Celebrate,
+    /// A monster reached her; the answer is shown so it can be learned.
+    Missed,
+    /// A boss is coming.
+    Boss,
+}
+
 /// A short message under the arena, like "KUU = 2".
-pub(super) struct Feedback {
+pub struct Feedback {
     pub text: String,
-    pub color: Color,
+    pub tone: Tone,
     pub seconds_left: f32,
 }
 
 /// A big message in the middle of the screen, like "Taso 2!".
-pub(super) struct Banner {
+pub struct Banner {
     pub title: String,
     pub subtitle: String,
-    pub color: Color,
+    pub tone: Tone,
     /// Stars earned, shown under a level-up banner.
     pub stars: Option<u8>,
     pub seconds_left: f32,
@@ -36,21 +51,21 @@ pub(super) struct Display {
 
 impl Display {
     /// Shows a big message for a while.
-    pub fn announce(&mut self, title: String, subtitle: String, color: Color, stars: Option<u8>) {
+    pub fn announce(&mut self, title: String, subtitle: String, tone: Tone, stars: Option<u8>) {
         self.banner = Some(Banner {
             title,
             subtitle,
-            color,
+            tone,
             stars,
             seconds_left: BANNER_SECONDS,
         });
     }
 
     /// Shows a short message for a while.
-    pub fn say(&mut self, text: String, color: Color) {
+    pub fn say(&mut self, text: String, tone: Tone) {
         self.feedback = Some(Feedback {
             text,
-            color,
+            tone,
             seconds_left: FEEDBACK_SECONDS,
         });
     }

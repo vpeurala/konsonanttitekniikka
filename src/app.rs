@@ -17,6 +17,7 @@ use crate::audio::Sfx;
 use crate::badge_screen::BadgeScreen;
 use crate::frame::Frame;
 use crate::game::{self, Game};
+use crate::game_render;
 use crate::keyboard::Key;
 use crate::levels::{LevelAction, LevelSelect};
 use crate::practice::{PracticeAction, PracticeScreen};
@@ -353,7 +354,7 @@ impl App {
             Screen::Game(game) => {
                 let content = touch::content_rect(self.touch_mode);
                 let view = view::begin(content);
-                game.draw(view);
+                game_render::draw(&game.scene(), view);
                 if self.touch_mode {
                     self.controls.draw(self.music_on(), game.is_paused(), true);
                 }

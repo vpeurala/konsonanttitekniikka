@@ -1,7 +1,5 @@
 //! Reading what the player typed: which answers on screen it matches.
 
-use macroquad::prelude::{Color, SKYBLUE, VIOLET};
-
 /// What the typed text means given the answers currently on screen.
 #[derive(Debug, PartialEq, Eq)]
 pub enum InputOutcome {
@@ -43,7 +41,7 @@ pub fn resolve_input<'a>(
 /// Where typed characters go: digits to the number slot, letters to the
 /// word slot. Each slot answers the enemies showing the other kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Slot {
+pub enum Slot {
     Number,
     Word,
 }
@@ -84,14 +82,6 @@ impl Slot {
             Slot::Number
         } else {
             Slot::Word
-        }
-    }
-
-    /// The slot's color, which the monsters it answers share.
-    pub(super) fn accent(self) -> Color {
-        match self {
-            Slot::Number => SKYBLUE,
-            Slot::Word => VIOLET,
         }
     }
 }

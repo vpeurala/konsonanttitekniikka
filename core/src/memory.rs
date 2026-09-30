@@ -159,6 +159,22 @@ impl Memory {
     }
 }
 
+/// A pair counts as learned once its difficulty is below this.
+pub const LEARNED: f32 = 0.25;
+
+/// Whether `pair` counts as learned.
+pub fn is_learned(memory: &Memory, pair: &Pair) -> bool {
+    memory.record(pair).is_some_and(|r| r.difficulty < LEARNED)
+}
+
+/// How many pairs count as learned.
+pub fn learned_count(memory: &Memory) -> usize {
+    pairs::PAIRS
+        .iter()
+        .filter(|p| is_learned(memory, p))
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

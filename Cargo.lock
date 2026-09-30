@@ -232,7 +232,15 @@ name = "lukuloitsu"
 version = "0.4.5"
 dependencies = [
  "image 0.25.10",
+ "lukuloitsu-core",
  "macroquad",
+]
+
+[[package]]
+name = "lukuloitsu-core"
+version = "0.4.5"
+dependencies = [
+ "glam",
 ]
 
 [[package]]

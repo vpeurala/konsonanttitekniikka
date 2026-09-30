@@ -2,28 +2,28 @@
 
 use std::collections::VecDeque;
 
-use macroquad::prelude::{Vec2, vec2};
+use glam::{Vec2, vec2};
 
 use super::answer::Slot;
 use super::metrics::text_width;
 use super::rules::{
     BOSS_RADIUS, BOSS_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED, enemy_speed, shows_hint,
 };
+use crate::arena::{ARENA_H, ARENA_W};
 use crate::long_numbers::Question;
 use crate::memory::{self, Memory};
-use crate::view::{ARENA_H, ARENA_W};
 
-pub(super) const LABEL_FONT_SIZE: u16 = 22;
+pub const LABEL_FONT_SIZE: u16 = 22;
 pub(super) const LABEL_PAD: f32 = 6.0;
 /// Gap between an enemy's body and the center of its label.
 const LABEL_GAP: f32 = 22.0;
-pub(super) const LABEL_HEIGHT: f32 = LABEL_FONT_SIZE as f32 + 2.0;
-pub(super) const HINT_FONT_SIZE: u16 = 20;
+pub const LABEL_HEIGHT: f32 = LABEL_FONT_SIZE as f32 + 2.0;
+pub const HINT_FONT_SIZE: u16 = 20;
 /// Extra room below the label for a hint.
-pub(super) const HINT_SPACE: f32 = 28.0;
+pub const HINT_SPACE: f32 = 28.0;
 
 /// A boss's extra lives: the numbers it shows after its current one.
-pub(super) struct BossLives {
+pub struct BossLives {
     pub queue: VecDeque<Question>,
     pub total: usize,
     /// Seconds left of the white flash after being hit.
@@ -36,9 +36,9 @@ pub(super) struct BossLives {
 /// Positions in the list shift when an enemy leaves, so anything that
 /// has to find the same enemy later holds one of these instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct EnemyId(pub u32);
+pub struct EnemyId(pub u32);
 
-pub(super) struct Enemy {
+pub struct Enemy {
     /// Set by `Game::admit` when the enemy joins the game.
     pub id: EnemyId,
     pub pos: Vec2,

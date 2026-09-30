@@ -2,7 +2,9 @@
 //! here is state that moves on with time, and it is pure; `game/render.rs`
 //! draws it.
 
-use macroquad::prelude::{Color, SKYBLUE, Vec2, WHITE, YELLOW, vec2};
+use glam::{Vec2, vec2};
+
+use crate::color::{Color, SKYBLUE, WHITE, YELLOW};
 
 use crate::rng::{Rng, Stream};
 

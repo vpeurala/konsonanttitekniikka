@@ -2,7 +2,7 @@
 //! only on the level and the screen size, so a level always has its
 //! portals in the same places.
 
-use macroquad::math::{Vec2, vec2};
+use glam::{Vec2, vec2};
 
 use crate::rng::{Rng, Stream};
 

@@ -1,17 +1,17 @@
 //! Spells, collisions and the movement of monsters.
 
 use crate::memory::Memory;
-use macroquad::prelude::{Vec2, YELLOW};
+use glam::Vec2;
 
 use super::enemy::{Enemy, EnemyId};
 use super::rules::*;
-use super::{Game, GameEvent};
-use crate::audio::Sfx;
+use super::{Game, GameEvent, Tone};
+use crate::arena::girl_hand;
 use crate::obstacles::{push_out, steer};
-use crate::sprites::girl_hand;
+use crate::sfx::Sfx;
 
 /// What a spell is flying toward.
-pub(super) enum SpellTarget {
+pub enum SpellTarget {
     /// An enemy that is already out of play and explodes when hit.
     Doomed(Enemy),
     /// The boss, which is still in play and only loses a life.
@@ -19,7 +19,7 @@ pub(super) enum SpellTarget {
 }
 
 /// A magic bolt flying toward an answered enemy.
-pub(super) struct Spell {
+pub struct Spell {
     pub pos: Vec2,
     pub target: SpellTarget,
     /// Where the target was last seen, in case the boss dies first.
@@ -211,7 +211,7 @@ impl Game {
                 .effects
                 .explode(enemy.pos, enemy.radius, &COLLISION_PALETTE);
             // Show the pair so a collision still teaches something.
-            self.show_question(&enemy.question, YELLOW);
+            self.show_question(&enemy.question, Tone::Missed);
         }
         if hurt {
             self.mistake();

@@ -6,8 +6,7 @@
 
 use macroquad::prelude::*;
 
-pub const ARENA_W: f32 = 800.0;
-pub const ARENA_H: f32 = 600.0;
+pub use lukuloitsu_core::arena::{ARENA_H, ARENA_W};
 
 /// Maps between screen points and virtual units for one frame.
 #[derive(Debug, Clone, Copy)]

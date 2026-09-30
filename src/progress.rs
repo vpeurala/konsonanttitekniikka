@@ -6,7 +6,7 @@ use macroquad::prelude::*;
 use crate::fonts::draw_centered_text;
 use crate::fonts::{self, Style};
 use crate::frame::Frame;
-use crate::memory::Memory;
+use crate::memory::{LEARNED, Memory, learned_count};
 use crate::pairs::{PAIRS, Pair};
 use crate::save::SaveData;
 use crate::sprites::draw_star;
@@ -14,8 +14,6 @@ use crate::title::pair_rows;
 use crate::touch::Pointer;
 use crate::view::{ARENA_H, ARENA_W};
 
-/// A pair counts as learned once its difficulty is below this.
-const LEARNED: f32 = 0.25;
 /// The colour is pure yellow here; a pair is "nearly" learned around it.
 const NEARLY: f32 = 0.5;
 /// Halfway between yellow and red: past this a pair still needs practice.
@@ -60,16 +58,6 @@ pub fn mastery_tier(difficulty: f32) -> u8 {
     } else {
         1
     }
-}
-
-/// Whether `pair` counts as learned.
-pub fn is_learned(memory: &Memory, pair: &Pair) -> bool {
-    memory.record(pair).is_some_and(|r| r.difficulty < LEARNED)
-}
-
-/// How many pairs count as learned.
-pub fn learned_count(memory: &Memory) -> usize {
-    PAIRS.iter().filter(|p| is_learned(memory, p)).count()
 }
 
 #[derive(Default)]

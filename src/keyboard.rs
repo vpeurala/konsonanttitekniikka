@@ -6,11 +6,7 @@
 use macroquad::input::utils::{register_input_subscriber, repeat_all_miniquad_input};
 use macroquad::miniquad::{EventHandler, KeyCode, KeyMods};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Key {
-    Char(char),
-    Backspace,
-}
+pub use lukuloitsu_core::key::Key;
 
 pub struct Keyboard {
     subscriber: usize,

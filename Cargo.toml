@@ -7,7 +7,15 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/vpeurala/lukuloitsu.fi"
 homepage = "https://lukuloitsu.fi"
 
+# The rules and state machines live in `core`, which has no graphics,
+# sound or clock; this crate is the shell around them. `default-members`
+# makes a plain `cargo test` or `cargo clippy` cover both.
+[workspace]
+members = ["core"]
+default-members = [".", "core"]
+
 [dependencies]
+lukuloitsu-core = { path = "core" }
 macroquad = { version = "0.4.16", features = ["audio"] }
 # The booklet uses it to encode pictures. macroquad has its own, older copy,
 # so the two are built side by side (about 1% more web download).

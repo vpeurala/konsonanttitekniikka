@@ -130,7 +130,7 @@ Open Font License, and the licenses are next to them
 [Fredoka](assets/fonts/OFL-Fredoka.txt)). `vendor/miniquad` keeps its own
 license files.
 
-**The word list.** The 110 number and word pairs in `src/pairs.rs` are the
+**The word list.** The 110 number and word pairs in `core/src/pairs.rs` are the
 author's own work, compiled over years. The list itself (the choice of a word
 for each number, not the Rust code around it) is licensed under
 [CC BY-SA 4.0](LICENSE-CC-BY-SA)

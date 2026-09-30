@@ -12,21 +12,7 @@ pub const RATE: u32 = 44_100;
 const MUSIC_VOLUME: f32 = 0.35;
 const SFX_VOLUME: f32 = 0.6;
 
-/// A sound effect the game asks to be played.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Sfx {
-    Type,
-    Cast,
-    Explode,
-    Hurt,
-    Wrong,
-    LevelUp,
-    GameOver,
-    Boss,
-    Thunder,
-    /// A badge was earned.
-    Badge,
-}
+pub use lukuloitsu_core::sfx::Sfx;
 
 pub struct Audio {
     music: Sound,

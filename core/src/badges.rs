@@ -8,9 +8,8 @@
 //! badges newly earned. An earned badge is remembered in the save file and
 //! never taken away, even if, say, a pair is forgotten again later.
 
-use crate::memory::{FAST_SECONDS, Memory};
+use crate::memory::{FAST_SECONDS, Memory, is_learned};
 use crate::pairs::{PAIR_COUNT, PAIRS};
-use crate::progress::is_learned;
 use crate::save::SaveData;
 
 /// The most any counter is allowed to reach, so a damaged save can't send

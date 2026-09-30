@@ -3,27 +3,18 @@ mod app;
 mod audio;
 mod badge_art;
 mod badge_screen;
-mod badges;
 mod booklet;
-mod curriculum;
-mod effects;
 mod fonts;
 mod frame;
-mod game;
+mod game_render;
 mod icon;
 mod keyboard;
 mod levels;
 mod lifecycle;
-mod long_numbers;
-mod memory;
 mod music;
-mod obstacles;
-mod pairs;
 mod pictures;
-mod portals;
 mod practice;
 mod progress;
-mod rng;
 mod save;
 mod sprites;
 mod title;
@@ -33,6 +24,8 @@ mod view;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+// The rules live in the core crate; these names keep the paths short.
+use lukuloitsu_core::{badges, curriculum, game, long_numbers, memory, obstacles, pairs, rng};
 use macroquad::prelude::*;
 
 use app::{App, Effect};

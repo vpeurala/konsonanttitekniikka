@@ -5,9 +5,9 @@
 use super::{Assets, Page, escape, letter_tiles};
 use crate::badges::BADGES;
 use crate::curriculum::NEW_PAIRS_PER_LEVEL;
-use crate::levels::LEVELS_PER_CHECKPOINT;
 use crate::long_numbers::{Question, first_long_level};
 use crate::pairs::{DIGIT_CONSONANTS, PAIR_COUNT, PAIRS, Pair, VOWELS, find};
+use lukuloitsu_core::levels::LEVELS_PER_CHECKPOINT;
 
 pub fn pages(assets: &Assets) -> Vec<Page> {
     let mut pages = vec![

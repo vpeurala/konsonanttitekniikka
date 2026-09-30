@@ -1,0 +1,14 @@
+[package]
+name = "lukuloitsu-core"
+version = "0.4.5"
+edition = "2024"
+description = "The rules and state machines of Lukuloitsu, with no graphics, sound or clock"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vpeurala/lukuloitsu.fi"
+homepage = "https://lukuloitsu.fi"
+
+# Nothing here may depend on macroquad or anything else that draws, plays
+# sounds or reads the clock: that is what keeps the rules pure. `glam` is
+# the maths library macroquad itself uses, so its vectors are the same type.
+[dependencies]
+glam = "0.27"

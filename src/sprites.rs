@@ -14,17 +14,7 @@ const EYES: Color = Color::new(0.15, 0.1, 0.1, 1.0);
 
 const SHADOW: Color = Color::new(0.0, 0.0, 0.0, 0.35);
 
-/// Which side of her body faces `toward`: -1.0 for left, 1.0 for right.
-fn side_toward(pos: Vec2, toward: Vec2) -> f32 {
-    if toward.x < pos.x { -1.0 } else { 1.0 }
-}
-
-/// Where her raised hand is while casting toward `toward`.
-pub fn girl_hand(pos: Vec2, toward: Vec2) -> Vec2 {
-    let side = side_toward(pos, toward);
-    let shoulder = vec2(pos.x + side * 6.0, pos.y - 3.0);
-    shoulder + (toward - shoulder).normalize_or(vec2(side, 0.0)) * 13.0
-}
+use lukuloitsu_core::arena::{girl_hand, side_toward};
 
 /// A little girl in a pink dress, centered on `pos`. `time` animates her
 /// walk while `moving` is true. While `casting` toward a point, she points

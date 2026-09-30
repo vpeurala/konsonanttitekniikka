@@ -3,7 +3,7 @@
 //! game. Every obstacle blocks a circle, which keeps collisions simple and
 //! lets anything slide around it.
 
-use macroquad::math::{Vec2, vec2};
+use glam::{Vec2, vec2};
 
 use crate::rng::{Rng, Stream};
 
