@@ -70,8 +70,12 @@ code fits together, and pitfalls already found the hard way.
 
 **Two crates.** `core/` (`lukuloitsu-core`) holds the rules and state
 machines: `pairs`, `curriculum`, `long_numbers`, `memory`, `badges`, `levels`
-(the checkpoint rule), `save` (the file's format, not where it lives), `rng`,
-`effects`, `obstacles`, `portals` and the whole `game` simulation. It depends
+(the checkpoint rule), `progress` (everything known about the player,
+`Memory` included), `save` (its file format, not where it lives), `rng`,
+`effects`, `obstacles`, `portals`, the whole `game` simulation and the whole
+`app`: the screens as state machines (`screens/`), the touch controls' logic
+(`touch`), the notices (`toast`), the input types (`input`: `Frame`,
+`KeyCode`, `Pointer`), `geometry::Rect` and `view::View`. It depends
 only on `glam` and has no graphics, sound, clock or input, so the compiler
 enforces the purity described below: if you need macroquad in `core/`, the
 code belongs in the shell instead. It hands the shell small plain types to
@@ -149,7 +153,7 @@ so it can be tested without a screen; do the same for new layouts.
   on the font machinery. Also `rules.rs` (numbers and pure rules),
   `answer.rs` (matching what was typed), `display.rs` (sparks, banners and
   messages, which the rules tell to show but never read), `enemy.rs` and
-  `scene.rs` (the read-only `Scene` for drawing; `src/game_render.rs` in the
+  `scene.rs` (the read-only `Scene` for drawing; `src/gfx/game_render.rs` in the
   shell is the only code that draws it).
 - `booklet/`: the user instruction booklet, `--render-booklet FILE.html`:
   one self-contained HTML file (fonts and PNG pictures embedded as base64),
@@ -234,7 +238,7 @@ so it can be tested without a screen; do the same for new layouts.
   everything drawn is code; there are no image assets besides the fonts in
   `assets/`.
 - `effects.rs`: sparks, rings and lightning as pure state that moves on with
-  time; `src/game_render.rs` draws it.
+  time; `src/gfx/game_render.rs` draws it.
 - `lifecycle.rs`: notices when the app was away, so the game pauses itself
   (`Frame::away`).
 - `web.rs`, `analytics.rs`: the browser version's link to the page.
