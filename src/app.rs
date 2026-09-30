@@ -10,12 +10,14 @@
 mod events;
 mod persistence;
 
-use macroquad::prelude::{BLACK, KeyCode, Rect};
+use macroquad::prelude::BLACK;
+
+use lukuloitsu_core::geometry::Rect;
+use lukuloitsu_core::input::{Frame, KeyCode, Pointer};
 
 use crate::game::{self, Game};
 use crate::gfx::game_render;
-use crate::gfx::view::{self, ARENA_H, ARENA_W, View};
-use crate::input::frame::Frame;
+use crate::gfx::view::{self, ARENA_H, ARENA_W};
 use crate::input::keyboard::Key;
 use crate::input::touch::{self, Button, TouchControls, TouchInput};
 use crate::platform::analytics;
@@ -300,8 +302,8 @@ impl App {
     /// button switches it and saves.
     fn arena_input(&mut self, frame: &Frame, effects: &mut Vec<Effect>) -> (TouchInput, Vec<Key>) {
         let input = if self.touch_mode {
-            let view = View::fit(touch::content_rect(true), frame.screen);
-            self.controls.update(&frame.pointers(&view), frame.dt)
+            self.controls
+                .update(&frame.pointers(touch::content_rect(true)), frame.dt)
         } else {
             TouchInput::default()
         };
@@ -386,8 +388,8 @@ impl App {
 }
 
 /// The touches and clicks as a menu screen sees them.
-fn menu_pointers(frame: &Frame) -> Vec<touch::Pointer> {
-    frame.pointers(&View::fit(menu_rect(), frame.screen))
+fn menu_pointers(frame: &Frame) -> Vec<Pointer> {
+    frame.pointers(menu_rect())
 }
 
 /// Leaves for the title screen if the screen said it is done.

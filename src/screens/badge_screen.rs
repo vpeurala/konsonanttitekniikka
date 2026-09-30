@@ -5,12 +5,13 @@
 
 use macroquad::prelude::*;
 
+use lukuloitsu_core::geometry::Rect;
+use lukuloitsu_core::input::{Frame, KeyCode, Phase, Pointer};
+
 use crate::badges::{BADGES, Badge, standing};
 use crate::gfx::badge_art::draw_medal;
 use crate::gfx::fonts::{self, Style};
 use crate::gfx::view::{ARENA_H, ARENA_W};
-use crate::input::frame::Frame;
-use crate::input::touch::Pointer;
 use crate::progress::Progress;
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
@@ -165,10 +166,10 @@ impl BadgeScreen {
 
         for p in pointers {
             match p.phase {
-                TouchPhase::Started if self.drag.is_none() => {
+                Phase::Started if self.drag.is_none() => {
                     self.drag = Some((p.id, p.pos.y, 0.0));
                 }
-                TouchPhase::Moved | TouchPhase::Stationary => {
+                Phase::Moved | Phase::Stationary => {
                     if let Some((id, last_y, moved)) = &mut self.drag
                         && *id == p.id
                     {
@@ -177,12 +178,12 @@ impl BadgeScreen {
                         *last_y = p.pos.y;
                     }
                 }
-                TouchPhase::Ended | TouchPhase::Cancelled => {
+                Phase::Ended | Phase::Cancelled => {
                     if let Some((id, _, moved)) = self.drag
                         && id == p.id
                     {
                         self.drag = None;
-                        if moved < TAP_SLOP && p.phase == TouchPhase::Ended {
+                        if moved < TAP_SLOP && p.phase == Phase::Ended {
                             if back_button().contains(p.pos) {
                                 back = true;
                             } else if let Some(index) = self.medal_at(&rows, p.pos) {

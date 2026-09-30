@@ -4,11 +4,12 @@
 
 use macroquad::prelude::*;
 
+use lukuloitsu_core::geometry::Rect;
+use lukuloitsu_core::input::{Frame, KeyCode, Phase, Pointer};
+
 use crate::gfx::fonts::draw_centered_text;
 use crate::gfx::fonts::{self, Style};
 use crate::gfx::view::{ARENA_H, ARENA_W};
-use crate::input::frame::Frame;
-use crate::input::touch::Pointer;
 use crate::long_numbers::first_long_level;
 use crate::screens::practice::unlocked_pairs;
 use lukuloitsu_core::levels::checkpoints;
@@ -98,7 +99,7 @@ impl LevelSelect {
         if frame.pressed(KeyCode::Down) && self.selected + COLUMNS <= last {
             self.selected += COLUMNS;
         }
-        let Some(tap) = pointers.iter().find(|p| p.phase == TouchPhase::Ended) else {
+        let Some(tap) = pointers.iter().find(|p| p.phase == Phase::Ended) else {
             return LevelAction::Stay;
         };
         match (0..self.levels.len()).find(|&i| self.button_rect(i).contains(tap.pos)) {
@@ -166,7 +167,7 @@ mod tests {
         vec![Pointer {
             id: 1,
             pos,
-            phase: TouchPhase::Ended,
+            phase: Phase::Ended,
         }]
     }
 
@@ -269,7 +270,7 @@ mod tests {
         let started = [Pointer {
             id: 1,
             pos: vec2(2.0, 2.0),
-            phase: TouchPhase::Started,
+            phase: Phase::Started,
         }];
         assert!(matches!(
             select().update(&frame(), &started),

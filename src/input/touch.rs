@@ -9,8 +9,9 @@ use macroquad::prelude::*;
 
 use crate::gfx::fonts::{self, Style};
 use crate::gfx::view::{ARENA_H, ARENA_W};
-use crate::input::keyboard::Key;
 use crate::pairs::{DIGIT_CONSONANTS, VOWELS, is_answer_char};
+use lukuloitsu_core::geometry::Rect;
+use lukuloitsu_core::input::{Key, Phase, Pointer};
 
 /// A key's size, and the gaps around keys and panel edges.
 const KEY: f32 = 60.0;
@@ -45,15 +46,17 @@ pub fn enabled() -> bool {
         || std::env::var_os("LUKULOITSU_TOUCH").is_some()
 }
 
-/// A finger or the mouse.
-#[derive(Debug, Clone, Copy)]
-pub struct Pointer {
-    pub id: u64,
-    pub pos: Vec2,
-    pub phase: TouchPhase,
-}
-
 const MOUSE_ID: u64 = u64::MAX;
+
+/// The window's touch phase as the app knows it.
+fn phase_of(phase: miniquad::TouchPhase) -> Phase {
+    match phase {
+        miniquad::TouchPhase::Started => Phase::Started,
+        miniquad::TouchPhase::Moved => Phase::Moved,
+        miniquad::TouchPhase::Ended => Phase::Ended,
+        miniquad::TouchPhase::Cancelled => Phase::Cancelled,
+    }
+}
 
 /// Reads touches as the ordered stream of events they arrive in, so a
 /// quick tap that starts and ends within one frame still counts.
@@ -61,14 +64,14 @@ pub struct TouchReader {
     subscriber: usize,
 }
 
-struct TouchCollector(Vec<(TouchPhase, u64, Vec2)>);
+struct TouchCollector(Vec<(Phase, u64, Vec2)>);
 
 impl EventHandler for TouchCollector {
     fn update(&mut self) {}
     fn draw(&mut self) {}
 
     fn touch_event(&mut self, phase: miniquad::TouchPhase, id: u64, x: f32, y: f32) {
-        self.0.push((phase.into(), id, vec2(x, y)));
+        self.0.push((phase_of(phase), id, vec2(x, y)));
     }
 }
 
@@ -108,10 +111,10 @@ fn mouse_pointer() -> Vec<Pointer> {
     let pressed = is_mouse_button_pressed(MouseButton::Left);
     let released = is_mouse_button_released(MouseButton::Left);
     let phases = match (pressed, released) {
-        (true, true) => vec![TouchPhase::Started, TouchPhase::Ended],
-        (true, false) => vec![TouchPhase::Started],
-        (false, true) => vec![TouchPhase::Ended],
-        _ if is_mouse_button_down(MouseButton::Left) => vec![TouchPhase::Moved],
+        (true, true) => vec![Phase::Started, Phase::Ended],
+        (true, false) => vec![Phase::Started],
+        (false, true) => vec![Phase::Ended],
+        _ if is_mouse_button_down(MouseButton::Left) => vec![Phase::Moved],
         _ => Vec::new(),
     };
     let pos = Vec2::from(mouse_position());
@@ -257,7 +260,7 @@ impl TouchControls {
         for p in pointers {
             let in_arena = (0.0..ARENA_W).contains(&p.pos.x);
             match p.phase {
-                TouchPhase::Started if in_arena => {
+                Phase::Started if in_arena => {
                     input.arena_taps += 1;
                     if self.stick.is_none() {
                         self.stick = Some(Stick {
@@ -267,7 +270,7 @@ impl TouchControls {
                         });
                     }
                 }
-                TouchPhase::Started => {
+                Phase::Started => {
                     let pressed = keys.iter().enumerate().find_map(|(i, k)| {
                         let key = match k.label {
                             Label::Char(c) => Key::Char(c),
@@ -286,7 +289,7 @@ impl TouchControls {
                         }
                     }
                 }
-                TouchPhase::Moved | TouchPhase::Stationary => match &mut self.stick {
+                Phase::Moved | Phase::Stationary => match &mut self.stick {
                     Some(stick) if stick.id == p.id => {
                         let offset = (p.pos - stick.base).clamp_length_max(STICK_RADIUS);
                         stick.knob = stick.base + offset;
@@ -302,7 +305,7 @@ impl TouchControls {
                     }
                     _ => {}
                 },
-                TouchPhase::Ended | TouchPhase::Cancelled => {
+                Phase::Ended | Phase::Cancelled => {
                     if self.stick.as_ref().is_some_and(|s| s.id == p.id) {
                         self.stick = None;
                     }
@@ -578,7 +581,7 @@ mod tests {
         }
     }
 
-    fn touch(id: u64, pos: Vec2, phase: TouchPhase) -> Pointer {
+    fn touch(id: u64, pos: Vec2, phase: Phase) -> Pointer {
         Pointer { id, pos, phase }
     }
 
@@ -590,10 +593,7 @@ mod tests {
             .iter()
             .find(|k| matches!(k.label, Label::Char('k')))
             .unwrap();
-        let input = controls.update(
-            &[touch(1, key_rect(k).center(), TouchPhase::Started)],
-            0.016,
-        );
+        let input = controls.update(&[touch(1, key_rect(k).center(), Phase::Started)], 0.016);
         assert_eq!(input.keys, vec![Key::Char('k')]);
     }
 
@@ -605,10 +605,7 @@ mod tests {
             .iter()
             .find(|k| matches!(k.label, Label::Unused('q')))
             .unwrap();
-        let input = controls.update(
-            &[touch(1, key_rect(q).center(), TouchPhase::Started)],
-            0.016,
-        );
+        let input = controls.update(&[touch(1, key_rect(q).center(), Phase::Started)], 0.016);
         assert!(input.keys.is_empty());
         assert!(controls.flashes.is_empty());
     }
@@ -617,38 +614,32 @@ mod tests {
     fn the_joystick_follows_a_finger_dragged_in_the_arena() {
         let mut controls = TouchControls::default();
         let start = vec2(200.0, 300.0);
-        controls.update(&[touch(7, start, TouchPhase::Started)], 0.016);
-        let input = controls.update(
-            &[touch(7, start + vec2(30.0, 0.0), TouchPhase::Moved)],
-            0.016,
-        );
+        controls.update(&[touch(7, start, Phase::Started)], 0.016);
+        let input = controls.update(&[touch(7, start + vec2(30.0, 0.0), Phase::Moved)], 0.016);
         assert!(
             (input.movement - vec2(0.5, 0.0)).length() < 0.001,
             "{}",
             input.movement
         );
         // Pushing past the edge is full speed, not faster.
-        let input = controls.update(
-            &[touch(7, start + vec2(0.0, -500.0), TouchPhase::Moved)],
-            0.016,
-        );
+        let input = controls.update(&[touch(7, start + vec2(0.0, -500.0), Phase::Moved)], 0.016);
         assert!((input.movement.length() - 1.0).abs() < 0.001);
-        let input = controls.update(&[touch(7, start, TouchPhase::Ended)], 0.016);
+        let input = controls.update(&[touch(7, start, Phase::Ended)], 0.016);
         assert_eq!(input.movement, Vec2::ZERO);
     }
 
     #[test]
     fn a_finger_whose_start_was_missed_still_steers() {
         let mut controls = TouchControls::default();
-        controls.update(&[touch(3, vec2(200.0, 300.0), TouchPhase::Moved)], 0.016);
-        let input = controls.update(&[touch(3, vec2(260.0, 300.0), TouchPhase::Moved)], 0.016);
+        controls.update(&[touch(3, vec2(200.0, 300.0), Phase::Moved)], 0.016);
+        let input = controls.update(&[touch(3, vec2(260.0, 300.0), Phase::Moved)], 0.016);
         assert!(input.movement.x > 0.9, "{}", input.movement);
     }
 
     #[test]
     fn a_second_finger_can_type_while_the_first_steers() {
         let mut controls = TouchControls::default();
-        controls.update(&[touch(1, vec2(200.0, 300.0), TouchPhase::Started)], 0.016);
+        controls.update(&[touch(1, vec2(200.0, 300.0), Phase::Started)], 0.016);
         let keys = keypad();
         let seven = keys
             .iter()
@@ -656,8 +647,8 @@ mod tests {
             .unwrap();
         let input = controls.update(
             &[
-                touch(1, vec2(260.0, 300.0), TouchPhase::Moved),
-                touch(2, key_rect(seven).center(), TouchPhase::Started),
+                touch(1, vec2(260.0, 300.0), Phase::Moved),
+                touch(2, key_rect(seven).center(), Phase::Started),
             ],
             0.016,
         );

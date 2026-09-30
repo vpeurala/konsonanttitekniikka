@@ -3,12 +3,13 @@
 
 use macroquad::prelude::*;
 
+use lukuloitsu_core::geometry::Rect;
+use lukuloitsu_core::input::{Frame, KeyCode, Phase, Pointer};
+
 use crate::gfx::fonts::draw_centered_text;
 use crate::gfx::fonts::{self, Style};
 use crate::gfx::sprites::draw_star;
 use crate::gfx::view::{ARENA_H, ARENA_W};
-use crate::input::frame::Frame;
-use crate::input::touch::Pointer;
 use crate::memory::{LEARNED, Memory, learned_count};
 use crate::pairs::{PAIRS, Pair};
 use crate::progress::Progress;
@@ -62,7 +63,7 @@ pub fn mastery_tier(difficulty: f32) -> u8 {
 
 /// Returns true when the player wants to go back to the title.
 pub fn update(frame: &Frame, pointers: &[Pointer]) -> bool {
-    let tapped = pointers.iter().any(|p| p.phase == TouchPhase::Ended);
+    let tapped = pointers.iter().any(|p| p.phase == Phase::Ended);
     tapped
         || frame.pressed(KeyCode::Escape)
         || frame.pressed(KeyCode::Enter)
@@ -360,7 +361,7 @@ mod tests {
         vec![Pointer {
             id: 1,
             pos: vec2(100.0, 100.0),
-            phase: TouchPhase::Ended,
+            phase: Phase::Ended,
         }]
     }
 
@@ -389,7 +390,7 @@ mod tests {
     #[test]
     fn a_finger_only_touching_down_does_not_close_it() {
         let started = [Pointer {
-            phase: TouchPhase::Started,
+            phase: Phase::Started,
             ..tap()[0]
         }];
         assert!(!update(&Frame::default(), &started));

@@ -4,13 +4,14 @@
 
 use macroquad::prelude::*;
 
+use lukuloitsu_core::geometry::Rect;
+use lukuloitsu_core::input::{Frame, KeyCode, Phase, Pointer};
+
 use crate::gfx::fonts::draw_centered_text;
 use crate::gfx::fonts::{self, Style};
 use crate::gfx::pictures::draw_picture;
 use crate::gfx::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
 use crate::gfx::view::{ARENA_H, ARENA_W, View};
-use crate::input::frame::Frame;
-use crate::input::touch::Pointer;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
 use crate::progress::Progress;
 
@@ -119,10 +120,10 @@ impl TitleScreen {
         // Dragging scrolls the list; a tap on a menu button picks it.
         for p in pointers {
             match p.phase {
-                TouchPhase::Started if self.drag.is_none() => {
+                Phase::Started if self.drag.is_none() => {
                     self.drag = Some((p.id, p.pos.y, 0.0));
                 }
-                TouchPhase::Moved | TouchPhase::Stationary => {
+                Phase::Moved | Phase::Stationary => {
                     if let Some((id, last_y, moved)) = &mut self.drag
                         && *id == p.id
                     {
@@ -131,12 +132,12 @@ impl TitleScreen {
                         *last_y = p.pos.y;
                     }
                 }
-                TouchPhase::Ended | TouchPhase::Cancelled => {
+                Phase::Ended | Phase::Cancelled => {
                     if let Some((id, _, moved)) = self.drag
                         && id == p.id
                     {
                         self.drag = None;
-                        if moved < TAP_SLOP && p.phase == TouchPhase::Ended {
+                        if moved < TAP_SLOP && p.phase == Phase::Ended {
                             for (i, &(_, _, action)) in MENU.iter().enumerate() {
                                 if button_rect(i, self.scroll).contains(p.pos) {
                                     return action;
@@ -553,15 +554,12 @@ mod tests {
         }
     }
 
-    fn pointer(phase: TouchPhase, pos: Vec2) -> Pointer {
+    fn pointer(phase: Phase, pos: Vec2) -> Pointer {
         Pointer { id: 1, pos, phase }
     }
 
     fn tap_on(pos: Vec2) -> Vec<Pointer> {
-        vec![
-            pointer(TouchPhase::Started, pos),
-            pointer(TouchPhase::Ended, pos),
-        ]
+        vec![pointer(Phase::Started, pos), pointer(Phase::Ended, pos)]
     }
 
     #[test]
@@ -584,7 +582,7 @@ mod tests {
             TitleAction::Progress
         );
         assert_eq!(title.update(&pressed(KeyCode::K), &[]), TitleAction::Badges);
-        assert_eq!(title.update(&pressed(KeyCode::X), &[]), TitleAction::Stay);
+        assert_eq!(title.update(&pressed(KeyCode::A), &[]), TitleAction::Stay);
     }
 
     #[test]
@@ -627,9 +625,9 @@ mod tests {
         let button = button_rect(0, 0.0).center();
         let up = button - vec2(0.0, 100.0);
         let pointers = [
-            pointer(TouchPhase::Started, button),
-            pointer(TouchPhase::Moved, up),
-            pointer(TouchPhase::Ended, up),
+            pointer(Phase::Started, button),
+            pointer(Phase::Moved, up),
+            pointer(Phase::Ended, up),
         ];
         assert_eq!(title.update(&frame(), &pointers), TitleAction::Stay);
         assert!((title.scroll - 100.0).abs() < 1e-3, "{}", title.scroll);
@@ -640,9 +638,9 @@ mod tests {
         let mut title = TitleScreen::new(true);
         let center = button_rect(1, 0.0).center();
         let pointers = [
-            pointer(TouchPhase::Started, center),
-            pointer(TouchPhase::Moved, center + vec2(2.0, 3.0)),
-            pointer(TouchPhase::Ended, center + vec2(2.0, 3.0)),
+            pointer(Phase::Started, center),
+            pointer(Phase::Moved, center + vec2(2.0, 3.0)),
+            pointer(Phase::Ended, center + vec2(2.0, 3.0)),
         ];
         assert_eq!(title.update(&frame(), &pointers), TitleAction::Practice);
     }

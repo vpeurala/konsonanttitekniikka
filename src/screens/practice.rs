@@ -4,13 +4,15 @@
 
 use macroquad::prelude::*;
 
+use lukuloitsu_core::geometry::Rect;
+use lukuloitsu_core::input::{Frame, KeyCode};
+
 use crate::curriculum::Curriculum;
 use crate::game::{InputOutcome, resolve_input};
 use crate::gfx::fonts::draw_centered_text;
 use crate::gfx::fonts::{self, Style};
 use crate::gfx::pictures::draw_picture;
 use crate::gfx::view::{ARENA_H, ARENA_W};
-use crate::input::frame::Frame;
 use crate::input::keyboard::Key;
 use crate::memory::{Happened, Lesson, Memory};
 use crate::pairs::{self, Pair};
