@@ -81,7 +81,7 @@ pub struct PairRecord {
 
 /// Each pair's record, kept across games and, through saving, across
 /// launches of the app.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Memory {
     records: HashMap<PairId, PairRecord>,
 }

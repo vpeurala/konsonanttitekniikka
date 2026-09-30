@@ -9,20 +9,20 @@ use macroquad::prelude::vec2;
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
 
-fn app_with(progress: SaveData, can_quit: bool) -> App {
+fn app_with(progress: Progress, can_quit: bool) -> App {
     App::new(progress, false, can_quit, START)
 }
 
 fn app() -> App {
-    app_with(SaveData::default(), true)
+    app_with(Progress::default(), true)
 }
 
 /// A player who has reached `level`, so there are levels to choose from.
 fn veteran(level: u32) -> App {
     app_with(
-        SaveData {
+        Progress {
             best_level: level,
-            ..SaveData::default()
+            ..Progress::default()
         },
         true,
     )
@@ -119,7 +119,7 @@ fn escape_quits_from_the_title_screen_only_where_apps_can_quit() {
             .update(&press(KeyCode::Escape))
             .contains(&Effect::Quit)
     );
-    let mut web = app_with(SaveData::default(), false);
+    let mut web = app_with(Progress::default(), false);
     assert!(!web.update(&press(KeyCode::Escape)).contains(&Effect::Quit));
 }
 
@@ -199,7 +199,7 @@ fn a_game_is_saved_now_and_then_but_not_every_frame() {
 
 #[test]
 fn a_finished_level_is_counted_remembered_and_saved() {
-    let mut data = Persistence::new(SaveData::default(), START);
+    let mut data = Persistence::new(Progress::default(), START);
     let event = GameEvent::LevelCompleted { level: 1, stars: 2 };
     assert!(data.record(&event));
     assert_eq!(
@@ -318,7 +318,7 @@ fn learning_pairs_earns_their_badge_at_once() {
             learned.record_answer(*pair, 1.0, false, START);
         }
     }
-    app.data.memory = learned;
+    app.data.progress.memory = learned;
     let effects = app.update(&frame());
     assert!(counted(&effects).contains(&"merkki/pairs-digits".to_owned()));
 }
@@ -335,7 +335,7 @@ fn k_opens_the_badges_and_escape_comes_back() {
 
 #[test]
 fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
-    let mut data = Persistence::new(SaveData::default(), START);
+    let mut data = Persistence::new(Progress::default(), START);
     let started = GameEvent::Started { level: 5 };
     let over = GameEvent::Over { level: 7 };
     assert!(!data.record(&started));
@@ -348,7 +348,7 @@ fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
             .collect::<Vec<_>>(),
         vec!["peli-alkoi/taso-5", "peli-paattyi/taso-7"]
     );
-    assert_eq!(data.progress, SaveData::default());
+    assert_eq!(data.progress, Progress::default());
 }
 
 #[test]
@@ -395,9 +395,9 @@ fn the_same_frames_give_the_same_effects() {
     assert_eq!(run(), run());
 }
 
-fn last_saved(effects: &[Effect]) -> Option<SaveData> {
+fn last_saved(effects: &[Effect]) -> Option<Progress> {
     effects.iter().rev().find_map(|e| match e {
-        Effect::Save(text) => Some(SaveData::from_text(text)),
+        Effect::Save(text) => Some(Progress::from_text(text)),
         _ => None,
     })
 }
@@ -410,7 +410,7 @@ fn what_practice_teaches_is_saved_when_leaving() {
     app.update(&press(KeyCode::Space));
     let effects = app.update(&press(KeyCode::Escape));
     let saved = last_saved(&effects).expect("leaving practice saves");
-    assert_eq!(saved.pairs.len(), 1);
+    assert_eq!(saved.memory.records().count(), 1);
 }
 
 #[test]
@@ -421,7 +421,10 @@ fn what_a_game_teaches_is_saved_when_leaving() {
     idle(&mut app, START, 30.0);
     let effects = app.update(&press(KeyCode::Escape));
     let saved = last_saved(&effects).expect("leaving a game saves");
-    assert!(!saved.pairs.is_empty(), "the misses are in the save");
+    assert!(
+        saved.memory.records().count() > 0,
+        "the misses are in the save"
+    );
     assert!(on_title(&app));
 }
 
@@ -430,10 +433,10 @@ fn the_progress_screen_shows_what_was_learned_without_saving_first() {
     let mut app = app();
     app.update(&press(KeyCode::H));
     app.update(&press(KeyCode::Space));
-    assert_eq!(app.data.memory.records().count(), 1, "kept live in the app");
-    assert!(
-        app.data.progress.pairs.is_empty(),
-        "not converted every frame"
+    assert_eq!(
+        app.data.progress.memory.records().count(),
+        1,
+        "kept live in the app"
     );
 }
 

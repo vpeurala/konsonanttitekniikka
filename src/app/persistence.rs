@@ -1,45 +1,40 @@
 //! What the app knows about the player and when it was last written down:
-//! the save data, the live memory of each pair and the time of the last
+//! the progress, memory of each pair included, and the time of the last
 //! save. Saving returns an `Effect` for the caller to perform.
 
 use super::Effect;
 use super::events::{tally, worth_saving};
 use crate::badges::{self, Badge, Stats};
 use crate::game::GameEvent;
-use crate::memory::Memory;
-use crate::platform::save::{self, SaveData};
+use crate::platform::save::day_of;
+use crate::progress::Progress;
 
 /// How often progress is saved while playing, in seconds, so little is lost
 /// if the app is closed or killed in the background.
 const SAVE_INTERVAL: f64 = 5.0;
 
 pub struct Persistence {
-    pub progress: SaveData,
-    /// How well each pair is known, live: `progress` only gets it when
-    /// saving, so nothing is converted every frame. This is the only live
-    /// copy; the game and the practice screen learn into it.
-    pub memory: Memory,
+    /// Everything about the player. The one live copy: the game and the
+    /// practice screen learn into its memory, and saving writes it out.
+    pub(super) progress: Progress,
     /// When progress was last saved, in seconds since 1970.
     last_save: f64,
 }
 
 impl Persistence {
     /// `progress` as loaded from the device, at time `now`.
-    pub fn new(mut progress: SaveData, now: f64) -> Self {
-        let memory = progress.memory();
+    pub fn new(mut progress: Progress, now: f64) -> Self {
         // Badges the player already qualifies for, from before badges
         // existed, are given quietly; the badge screen shows them.
-        badges::award(&mut progress, &memory, save::day_of(now));
+        badges::award(&mut progress, day_of(now));
         Persistence {
             progress,
-            memory,
             last_save: now,
         }
     }
 
     /// The save file's text for the state right now.
-    fn snapshot(&mut self) -> Effect {
-        self.progress.set_memory(&self.memory);
+    fn snapshot(&self) -> Effect {
         Effect::Save(self.progress.to_text())
     }
 
@@ -79,6 +74,6 @@ impl Persistence {
 
     /// Records the badges just earned, on the day `now` falls on.
     pub fn award_badges(&mut self, now: f64) -> Vec<&'static Badge> {
-        badges::award(&mut self.progress, &self.memory, save::day_of(now))
+        badges::award(&mut self.progress, day_of(now))
     }
 }

@@ -12,7 +12,7 @@ use crate::gfx::view::{ARENA_H, ARENA_W, View};
 use crate::input::frame::Frame;
 use crate::input::touch::Pointer;
 use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
-use crate::platform::save::SaveData;
+use crate::progress::Progress;
 
 /// Pixels scrolled per second while an arrow key is held.
 const KEY_SCROLL_SPEED: f32 = 500.0;
@@ -180,7 +180,7 @@ impl TitleScreen {
         (content_height() - (ARENA_H - FOOTER_HEIGHT)).max(0.0)
     }
 
-    pub fn draw(&self, progress: &SaveData, view: View, time: f32) {
+    pub fn draw(&self, progress: &Progress, view: View, time: f32) {
         clear_background(BACKGROUND);
         let cx = ARENA_W / 2.0;
         let mut y = 70.0 - self.scroll;
@@ -228,7 +228,7 @@ impl TitleScreen {
         draw_footer(self.touch);
     }
 
-    fn draw_menu(&self, progress: &SaveData) {
+    fn draw_menu(&self, progress: &Progress) {
         for (i, (label, key, _)) in MENU.iter().enumerate() {
             let rect = button_rect(i, self.scroll);
             let primary = i == 0;

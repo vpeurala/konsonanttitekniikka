@@ -19,7 +19,7 @@ use crate::input::frame::Frame;
 use crate::input::keyboard::Key;
 use crate::input::touch::{self, Button, TouchControls, TouchInput};
 use crate::platform::analytics;
-use crate::platform::save::SaveData;
+use crate::progress::Progress;
 use crate::screens::badge_screen::BadgeScreen;
 use crate::screens::levels::{LevelAction, LevelSelect};
 use crate::screens::practice::{PracticeAction, PracticeScreen};
@@ -106,7 +106,7 @@ fn menu_rect() -> Rect {
 impl App {
     /// The app at its title screen, with `progress` loaded from the
     /// device, at time `now`.
-    pub fn new(progress: SaveData, touch_mode: bool, can_quit: bool, now: f64) -> Self {
+    pub fn new(progress: Progress, touch_mode: bool, can_quit: bool, now: f64) -> Self {
         App {
             screen: Screen::Title,
             title: TitleScreen::new(touch_mode),
@@ -194,7 +194,7 @@ impl App {
             TitleAction::Practice => Step::go_counting(
                 Screen::Practice(Box::new(PracticeScreen::new(
                     self.data.progress.best_level,
-                    &self.data.memory,
+                    &self.data.progress.memory,
                     self.touch_mode,
                     frame.now,
                 ))),
@@ -227,7 +227,13 @@ impl App {
         let (input, keys) = self.arena_input(frame, &mut step.effects);
         // The pause button leaves practice.
         let back = escape || input.buttons.contains(&Button::Pause);
-        let outcome = practice.update(frame, &keys, input.arena_taps, back, &mut self.data.memory);
+        let outcome = practice.update(
+            frame,
+            &keys,
+            input.arena_taps,
+            back,
+            &mut self.data.progress.memory,
+        );
         self.data.count_practice_correct(outcome.answered_right);
         step.effects
             .extend(outcome.sfx.into_iter().map(Effect::Play));
@@ -256,7 +262,7 @@ impl App {
                 confirm: frame.pressed(KeyCode::Enter),
                 taps: input.arena_taps,
             },
-            &mut self.data.memory,
+            &mut self.data.progress.memory,
         );
         step.effects
             .extend(outputs.sfx.into_iter().map(Effect::Play));
@@ -319,7 +325,7 @@ impl App {
 
     /// Draws the current screen.
     pub fn draw(&self) {
-        let (progress, memory) = (&self.data.progress, &self.data.memory);
+        let progress = &self.data.progress;
         match &self.screen {
             Screen::Title => {
                 let view = view::begin(menu_rect());
@@ -333,12 +339,12 @@ impl App {
             }
             Screen::Progress => {
                 let view = view::begin(menu_rect());
-                progress::draw(progress, memory, self.touch_mode);
+                progress::draw(progress, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Badges(screen) => {
                 let view = view::begin(menu_rect());
-                screen.draw(progress, memory, self.touch_mode);
+                screen.draw(progress, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Practice(practice) => {

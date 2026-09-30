@@ -21,6 +21,7 @@ pub mod memory;
 pub mod obstacles;
 pub mod pairs;
 pub mod portals;
+pub mod progress;
 pub mod rng;
 pub mod save;
 pub mod sfx;

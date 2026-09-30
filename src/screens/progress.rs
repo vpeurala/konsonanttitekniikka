@@ -11,7 +11,7 @@ use crate::input::frame::Frame;
 use crate::input::touch::Pointer;
 use crate::memory::{LEARNED, Memory, learned_count};
 use crate::pairs::{PAIRS, Pair};
-use crate::platform::save::SaveData;
+use crate::progress::Progress;
 use crate::screens::title::pair_rows;
 
 /// The colour is pure yellow here; a pair is "nearly" learned around it.
@@ -70,7 +70,8 @@ pub fn update(frame: &Frame, pointers: &[Pointer]) -> bool {
         || frame.pressed(KeyCode::Backspace)
 }
 
-pub fn draw(data: &SaveData, memory: &Memory, touch: bool) {
+pub fn draw(data: &Progress, touch: bool) {
+    let memory = &data.memory;
     clear_background(BACKGROUND);
     let cx = ARENA_W / 2.0;
     fonts::draw_centered("Edistyminen", cx, 36.0, 44, GOLD, Style::Heading);

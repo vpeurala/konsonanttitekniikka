@@ -17,54 +17,17 @@
 //! pair 22 0.3512 1790000000 7
 //! ```
 
-use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use crate::badges::{self, Stats};
+use crate::badges;
 use crate::memory::{Memory, PairRecord};
 use crate::pairs;
+pub use crate::progress::day_of;
+use crate::progress::{MAX_LEVEL, Progress};
 
 const HEADER: &str = "lukuloitsu-save 1";
 
-/// No saved level is taken to be higher than this: nobody plays this far,
-/// and a damaged number must not send the game counting to billions.
-const MAX_LEVEL: u32 = 1000;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SaveData {
-    pub pairs: BTreeMap<String, PairRecord>,
-    pub music_on: bool,
-    /// The highest level reached.
-    pub best_level: u32,
-    /// The best stars earned on each level, from 1 to 3.
-    pub stars: BTreeMap<u32, u8>,
-    /// The last day played, as days since 1970, and how many days in a
-    /// row ended with it.
-    pub streak_day: i64,
-    pub streak: u32,
-    /// Lifetime counters that badges ask about.
-    pub stats: Stats,
-    /// The badges earned, by id, with the day each was earned (days since
-    /// 1970).
-    pub badges: BTreeMap<String, i64>,
-}
-
-impl Default for SaveData {
-    fn default() -> Self {
-        SaveData {
-            pairs: BTreeMap::new(),
-            music_on: true,
-            best_level: 1,
-            stars: BTreeMap::new(),
-            streak_day: 0,
-            streak: 0,
-            stats: Stats::default(),
-            badges: BTreeMap::new(),
-        }
-    }
-}
-
-impl SaveData {
+impl Progress {
     pub fn to_text(&self) -> String {
         // Writing to a `String` can't fail.
         let mut text = String::new();
@@ -88,7 +51,9 @@ impl SaveData {
         for (id, day) in &self.badges {
             writeln!(text, "badge {id} {day}")?;
         }
-        for (number, r) in &self.pairs {
+        let mut records: Vec<_> = self.memory.records().collect();
+        records.sort_by_key(|(number, _)| *number);
+        for (number, r) in records {
             writeln!(
                 text,
                 "pair {number} {:.4} {:.0} {} {}",
@@ -101,7 +66,8 @@ impl SaveData {
     /// Reads a save file, skipping lines it can't understand. Returns the
     /// defaults if the text isn't a save file at all.
     pub fn from_text(text: &str) -> Self {
-        let mut data = SaveData::default();
+        let mut data = Progress::default();
+        let mut records = Vec::new();
         let mut lines = text.lines();
         if lines.next() != Some(HEADER) {
             return data;
@@ -149,7 +115,7 @@ impl SaveData {
                         && last_seen.is_finite()
                         && pairs::find(number).is_some()
                     {
-                        data.pairs.insert(
+                        records.push((
                             number.to_string(),
                             PairRecord {
                                 difficulty: difficulty.clamp(0.0, 1.0),
@@ -157,71 +123,45 @@ impl SaveData {
                                 times_seen,
                                 streak,
                             },
-                        );
+                        ));
                     }
                 }
                 _ => {}
             }
         }
+        data.memory = Memory::from_records(records);
         data
     }
-
-    pub fn memory(&self) -> Memory {
-        Memory::from_records(self.pairs.iter().map(|(n, r)| (n.clone(), *r)))
-    }
-
-    pub fn set_memory(&mut self, memory: &Memory) {
-        self.pairs = memory.records().map(|(n, r)| (n.to_string(), *r)).collect();
-    }
-
-    /// Records playing on `day` (days since 1970): the streak grows if the
-    /// last day played was yesterday, and starts over after a gap.
-    pub fn record_play_day(&mut self, day: i64) {
-        if day == self.streak_day {
-            return;
-        }
-        self.streak = if self.streak_day.checked_add(1) == Some(day) {
-            self.streak.saturating_add(1)
-        } else {
-            1
-        };
-        self.streak_day = day;
-    }
-
-    /// Records finishing `level` with `stars`, keeping the best.
-    pub fn record_level(&mut self, level: u32, stars: u8) {
-        let best = self.stars.entry(level).or_insert(stars);
-        *best = (*best).max(stars);
-        self.best_level = self.best_level.max(level + 1);
-    }
-}
-
-/// The day number (days since 1970, in UTC) for a time in seconds. In
-/// Finland the day changes over in the small hours, which suits a streak.
-pub fn day_of(seconds: f64) -> i64 {
-    (seconds / 86_400.0).floor() as i64
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::badges::Stats;
     use crate::pairs::PAIRS;
     use crate::rng::{Rng, Stream};
 
-    fn sample() -> SaveData {
-        let mut data = SaveData {
+    /// The numbers of the pairs the save knows something about, in order.
+    fn numbers(data: &Progress) -> Vec<&'static str> {
+        let mut numbers: Vec<_> = data.memory.records().map(|(number, _)| number).collect();
+        numbers.sort_unstable();
+        numbers
+    }
+
+    fn sample() -> Progress {
+        let mut data = Progress {
             music_on: false,
             best_level: 4,
             streak_day: 20_356,
             streak: 5,
-            ..SaveData::default()
+            ..Progress::default()
         };
         data.stars.insert(1, 3);
         data.stars.insert(2, 1);
         data.stats.monsters = 120;
         data.stats.best_combo = 31;
         data.badges.insert("monsters-100".to_string(), 20_357);
-        data.pairs.insert(
+        data.memory = Memory::from_records([(
             "22".to_string(),
             PairRecord {
                 difficulty: 0.3512,
@@ -229,55 +169,30 @@ mod tests {
                 times_seen: 7,
                 streak: 3,
             },
-        );
+        )]);
         data
     }
 
     #[test]
     fn progress_survives_a_round_trip() {
         let data = sample();
-        assert_eq!(SaveData::from_text(&data.to_text()), data);
+        assert_eq!(Progress::from_text(&data.to_text()), data);
     }
 
     #[test]
     fn damaged_lines_are_skipped_without_losing_the_rest() {
         let text = sample().to_text().replace("stars 2 1", "stars two ?") + "garbage line\n";
-        let data = SaveData::from_text(&text);
+        let data = Progress::from_text(&text);
         assert_eq!(data.best_level, 4);
         assert_eq!(data.stars.get(&1), Some(&3));
         assert_eq!(data.stars.get(&2), None);
-        assert_eq!(data.pairs.len(), 1);
+        assert_eq!(numbers(&data), ["22"]);
     }
 
     #[test]
     fn anything_but_a_save_file_gives_the_defaults() {
-        assert_eq!(SaveData::from_text("hello"), SaveData::default());
-        assert_eq!(SaveData::from_text(""), SaveData::default());
-    }
-
-    #[test]
-    fn the_streak_grows_on_consecutive_days_and_restarts_after_a_gap() {
-        let mut data = SaveData::default();
-        data.record_play_day(100);
-        assert_eq!(data.streak, 1);
-        data.record_play_day(100);
-        assert_eq!(data.streak, 1);
-        data.record_play_day(101);
-        data.record_play_day(102);
-        assert_eq!(data.streak, 3);
-        data.record_play_day(105);
-        assert_eq!(data.streak, 1);
-    }
-
-    #[test]
-    fn levels_keep_their_best_stars() {
-        let mut data = SaveData::default();
-        data.record_level(2, 2);
-        data.record_level(2, 1);
-        assert_eq!(data.stars.get(&2), Some(&2));
-        data.record_level(2, 3);
-        assert_eq!(data.stars.get(&2), Some(&3));
-        assert_eq!(data.best_level, 3);
+        assert_eq!(Progress::from_text("hello"), Progress::default());
+        assert_eq!(Progress::from_text(""), Progress::default());
     }
 
     /// A save file made of plausible and implausible pieces, as damaged or
@@ -327,20 +242,20 @@ mod tests {
     fn damaged_save_files_never_panic_and_always_give_usable_data() {
         for seed in 0..3000 {
             let text = garbage(seed);
-            let mut data = SaveData::from_text(&text);
+            let mut data = Progress::from_text(&text);
             assert!(
                 (1..=MAX_LEVEL).contains(&data.best_level),
                 "best level {} from {text:?}",
                 data.best_level
             );
-            for (number, record) in &data.pairs {
+            for (number, record) in data.memory.records() {
                 assert!(
                     (0.0..=1.0).contains(&record.difficulty) && record.last_seen.is_finite(),
                     "pair {number} {record:?} from {text:?}"
                 );
             }
             // Whatever was read must survive being used.
-            let memory = data.memory();
+            let memory = &data.memory;
             for pair in PAIRS {
                 assert!(memory.weight(pair, 1.8e9).is_finite(), "{text:?}");
             }
@@ -349,8 +264,8 @@ mod tests {
             assert!(crate::levels::checkpoints(data.best_level).len() <= 25);
             // Writing rounds times to whole seconds, but once rounded a
             // save reads back as itself.
-            let once = SaveData::from_text(&data.to_text());
-            assert_eq!(SaveData::from_text(&once.to_text()), once, "{text:?}");
+            let once = Progress::from_text(&data.to_text());
+            assert_eq!(Progress::from_text(&once.to_text()), once, "{text:?}");
         }
     }
 
@@ -359,31 +274,16 @@ mod tests {
         let text = sample().to_text();
         for end in 0..=text.len() {
             if text.is_char_boundary(end) {
-                SaveData::from_text(&text[..end]);
+                Progress::from_text(&text[..end]);
             }
         }
     }
 
     #[test]
-    fn the_streak_survives_extreme_days() {
-        let mut data = SaveData {
-            streak_day: i64::MAX,
-            streak: u32::MAX,
-            ..SaveData::default()
-        };
-        data.record_play_day(i64::MAX);
-        data.record_play_day(i64::MIN);
-        data.streak_day = i64::MAX - 1;
-        data.streak = u32::MAX;
-        data.record_play_day(i64::MAX);
-        assert_eq!(data.streak, u32::MAX);
-    }
-
-    #[test]
     fn an_absurd_best_level_is_capped() {
-        let data = SaveData::from_text(&format!("{HEADER}\nbest-level 4294967295\n"));
+        let data = Progress::from_text(&format!("{HEADER}\nbest-level 4294967295\n"));
         assert_eq!(data.best_level, MAX_LEVEL);
-        let data = SaveData::from_text(&format!("{HEADER}\nbest-level 0\n"));
+        let data = Progress::from_text(&format!("{HEADER}\nbest-level 0\n"));
         assert_eq!(data.best_level, 1);
     }
 
@@ -392,23 +292,31 @@ mod tests {
         let text = format!(
             "{HEADER}\npair 22 NaN 100 1\npair 23 inf 100 1\npair 24 0.5 inf 1\npair 25 0.5 100 1\npair x 0.5 100 1\n"
         );
-        let data = SaveData::from_text(&text);
-        assert_eq!(data.pairs.keys().collect::<Vec<_>>(), vec!["25"]);
+        let data = Progress::from_text(&text);
+        assert_eq!(numbers(&data), ["25"]);
     }
 
     #[test]
     fn saves_from_before_streaks_still_load() {
         let text = format!("{HEADER}\npair 22 0.3512 1790000000 7\n");
-        let data = SaveData::from_text(&text);
-        let record = data.pairs.get("22").expect("the pair is kept");
+        let data = Progress::from_text(&text);
+        let record = data
+            .memory
+            .record(&pairs::find("22").unwrap())
+            .expect("the pair is kept");
         assert_eq!((record.times_seen, record.streak), (7, 0));
     }
 
     #[test]
     fn a_streak_is_saved_and_read_back() {
         let text = format!("{HEADER}\npair 22 0.3512 1790000000 7 4\n");
-        let data = SaveData::from_text(&text);
-        assert_eq!(data.pairs.get("22").map(|r| r.streak), Some(4));
+        let data = Progress::from_text(&text);
+        assert_eq!(
+            data.memory
+                .record(&pairs::find("22").unwrap())
+                .map(|r| r.streak),
+            Some(4)
+        );
         assert!(data.to_text().contains("pair 22 0.3512 1790000000 7 4"));
     }
 
@@ -417,13 +325,13 @@ mod tests {
         let text = format!(
             "{HEADER}\npair 22 0.5 100 1 x\npair 23 0.5 100 1 2 3\npair 24 0.5 100 1 -1\npair 25 0.5 100 1 2\n"
         );
-        let data = SaveData::from_text(&text);
-        assert_eq!(data.pairs.keys().collect::<Vec<_>>(), vec!["25"]);
+        let data = Progress::from_text(&text);
+        assert_eq!(numbers(&data), ["25"]);
     }
 
     #[test]
     fn stats_and_badges_survive_a_round_trip() {
-        let data = SaveData::from_text(&sample().to_text());
+        let data = Progress::from_text(&sample().to_text());
         assert_eq!(data.stats.monsters, 120);
         assert_eq!(data.stats.best_combo, 31);
         assert_eq!(data.badges.get("monsters-100"), Some(&20_357));
@@ -437,7 +345,7 @@ mod tests {
              badge no-such-badge 5\nbadge bosses-1 someday\nbadge levels-5 7\n\
              stat monsters 99999999999\n"
         );
-        let data = SaveData::from_text(&text);
+        let data = Progress::from_text(&text);
         assert_eq!(data.stats.bosses, 3);
         assert_eq!(data.stats.monsters, 0);
         assert_eq!(data.badges.len(), 1);
@@ -446,13 +354,13 @@ mod tests {
 
     #[test]
     fn a_huge_counter_is_capped() {
-        let data = SaveData::from_text(&format!("{HEADER}\nstat monsters 4000000000\n"));
+        let data = Progress::from_text(&format!("{HEADER}\nstat monsters 4000000000\n"));
         assert_eq!(data.stats.monsters, badges::MAX_COUNT);
     }
 
     #[test]
     fn saves_from_before_badges_still_load() {
-        let data = SaveData::from_text(&format!("{HEADER}\nmusic on\nbest-level 3\n"));
+        let data = Progress::from_text(&format!("{HEADER}\nmusic on\nbest-level 3\n"));
         assert_eq!(data.stats, Stats::default());
         assert!(data.badges.is_empty());
         assert_eq!(data.best_level, 3);

@@ -11,8 +11,7 @@ use crate::gfx::fonts::{self, Style};
 use crate::gfx::view::{ARENA_H, ARENA_W};
 use crate::input::frame::Frame;
 use crate::input::touch::Pointer;
-use crate::memory::Memory;
-use crate::platform::save::SaveData;
+use crate::progress::Progress;
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 const PANEL: Color = Color::new(0.13, 0.13, 0.19, 1.0);
@@ -213,7 +212,7 @@ impl BadgeScreen {
         })
     }
 
-    pub fn draw(&self, data: &SaveData, memory: &Memory, touch: bool) {
+    pub fn draw(&self, data: &Progress, touch: bool) {
         clear_background(BACKGROUND);
         let rows = rows();
         for (r, row) in rows.iter().enumerate() {
@@ -298,7 +297,7 @@ impl BadgeScreen {
         };
         fonts::draw(hint, 16.0, 78.0, 16, DIM, Style::Body);
 
-        self.draw_panel(data, memory);
+        self.draw_panel(data);
     }
 
     fn draw_scrollbar(&self, rows: usize) {
@@ -321,7 +320,7 @@ impl BadgeScreen {
     }
 
     /// Describes the selected badge.
-    fn draw_panel(&self, data: &SaveData, memory: &Memory) {
+    fn draw_panel(&self, data: &Progress) {
         draw_rectangle(0.0, PANEL_TOP, ARENA_W, ARENA_H - PANEL_TOP, PANEL);
         draw_line(
             0.0,
@@ -369,7 +368,7 @@ impl BadgeScreen {
                 Style::Bold,
             ),
             None => {
-                let (now, goal) = badge.requirement.progress(&standing(data, memory));
+                let (now, goal) = badge.requirement.progress(&standing(data));
                 let (bar_w, bar_h) = (300.0, 14.0);
                 let y = PANEL_TOP + 104.0;
                 draw_rectangle(x, y, bar_w, bar_h, Color::new(0.25, 0.25, 0.32, 1.0));

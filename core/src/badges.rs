@@ -8,9 +8,9 @@
 //! badges newly earned. An earned badge is remembered in the save file and
 //! never taken away, even if, say, a pair is forgotten again later.
 
-use crate::memory::{FAST_SECONDS, Memory, is_learned};
+use crate::memory::{FAST_SECONDS, is_learned};
 use crate::pairs::{PAIR_COUNT, PAIRS};
-use crate::save::SaveData;
+use crate::progress::Progress;
 
 /// The most any counter is allowed to reach, so a damaged save can't send
 /// the numbers to billions.
@@ -98,10 +98,9 @@ pub struct Standing {
     pub others_earned: u32,
 }
 
-/// The standing of the player whose save is `data`, with `memory` telling
-/// how well each pair is known.
-pub fn standing(data: &SaveData, memory: &Memory) -> Standing {
-    let learned = |pair: &&crate::pairs::Pair| is_learned(memory, pair);
+/// The standing of the player whose progress is `data`.
+pub fn standing(data: &Progress) -> Standing {
+    let learned = |pair: &&crate::pairs::Pair| is_learned(&data.memory, pair);
     Standing {
         stats: data.stats,
         levels_cleared: data.best_level.saturating_sub(1),
@@ -377,14 +376,13 @@ pub fn find(id: &str) -> Option<&'static Badge> {
 }
 
 /// Records every badge `data` has newly earned, on `day` (days since
-/// 1970), and returns them in table order. Whether a pair is learned is
-/// read from `memory`, which may be newer than the one in `data`.
-pub fn award(data: &mut SaveData, memory: &Memory, day: i64) -> Vec<&'static Badge> {
+/// 1970), and returns them in table order.
+pub fn award(data: &mut Progress, day: i64) -> Vec<&'static Badge> {
     let mut earned = Vec::new();
     // The last badge depends on the others, so go round again until
     // nothing more is earned.
     loop {
-        let standing = standing(data, memory);
+        let standing = standing(data);
         let new: Vec<&'static Badge> = BADGES
             .iter()
             .filter(|b| !data.badges.contains_key(b.id) && b.requirement.is_met(&standing))
@@ -402,7 +400,7 @@ pub fn award(data: &mut SaveData, memory: &Memory, day: i64) -> Vec<&'static Bad
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::PairRecord;
+    use crate::memory::{Memory, PairRecord};
     use std::collections::HashSet;
 
     const DAY: i64 = 20_000;
@@ -422,14 +420,17 @@ mod tests {
         }))
     }
 
-    fn earned_ids(data: &SaveData, memory: &Memory) -> Vec<&'static str> {
-        let mut data = data.clone();
-        award(&mut data, memory, DAY).iter().map(|b| b.id).collect()
+    fn earned_ids(data: &Progress, memory: &Memory) -> Vec<&'static str> {
+        let mut data = Progress {
+            memory: memory.clone(),
+            ..data.clone()
+        };
+        award(&mut data, DAY).iter().map(|b| b.id).collect()
     }
 
     #[test]
     fn a_new_player_has_earned_nothing() {
-        assert!(earned_ids(&SaveData::default(), &Memory::default()).is_empty());
+        assert!(earned_ids(&Progress::default(), &Memory::default()).is_empty());
     }
 
     #[test]
@@ -513,7 +514,7 @@ mod tests {
 
     #[test]
     fn a_counter_earns_its_badge_exactly_at_the_threshold() {
-        let mut data = SaveData::default();
+        let mut data = Progress::default();
         data.stats.monsters = 9;
         assert_eq!(earned_ids(&data, &Memory::default()), ["monsters-1"]);
         data.stats.monsters = 10;
@@ -526,9 +527,9 @@ mod tests {
     #[test]
     fn levels_are_counted_from_the_best_level_reached() {
         // Reaching level 6 means level 5 was finished.
-        let at = |best_level| SaveData {
+        let at = |best_level| Progress {
             best_level,
-            ..SaveData::default()
+            ..Progress::default()
         };
         assert!(!earned_ids(&at(5), &Memory::default()).contains(&"levels-5"));
         assert!(earned_ids(&at(6), &Memory::default()).contains(&"levels-5"));
@@ -536,7 +537,7 @@ mod tests {
 
     #[test]
     fn learned_pairs_count_and_the_digits_have_their_own_badge() {
-        let data = SaveData::default();
+        let data = Progress::default();
         let ids = earned_ids(&data, &memory_knowing(9));
         assert!(!ids.contains(&"pairs-digits"));
         let ids = earned_ids(&data, &memory_knowing(10));
@@ -547,7 +548,7 @@ mod tests {
 
     #[test]
     fn only_three_star_levels_count_as_star_levels() {
-        let mut data = SaveData::default();
+        let mut data = Progress::default();
         data.stars.insert(1, 2);
         assert!(earned_ids(&data, &Memory::default()).is_empty());
         data.stars.insert(2, 3);
@@ -556,9 +557,9 @@ mod tests {
 
     #[test]
     fn the_streak_earns_the_day_badges() {
-        let data = SaveData {
+        let data = Progress {
             streak: 7,
-            ..SaveData::default()
+            ..Progress::default()
         };
         let ids = earned_ids(&data, &Memory::default());
         assert_eq!(ids, ["days-2", "days-3", "days-7"]);
@@ -566,21 +567,30 @@ mod tests {
 
     #[test]
     fn an_earned_badge_is_never_taken_back() {
-        let mut data = SaveData::default();
-        award(&mut data, &memory_knowing(25), DAY);
+        let mut data = Progress {
+            memory: memory_knowing(25),
+            ..Progress::default()
+        };
+        award(&mut data, DAY);
         assert!(data.badges.contains_key("pairs-25"));
         // The pairs are forgotten again, and nothing is lost or added.
-        assert!(award(&mut data, &Memory::default(), DAY + 1).is_empty());
+        assert!(
+            {
+                data.memory = Memory::default();
+                award(&mut data, DAY + 1)
+            }
+            .is_empty()
+        );
         assert_eq!(data.badges.get("pairs-25"), Some(&DAY));
     }
 
     #[test]
     fn each_badge_is_earned_once_on_the_day_it_was_earned() {
-        let mut data = SaveData::default();
+        let mut data = Progress::default();
         data.stats.monsters = 1;
-        assert_eq!(award(&mut data, &Memory::default(), DAY).len(), 1);
+        assert_eq!(award(&mut data, DAY).len(), 1);
         data.stats.monsters = 10;
-        let second = award(&mut data, &Memory::default(), DAY + 3);
+        let second = award(&mut data, DAY + 3);
         assert_eq!(
             second.iter().map(|b| b.id).collect::<Vec<_>>(),
             ["monsters-10"]
@@ -591,9 +601,9 @@ mod tests {
 
     #[test]
     fn the_master_badge_needs_every_pair_and_the_levels() {
-        let at = |best_level| SaveData {
+        let at = |best_level| Progress {
             best_level,
-            ..SaveData::default()
+            ..Progress::default()
         };
         let data = at(MASTER_LEVELS + 1);
         assert!(!earned_ids(&data, &memory_knowing(109)).contains(&"master"));
@@ -604,7 +614,7 @@ mod tests {
 
     #[test]
     fn earning_everything_earns_the_last_badge_in_the_same_go() {
-        let mut data = SaveData {
+        let mut data = Progress {
             stats: Stats {
                 monsters: 10_000,
                 bosses: 100,
@@ -616,12 +626,13 @@ mod tests {
             },
             best_level: 101,
             streak: 100,
-            ..SaveData::default()
+            memory: memory_knowing(PAIR_COUNT),
+            ..Progress::default()
         };
         for level in 1..=30 {
             data.stars.insert(level, 3);
         }
-        let earned = award(&mut data, &memory_knowing(PAIR_COUNT), DAY);
+        let earned = award(&mut data, DAY);
         assert_eq!(earned.len(), BADGES.len());
         assert_eq!(earned.last().map(|b| b.id), Some("everything"));
     }
