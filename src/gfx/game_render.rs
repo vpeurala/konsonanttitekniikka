@@ -322,7 +322,7 @@ fn draw_score_and_level(scene: &Scene) {
 }
 
 /// Lists the pairs introduced on this level down the right edge, the new
-/// ones highlighted below the earlier ones that still fit. The panel is
+/// ones highlighted above the earlier ones that still fit. The panel is
 /// gone once a level brings nothing new.
 fn draw_new_pairs(scene: &Scene) {
     const WIDTH: f32 = 150.0;
@@ -349,10 +349,10 @@ fn draw_new_pairs(scene: &Scene) {
         GOLD,
         Style::Heading,
     );
-    let listed = earlier
+    let listed = new
         .iter()
-        .map(|p| (p, false))
-        .chain(new.iter().map(|p| (p, true)));
+        .map(|p| (p, true))
+        .chain(earlier.iter().map(|p| (p, false)));
     for (i, (pair, is_new)) in listed.enumerate() {
         let row_y = y + 44.0 + ROW * i as f32;
         let (number_color, word_color) = if is_new {
