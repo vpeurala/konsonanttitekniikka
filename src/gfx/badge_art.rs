@@ -267,474 +267,755 @@ fn draw_pie(pos: Vec2, radius: f32, fraction: f32, color: Color) {
     }
 }
 
+/// What the emblems are drawn with: where the medal is, how big it is and
+/// its colours. Sizes and positions are in medal radii from the centre.
+struct Pen {
+    c: Vec2,
+    r: f32,
+    dark: Color,
+    light: Color,
+    face: Color,
+}
+
+impl Pen {
+    /// A point, in medal radii from the centre.
+    fn at(&self, dx: f32, dy: f32) -> Vec2 {
+        self.c + vec2(dx, dy) * self.r
+    }
+
+    /// A line of a width given in radii.
+    fn line(&self, a: Vec2, b: Vec2, w: f32, color: Color) {
+        draw_line(a.x, a.y, b.x, b.y, w * self.r, color);
+    }
+
+    fn stroke(&self, a: Vec2, b: Vec2, w: f32, color: Color) {
+        draw_stroke(a, b, w * self.r, color);
+    }
+
+    fn disc(&self, p: Vec2, size: f32, color: Color) {
+        draw_circle(p.x, p.y, size * self.r, color);
+    }
+
+    fn ring(&self, p: Vec2, size: f32, w: f32, color: Color) {
+        draw_circle_lines(p.x, p.y, size * self.r, w * self.r, color);
+    }
+
+    fn rect(&self, x: f32, y: f32, w: f32, h: f32, color: Color) {
+        let p = self.at(x, y);
+        draw_rectangle(p.x, p.y, w * self.r, h * self.r, color);
+    }
+
+    fn oval(&self, p: Vec2, w: f32, h: f32, color: Color) {
+        draw_ellipse(p.x, p.y, w * self.r, h * self.r, 0.0, color);
+    }
+}
+
 /// Draws `emblem` on a medal of `radius` centred on `c`.
 fn draw_emblem(emblem: Emblem, c: Vec2, radius: f32, paint: Paint) {
-    let r = radius;
     let Paint { dark, light, face } = paint;
-    // A point, in medal radii from the centre.
-    let at = |dx: f32, dy: f32| c + vec2(dx, dy) * r;
-    // A line of a width given in radii.
-    let line = |a: Vec2, b: Vec2, w: f32, color: Color| draw_line(a.x, a.y, b.x, b.y, w * r, color);
-    let stroke = |a: Vec2, b: Vec2, w: f32, color: Color| draw_stroke(a, b, w * r, color);
-    let disc = |p: Vec2, size: f32, color: Color| draw_circle(p.x, p.y, size * r, color);
-    let ring = |p: Vec2, size: f32, w: f32, color: Color| {
-        draw_circle_lines(p.x, p.y, size * r, w * r, color);
-    };
-    let rect = |x: f32, y: f32, w: f32, h: f32, color: Color| {
-        let p = at(x, y);
-        draw_rectangle(p.x, p.y, w * r, h * r, color);
-    };
-    let oval = |p: Vec2, w: f32, h: f32, color: Color| {
-        draw_ellipse(p.x, p.y, w * r, h * r, 0.0, color);
+    let pen = Pen {
+        c,
+        r: radius,
+        dark,
+        light,
+        face,
     };
     match emblem {
-        Emblem::Cyclops => {
-            disc(at(0.0, 0.0), 0.44, dark);
-            disc(at(0.0, -0.08), 0.22, light);
-            disc(at(0.0, -0.08), 0.1, dark);
-            for side in [-1.0, 1.0] {
-                draw_triangle(
-                    at(side * 0.28, 0.14),
-                    at(side * 0.1, 0.14),
-                    at(side * 0.19, 0.33),
-                    light,
-                );
-            }
-        }
-        // A magic wand with a star at its tip.
-        Emblem::Wand => {
-            line(at(-0.4, 0.42), at(0.16, -0.14), 0.12, dark);
-            line(at(-0.4, 0.42), at(-0.28, 0.3), 0.12, light);
-            draw_solid_star(at(0.26, -0.26), r * 0.3, dark);
-            disc(at(-0.1, -0.36), 0.05, dark);
-            disc(at(0.4, 0.1), 0.05, dark);
-        }
-        Emblem::Shield => {
-            draw_quad(
-                at(-0.38, -0.4),
-                at(0.38, -0.4),
-                at(0.38, 0.05),
-                at(-0.38, 0.05),
-                dark,
-            );
-            draw_triangle(at(-0.38, 0.05), at(0.38, 0.05), at(0.0, 0.5), dark);
-            line(at(0.0, -0.32), at(0.0, 0.38), 0.09, light);
-            line(at(-0.3, -0.12), at(0.3, -0.12), 0.09, light);
-        }
-        Emblem::Sword => {
-            let (tip, guard) = (at(0.4, -0.42), at(-0.14, 0.12));
-            line(tip, guard, 0.15, dark);
-            line(at(0.32, -0.34), at(-0.06, 0.04), 0.04, light);
-            let perp = vec2(0.6, 0.6);
-            stroke(guard - perp * r * 0.32, guard + perp * r * 0.32, 0.11, dark);
-            line(guard, at(-0.34, 0.32), 0.1, dark);
-            disc(at(-0.38, 0.36), 0.09, dark);
-        }
-        Emblem::Trophy => {
-            draw_quad(
-                at(-0.32, -0.36),
-                at(0.32, -0.36),
-                at(0.2, 0.06),
-                at(-0.2, 0.06),
-                dark,
-            );
-            for side in [-1.0, 1.0] {
-                ring(at(side * 0.36, -0.2), 0.12, 0.06, dark);
-            }
-            rect(-0.05, 0.05, 0.1, 0.22, dark);
-            rect(-0.26, 0.26, 0.52, 0.1, dark);
-            draw_solid_star(at(0.0, -0.16), r * 0.12, light);
-        }
-        Emblem::Ghost => {
-            disc(at(0.0, -0.08), 0.34, dark);
-            rect(-0.34, -0.08, 0.68, 0.4, dark);
-            for i in 0..3 {
-                let x = -0.34 + i as f32 * 0.2267;
-                draw_triangle(at(x, 0.3), at(x + 0.2267, 0.3), at(x + 0.1133, 0.48), dark);
-            }
-            for side in [-1.0, 1.0] {
-                disc(at(side * 0.13, -0.12), 0.08, light);
-                disc(at(side * 0.13, -0.1), 0.035, dark);
-            }
-            disc(at(0.0, 0.1), 0.06, light);
-        }
-        // An explosion.
-        Emblem::Burst => {
-            draw_spiky(at(0.0, 0.0), 8, r * 0.52, r * 0.26, dark);
-            disc(at(0.0, 0.0), 0.13, light);
-        }
-        // A crescent moon with a star, for a monster's nightmare.
-        Emblem::Crescent => {
-            disc(at(-0.04, 0.0), 0.42, dark);
-            disc(at(0.14, -0.08), 0.35, face);
-            draw_solid_star(at(0.24, 0.1), r * 0.14, light);
-        }
-        Emblem::Crown => {
-            draw_quad(
-                at(-0.4, 0.08),
-                at(0.4, 0.08),
-                at(0.4, 0.32),
-                at(-0.4, 0.32),
-                dark,
-            );
-            draw_triangle(at(-0.4, 0.08), at(-0.4, -0.34), at(-0.1, 0.08), dark);
-            draw_triangle(at(-0.22, 0.08), at(0.0, -0.44), at(0.22, 0.08), dark);
-            draw_triangle(at(0.4, 0.08), at(0.4, -0.34), at(0.1, 0.08), dark);
-            for x in [-0.22, 0.0, 0.22] {
-                disc(at(x, 0.2), 0.05, light);
-            }
-        }
-        Emblem::Hammer => {
-            line(at(-0.36, 0.44), at(0.1, -0.1), 0.11, dark);
-            stroke(at(-0.04, -0.32), at(0.36, 0.02), 0.3, dark);
-            line(at(0.0, -0.24), at(0.26, -0.02), 0.06, light);
-        }
-        Emblem::Helmet => {
-            disc(at(0.0, 0.02), 0.4, dark);
-            rect(-0.5, 0.24, 1.0, 0.4, face);
-            rect(-0.4, 0.02, 0.8, 0.22, dark);
-            rect(-0.31, 0.06, 0.62, 0.07, light);
-            rect(-0.04, 0.06, 0.08, 0.2, light);
-            draw_triangle(at(-0.04, -0.38), at(0.1, -0.56), at(0.2, -0.34), dark);
-        }
-        Emblem::Tent => {
-            draw_triangle(at(0.0, -0.42), at(-0.5, 0.38), at(0.5, 0.38), dark);
-            draw_triangle(at(0.0, -0.06), at(-0.16, 0.38), at(0.16, 0.38), light);
-            line(at(-0.56, 0.4), at(0.56, 0.4), 0.06, dark);
-        }
-        Emblem::Compass => {
-            ring(at(0.0, 0.0), 0.42, 0.07, dark);
-            draw_triangle(at(0.12, -0.3), at(-0.09, -0.08), at(0.09, 0.09), dark);
-            draw_triangle(at(-0.12, 0.3), at(-0.09, -0.08), at(0.09, 0.09), light);
-            disc(at(0.0, 0.0), 0.04, dark);
-        }
-        Emblem::Map => {
-            draw_quad(
-                at(-0.42, -0.3),
-                at(0.42, -0.3),
-                at(0.42, 0.34),
-                at(-0.42, 0.34),
-                dark,
-            );
-            for x in [-0.14, 0.14] {
-                line(at(x, -0.3), at(x, 0.34), 0.03, light);
-            }
-            for p in [(-0.3, 0.2), (-0.2, 0.04), (-0.05, -0.02), (0.06, 0.14)] {
-                disc(at(p.0, p.1), 0.035, light);
-            }
-            line(at(0.18, 0.0), at(0.34, 0.16), 0.07, light);
-            line(at(0.34, 0.0), at(0.18, 0.16), 0.07, light);
-        }
-        Emblem::Footprints => {
-            for (x, y) in [(-0.2, 0.1), (0.2, -0.16)] {
-                oval(at(x, y), 0.11, 0.18, dark);
-                oval(at(x, y + 0.29), 0.08, 0.08, dark);
-                for dx in [-0.09, 0.0, 0.09] {
-                    disc(at(x + dx, y - 0.27), 0.045, dark);
-                }
-            }
-        }
-        Emblem::Mountain => {
-            draw_triangle(at(-0.2, -0.14), at(-0.55, 0.4), at(0.15, 0.4), dark);
-            draw_triangle(at(0.12, -0.3), at(-0.3, 0.4), at(0.54, 0.4), dark);
-            draw_triangle(at(0.12, -0.3), at(0.0, -0.08), at(0.24, -0.08), light);
-            line(at(0.12, -0.3), at(0.12, -0.5), 0.04, dark);
-            draw_triangle(at(0.12, -0.5), at(0.32, -0.43), at(0.12, -0.36), dark);
-        }
-        Emblem::Castle => {
-            rect(-0.4, -0.02, 0.8, 0.42, dark);
-            for x in [-0.44, 0.2] {
-                rect(x, -0.3, 0.24, 0.7, dark);
-                for k in 0..3 {
-                    rect(x + k as f32 * 0.09, -0.4, 0.06, 0.1, dark);
-                }
-            }
-            rect(-0.08, 0.14, 0.16, 0.26, light);
-            disc(at(0.0, 0.14), 0.08, light);
-        }
-        // Ten dots for the digits 0–9.
-        Emblem::Dots => {
-            for row in 0..2 {
-                for col in 0..5 {
-                    let p = at(-0.4 + col as f32 * 0.2, -0.12 + row as f32 * 0.26);
-                    draw_circle(p.x, p.y, r * 0.085, dark);
-                }
-            }
-        }
-        Emblem::Quarter | Emblem::Half | Emblem::ThreeQuarters => {
-            let fraction = match emblem {
-                Emblem::Quarter => 0.25,
-                Emblem::Half => 0.5,
-                _ => 0.75,
-            };
-            ring(at(0.0, 0.0), 0.42, 0.06, dark);
-            draw_pie(at(0.0, 0.0), r * 0.42, fraction, dark);
-        }
-        Emblem::Book => {
-            for side in [-1.0, 1.0] {
-                draw_quad(
-                    at(side * 0.03, -0.2),
-                    at(side * 0.46, -0.34),
-                    at(side * 0.46, 0.3),
-                    at(side * 0.03, 0.42),
-                    dark,
-                );
-            }
-            draw_solid_star(at(0.0, -0.32), r * 0.16, light);
-            for side in [-1.0, 1.0] {
-                for y in [-0.08, 0.06, 0.2] {
-                    line(at(side * 0.1, y), at(side * 0.38, y - 0.08), 0.03, light);
-                }
-            }
-        }
-        Emblem::Chain => {
-            for side in [-1.0, 1.0] {
-                ring(at(side * 0.2, 0.0), 0.27, 0.1, dark);
-            }
-        }
-        Emblem::Flame => {
-            disc(at(0.0, 0.16), 0.28, dark);
-            draw_triangle(at(0.04, -0.54), at(-0.24, 0.1), at(0.22, 0.1), dark);
-            draw_triangle(at(-0.26, -0.24), at(-0.3, 0.16), at(-0.06, 0.02), dark);
-            draw_triangle(at(0.3, -0.14), at(0.06, -0.02), at(0.3, 0.2), dark);
-            disc(at(0.0, 0.22), 0.13, light);
-            draw_triangle(at(0.0, -0.04), at(-0.11, 0.22), at(0.11, 0.22), light);
-        }
-        Emblem::Rocket => {
-            oval(at(0.0, -0.06), 0.17, 0.4, dark);
-            disc(at(0.0, -0.12), 0.08, light);
-            for side in [-1.0, 1.0] {
-                draw_triangle(
-                    at(side * 0.14, 0.12),
-                    at(side * 0.34, 0.4),
-                    at(side * 0.1, 0.3),
-                    dark,
-                );
-            }
-            draw_triangle(at(-0.08, 0.3), at(0.08, 0.3), at(0.0, 0.52), light);
-        }
-        Emblem::Comet => {
-            // A tail that widens towards the head, with a streak in it.
-            draw_triangle(at(0.36, -0.1), at(0.1, -0.36), at(-0.46, 0.46), dark);
-            line(at(0.14, -0.14), at(-0.3, 0.3), 0.04, light);
-            draw_solid_star(at(0.24, -0.24), r * 0.27, dark);
-            disc(at(0.24, -0.24), 0.07, light);
-        }
-        Emblem::Star => draw_solid_star(at(0.0, 0.03), r * 0.52, dark),
-        Emblem::Check => {
-            stroke(at(-0.32, 0.04), at(-0.1, 0.28), 0.17, dark);
-            stroke(at(-0.1, 0.28), at(0.36, -0.3), 0.17, dark);
-        }
-        Emblem::ThreeStars => {
-            draw_solid_star(at(0.0, -0.1), r * 0.3, dark);
-            draw_solid_star(at(-0.33, 0.2), r * 0.2, dark);
-            draw_solid_star(at(0.33, 0.2), r * 0.2, dark);
-        }
-        Emblem::Constellation => {
-            let stars = [
-                (-0.36, 0.2),
-                (-0.16, -0.14),
-                (0.08, 0.08),
-                (0.3, -0.26),
-                (0.4, 0.22),
-            ];
-            for pair in stars.windows(2) {
-                line(
-                    at(pair[0].0, pair[0].1),
-                    at(pair[1].0, pair[1].1),
-                    0.035,
-                    dark,
-                );
-            }
-            for (i, s) in stars.iter().enumerate() {
-                draw_solid_star(at(s.0, s.1), r * if i == 3 { 0.2 } else { 0.14 }, dark);
-            }
-        }
-        Emblem::Ruler => {
-            let (a, b) = (at(-0.4, 0.32), at(0.4, -0.32));
-            line(a, b, 0.32, dark);
-            // Ticks across the ruler, from one edge.
-            let along = (b - a).normalize();
-            let across = vec2(-along.y, along.x);
-            for i in 0..7 {
-                let base = a + (b - a) * (0.08 + i as f32 * 0.14) + across * r * 0.16;
-                let len = if i % 2 == 0 { 0.16 } else { 0.09 };
-                draw_line(
-                    base.x,
-                    base.y,
-                    base.x - across.x * r * len,
-                    base.y - across.y * r * len,
-                    r * 0.035,
-                    light,
-                );
-            }
-        }
-        Emblem::Scroll => {
-            rect(-0.3, -0.34, 0.6, 0.68, dark);
-            rect(-0.38, -0.44, 0.76, 0.13, dark);
-            rect(-0.38, 0.31, 0.76, 0.13, dark);
-            for y in [-0.16, 0.0, 0.16] {
-                line(at(-0.18, y), at(0.18, y), 0.05, light);
-            }
-        }
-        Emblem::WitchHat => {
-            draw_triangle(at(0.12, -0.52), at(-0.24, 0.26), at(0.24, 0.26), dark);
-            oval(at(0.0, 0.28), 0.5, 0.1, dark);
-            draw_quad(
-                at(-0.22, 0.12),
-                at(0.22, 0.12),
-                at(0.24, 0.26),
-                at(-0.24, 0.26),
-                light,
-            );
-            draw_solid_star(at(0.02, -0.14), r * 0.09, light);
-        }
-        Emblem::Card => {
-            let (w, h) = (0.62 * r, 0.82 * r);
-            draw_rectangle(c.x - w / 2.0, c.y - h / 2.0, w, h, light);
-            draw_rectangle_lines(c.x - w / 2.0, c.y - h / 2.0, w, h, 0.09 * r, dark);
-            fonts::draw_centered(
-                "?",
-                c.x,
-                c.y + 0.02 * r,
-                (r * 0.62) as u16,
-                dark,
-                Style::Bold,
-            );
-        }
-        Emblem::Pencil => {
-            let (tip, end) = (at(-0.42, 0.42), at(0.3, -0.3));
-            let start = tip + (end - tip).normalize() * r * 0.24;
-            let across = vec2(0.7, 0.7) * r * 0.1;
-            draw_triangle(tip, start + across, start - across, dark);
-            line(start, end, 0.2, dark);
-            line(end, end + (end - tip).normalize() * r * 0.12, 0.2, light);
-        }
-        Emblem::Dumbbell => {
-            line(at(-0.32, 0.0), at(0.32, 0.0), 0.09, dark);
-            for side in [-1.0, 1.0] {
-                rect(side * 0.42 - 0.05, -0.22, 0.1, 0.44, dark);
-                rect(side * 0.31 - 0.04, -0.15, 0.08, 0.3, dark);
-            }
-        }
-        Emblem::GraduationCap => {
-            draw_quad(
-                at(0.0, -0.32),
-                at(0.52, -0.1),
-                at(0.0, 0.12),
-                at(-0.52, -0.1),
-                dark,
-            );
-            draw_quad(
-                at(-0.28, 0.02),
-                at(0.28, 0.02),
-                at(0.26, 0.26),
-                at(-0.26, 0.26),
-                dark,
-            );
-            line(at(-0.28, 0.03), at(0.28, 0.03), 0.04, light);
-            line(at(0.42, -0.08), at(0.42, 0.22), 0.04, light);
-            disc(at(0.42, 0.26), 0.06, light);
-        }
-        Emblem::Heart => {
-            disc(at(-0.15, -0.12), 0.21, dark);
-            disc(at(0.15, -0.12), 0.21, dark);
-            draw_triangle(at(-0.34, -0.03), at(0.34, -0.03), at(0.0, 0.42), dark);
-            disc(at(-0.2, -0.16), 0.06, light);
-        }
-        Emblem::Calendar => {
-            rect(-0.38, -0.3, 0.76, 0.72, dark);
-            rect(-0.38, -0.3, 0.76, 0.16, light);
-            for x in [-0.2, 0.14] {
-                rect(x, -0.4, 0.06, 0.16, dark);
-            }
-            for row in 0..2 {
-                for col in 0..3 {
-                    rect(
-                        -0.27 + col as f32 * 0.21,
-                        -0.04 + row as f32 * 0.22,
-                        0.13,
-                        0.13,
-                        light,
-                    );
-                }
-            }
-        }
-        Emblem::Rainbow => {
-            disc(at(0.0, 0.1), 0.46, dark);
-            disc(at(0.0, 0.1), 0.36, light);
-            disc(at(0.0, 0.1), 0.26, dark);
-            disc(at(0.0, 0.1), 0.16, face);
-            rect(-0.5, 0.1, 1.0, 0.5, face);
-            for side in [-1.0, 1.0] {
-                disc(at(side * 0.36, 0.14), 0.09, light);
-            }
-        }
-        Emblem::Flower => {
-            for i in 0..6 {
-                let p = c + Vec2::from_angle(i as f32 * std::f32::consts::TAU / 6.0) * r * 0.25;
-                draw_circle(p.x, p.y, r * 0.16, dark);
-            }
-            disc(at(0.0, 0.0), 0.13, light);
-        }
-        Emblem::Moon => {
-            disc(at(0.0, 0.0), 0.42, dark);
-            disc(at(-0.13, -0.1), 0.09, light);
-            disc(at(0.14, 0.14), 0.12, light);
-            disc(at(0.16, -0.2), 0.06, light);
-        }
-        Emblem::Sun => {
-            disc(at(0.0, 0.0), 0.24, dark);
-            for i in 0..8 {
-                let dir = Vec2::from_angle(i as f32 * std::f32::consts::FRAC_PI_4);
-                line(c + dir * r * 0.36, c + dir * r * 0.58, 0.08, dark);
-            }
-        }
-        Emblem::Stopwatch => {
-            ring(at(0.0, 0.08), 0.34, 0.08, dark);
-            rect(-0.07, -0.5, 0.14, 0.11, dark);
-            line(at(0.0, 0.08), at(0.14, -0.1), 0.06, dark);
-            for (x, y) in [(0.0, -0.16), (0.24, 0.08), (0.0, 0.32), (-0.24, 0.08)] {
-                disc(at(x, y), 0.03, dark);
-            }
-        }
-        Emblem::Bolt => {
-            draw_triangle(at(0.14, -0.56), at(-0.32, 0.1), at(0.06, 0.1), dark);
-            draw_triangle(at(-0.14, 0.56), at(0.32, -0.1), at(-0.06, -0.1), dark);
-            draw_quad(
-                at(0.14, -0.56),
-                at(0.06, 0.1),
-                at(-0.06, -0.1),
-                at(0.06, -0.1),
-                dark,
-            );
-        }
-        Emblem::CrystalBall => {
-            disc(at(0.0, -0.06), 0.36, dark);
-            draw_quad(
-                at(-0.28, 0.3),
-                at(0.28, 0.3),
-                at(0.2, 0.44),
-                at(-0.2, 0.44),
-                dark,
-            );
-            disc(at(-0.14, -0.18), 0.08, light);
-            draw_solid_star(at(0.06, -0.02), r * 0.15, light);
-        }
-        Emblem::Gem => {
-            draw_quad(
-                at(-0.2, -0.4),
-                at(0.2, -0.4),
-                at(0.38, -0.14),
-                at(-0.38, -0.14),
-                dark,
-            );
-            draw_triangle(at(-0.38, -0.08), at(0.38, -0.08), at(0.0, 0.46), dark);
-            line(at(-0.1, -0.4), at(-0.2, -0.14), 0.03, light);
-            line(at(0.1, -0.4), at(0.2, -0.14), 0.03, light);
-            line(at(-0.2, -0.02), at(0.0, 0.3), 0.03, light);
+        Emblem::Cyclops => cyclops(&pen),
+        Emblem::Wand => wand(&pen),
+        Emblem::Shield => shield(&pen),
+        Emblem::Sword => sword(&pen),
+        Emblem::Trophy => trophy(&pen),
+        Emblem::Ghost => ghost(&pen),
+        Emblem::Burst => burst(&pen),
+        Emblem::Crescent => crescent(&pen),
+        Emblem::Crown => crown(&pen),
+        Emblem::Hammer => hammer(&pen),
+        Emblem::Helmet => helmet(&pen),
+        Emblem::Tent => tent(&pen),
+        Emblem::Compass => compass(&pen),
+        Emblem::Map => map(&pen),
+        Emblem::Footprints => footprints(&pen),
+        Emblem::Mountain => mountain(&pen),
+        Emblem::Castle => castle(&pen),
+        Emblem::Dots => dots(&pen),
+        Emblem::Quarter | Emblem::Half | Emblem::ThreeQuarters => fraction(&pen, emblem),
+        Emblem::Book => book(&pen),
+        Emblem::Chain => chain(&pen),
+        Emblem::Flame => flame(&pen),
+        Emblem::Rocket => rocket(&pen),
+        Emblem::Comet => comet(&pen),
+        Emblem::Star => star(&pen),
+        Emblem::Check => check(&pen),
+        Emblem::ThreeStars => three_stars(&pen),
+        Emblem::Constellation => constellation(&pen),
+        Emblem::Ruler => ruler(&pen),
+        Emblem::Scroll => scroll(&pen),
+        Emblem::WitchHat => witch_hat(&pen),
+        Emblem::Card => card(&pen),
+        Emblem::Pencil => pencil(&pen),
+        Emblem::Dumbbell => dumbbell(&pen),
+        Emblem::GraduationCap => graduation_cap(&pen),
+        Emblem::Heart => heart(&pen),
+        Emblem::Calendar => calendar(&pen),
+        Emblem::Rainbow => rainbow(&pen),
+        Emblem::Flower => flower(&pen),
+        Emblem::Moon => moon(&pen),
+        Emblem::Sun => sun(&pen),
+        Emblem::Stopwatch => stopwatch(&pen),
+        Emblem::Bolt => bolt(&pen),
+        Emblem::CrystalBall => crystal_ball(&pen),
+        Emblem::Gem => gem(&pen),
+    }
+}
+
+fn cyclops(pen: &Pen) {
+    pen.disc(pen.at(0.0, 0.0), 0.44, pen.dark);
+    pen.disc(pen.at(0.0, -0.08), 0.22, pen.light);
+    pen.disc(pen.at(0.0, -0.08), 0.1, pen.dark);
+    for side in [-1.0, 1.0] {
+        draw_triangle(
+            pen.at(side * 0.28, 0.14),
+            pen.at(side * 0.1, 0.14),
+            pen.at(side * 0.19, 0.33),
+            pen.light,
+        );
+    }
+}
+
+/// A magic wand with a star at its tip.
+fn wand(pen: &Pen) {
+    pen.line(pen.at(-0.4, 0.42), pen.at(0.16, -0.14), 0.12, pen.dark);
+    pen.line(pen.at(-0.4, 0.42), pen.at(-0.28, 0.3), 0.12, pen.light);
+    draw_solid_star(pen.at(0.26, -0.26), pen.r * 0.3, pen.dark);
+    pen.disc(pen.at(-0.1, -0.36), 0.05, pen.dark);
+    pen.disc(pen.at(0.4, 0.1), 0.05, pen.dark);
+}
+
+fn shield(pen: &Pen) {
+    draw_quad(
+        pen.at(-0.38, -0.4),
+        pen.at(0.38, -0.4),
+        pen.at(0.38, 0.05),
+        pen.at(-0.38, 0.05),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(-0.38, 0.05),
+        pen.at(0.38, 0.05),
+        pen.at(0.0, 0.5),
+        pen.dark,
+    );
+    pen.line(pen.at(0.0, -0.32), pen.at(0.0, 0.38), 0.09, pen.light);
+    pen.line(pen.at(-0.3, -0.12), pen.at(0.3, -0.12), 0.09, pen.light);
+}
+
+fn sword(pen: &Pen) {
+    let (tip, guard) = (pen.at(0.4, -0.42), pen.at(-0.14, 0.12));
+    pen.line(tip, guard, 0.15, pen.dark);
+    pen.line(pen.at(0.32, -0.34), pen.at(-0.06, 0.04), 0.04, pen.light);
+    let perp = vec2(0.6, 0.6);
+    pen.stroke(
+        guard - perp * pen.r * 0.32,
+        guard + perp * pen.r * 0.32,
+        0.11,
+        pen.dark,
+    );
+    pen.line(guard, pen.at(-0.34, 0.32), 0.1, pen.dark);
+    pen.disc(pen.at(-0.38, 0.36), 0.09, pen.dark);
+}
+
+fn trophy(pen: &Pen) {
+    draw_quad(
+        pen.at(-0.32, -0.36),
+        pen.at(0.32, -0.36),
+        pen.at(0.2, 0.06),
+        pen.at(-0.2, 0.06),
+        pen.dark,
+    );
+    for side in [-1.0, 1.0] {
+        pen.ring(pen.at(side * 0.36, -0.2), 0.12, 0.06, pen.dark);
+    }
+    pen.rect(-0.05, 0.05, 0.1, 0.22, pen.dark);
+    pen.rect(-0.26, 0.26, 0.52, 0.1, pen.dark);
+    draw_solid_star(pen.at(0.0, -0.16), pen.r * 0.12, pen.light);
+}
+
+fn ghost(pen: &Pen) {
+    pen.disc(pen.at(0.0, -0.08), 0.34, pen.dark);
+    pen.rect(-0.34, -0.08, 0.68, 0.4, pen.dark);
+    for i in 0..3 {
+        let x = -0.34 + i as f32 * 0.2267;
+        draw_triangle(
+            pen.at(x, 0.3),
+            pen.at(x + 0.2267, 0.3),
+            pen.at(x + 0.1133, 0.48),
+            pen.dark,
+        );
+    }
+    for side in [-1.0, 1.0] {
+        pen.disc(pen.at(side * 0.13, -0.12), 0.08, pen.light);
+        pen.disc(pen.at(side * 0.13, -0.1), 0.035, pen.dark);
+    }
+    pen.disc(pen.at(0.0, 0.1), 0.06, pen.light);
+}
+
+/// An explosion.
+fn burst(pen: &Pen) {
+    draw_spiky(pen.at(0.0, 0.0), 8, pen.r * 0.52, pen.r * 0.26, pen.dark);
+    pen.disc(pen.at(0.0, 0.0), 0.13, pen.light);
+}
+
+/// A crescent moon with a star, for a monster's nightmare.
+fn crescent(pen: &Pen) {
+    pen.disc(pen.at(-0.04, 0.0), 0.42, pen.dark);
+    pen.disc(pen.at(0.14, -0.08), 0.35, pen.face);
+    draw_solid_star(pen.at(0.24, 0.1), pen.r * 0.14, pen.light);
+}
+
+fn crown(pen: &Pen) {
+    draw_quad(
+        pen.at(-0.4, 0.08),
+        pen.at(0.4, 0.08),
+        pen.at(0.4, 0.32),
+        pen.at(-0.4, 0.32),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(-0.4, 0.08),
+        pen.at(-0.4, -0.34),
+        pen.at(-0.1, 0.08),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(-0.22, 0.08),
+        pen.at(0.0, -0.44),
+        pen.at(0.22, 0.08),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(0.4, 0.08),
+        pen.at(0.4, -0.34),
+        pen.at(0.1, 0.08),
+        pen.dark,
+    );
+    for x in [-0.22, 0.0, 0.22] {
+        pen.disc(pen.at(x, 0.2), 0.05, pen.light);
+    }
+}
+
+fn hammer(pen: &Pen) {
+    pen.line(pen.at(-0.36, 0.44), pen.at(0.1, -0.1), 0.11, pen.dark);
+    pen.stroke(pen.at(-0.04, -0.32), pen.at(0.36, 0.02), 0.3, pen.dark);
+    pen.line(pen.at(0.0, -0.24), pen.at(0.26, -0.02), 0.06, pen.light);
+}
+
+fn helmet(pen: &Pen) {
+    pen.disc(pen.at(0.0, 0.02), 0.4, pen.dark);
+    pen.rect(-0.5, 0.24, 1.0, 0.4, pen.face);
+    pen.rect(-0.4, 0.02, 0.8, 0.22, pen.dark);
+    pen.rect(-0.31, 0.06, 0.62, 0.07, pen.light);
+    pen.rect(-0.04, 0.06, 0.08, 0.2, pen.light);
+    draw_triangle(
+        pen.at(-0.04, -0.38),
+        pen.at(0.1, -0.56),
+        pen.at(0.2, -0.34),
+        pen.dark,
+    );
+}
+
+fn tent(pen: &Pen) {
+    draw_triangle(
+        pen.at(0.0, -0.42),
+        pen.at(-0.5, 0.38),
+        pen.at(0.5, 0.38),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(0.0, -0.06),
+        pen.at(-0.16, 0.38),
+        pen.at(0.16, 0.38),
+        pen.light,
+    );
+    pen.line(pen.at(-0.56, 0.4), pen.at(0.56, 0.4), 0.06, pen.dark);
+}
+
+fn compass(pen: &Pen) {
+    pen.ring(pen.at(0.0, 0.0), 0.42, 0.07, pen.dark);
+    draw_triangle(
+        pen.at(0.12, -0.3),
+        pen.at(-0.09, -0.08),
+        pen.at(0.09, 0.09),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(-0.12, 0.3),
+        pen.at(-0.09, -0.08),
+        pen.at(0.09, 0.09),
+        pen.light,
+    );
+    pen.disc(pen.at(0.0, 0.0), 0.04, pen.dark);
+}
+
+fn map(pen: &Pen) {
+    draw_quad(
+        pen.at(-0.42, -0.3),
+        pen.at(0.42, -0.3),
+        pen.at(0.42, 0.34),
+        pen.at(-0.42, 0.34),
+        pen.dark,
+    );
+    for x in [-0.14, 0.14] {
+        pen.line(pen.at(x, -0.3), pen.at(x, 0.34), 0.03, pen.light);
+    }
+    for p in [(-0.3, 0.2), (-0.2, 0.04), (-0.05, -0.02), (0.06, 0.14)] {
+        pen.disc(pen.at(p.0, p.1), 0.035, pen.light);
+    }
+    pen.line(pen.at(0.18, 0.0), pen.at(0.34, 0.16), 0.07, pen.light);
+    pen.line(pen.at(0.34, 0.0), pen.at(0.18, 0.16), 0.07, pen.light);
+}
+
+fn footprints(pen: &Pen) {
+    for (x, y) in [(-0.2, 0.1), (0.2, -0.16)] {
+        pen.oval(pen.at(x, y), 0.11, 0.18, pen.dark);
+        pen.oval(pen.at(x, y + 0.29), 0.08, 0.08, pen.dark);
+        for dx in [-0.09, 0.0, 0.09] {
+            pen.disc(pen.at(x + dx, y - 0.27), 0.045, pen.dark);
         }
     }
+}
+
+fn mountain(pen: &Pen) {
+    draw_triangle(
+        pen.at(-0.2, -0.14),
+        pen.at(-0.55, 0.4),
+        pen.at(0.15, 0.4),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(0.12, -0.3),
+        pen.at(-0.3, 0.4),
+        pen.at(0.54, 0.4),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(0.12, -0.3),
+        pen.at(0.0, -0.08),
+        pen.at(0.24, -0.08),
+        pen.light,
+    );
+    pen.line(pen.at(0.12, -0.3), pen.at(0.12, -0.5), 0.04, pen.dark);
+    draw_triangle(
+        pen.at(0.12, -0.5),
+        pen.at(0.32, -0.43),
+        pen.at(0.12, -0.36),
+        pen.dark,
+    );
+}
+
+fn castle(pen: &Pen) {
+    pen.rect(-0.4, -0.02, 0.8, 0.42, pen.dark);
+    for x in [-0.44, 0.2] {
+        pen.rect(x, -0.3, 0.24, 0.7, pen.dark);
+        for k in 0..3 {
+            pen.rect(x + k as f32 * 0.09, -0.4, 0.06, 0.1, pen.dark);
+        }
+    }
+    pen.rect(-0.08, 0.14, 0.16, 0.26, pen.light);
+    pen.disc(pen.at(0.0, 0.14), 0.08, pen.light);
+}
+
+/// Ten dots for the digits 0–9.
+fn dots(pen: &Pen) {
+    for row in 0..2 {
+        for col in 0..5 {
+            let p = pen.at(-0.4 + col as f32 * 0.2, -0.12 + row as f32 * 0.26);
+            draw_circle(p.x, p.y, pen.r * 0.085, pen.dark);
+        }
+    }
+}
+
+fn fraction(pen: &Pen, emblem: Emblem) {
+    let fraction = match emblem {
+        Emblem::Quarter => 0.25,
+        Emblem::Half => 0.5,
+        _ => 0.75,
+    };
+    pen.ring(pen.at(0.0, 0.0), 0.42, 0.06, pen.dark);
+    draw_pie(pen.at(0.0, 0.0), pen.r * 0.42, fraction, pen.dark);
+}
+
+fn book(pen: &Pen) {
+    for side in [-1.0, 1.0] {
+        draw_quad(
+            pen.at(side * 0.03, -0.2),
+            pen.at(side * 0.46, -0.34),
+            pen.at(side * 0.46, 0.3),
+            pen.at(side * 0.03, 0.42),
+            pen.dark,
+        );
+    }
+    draw_solid_star(pen.at(0.0, -0.32), pen.r * 0.16, pen.light);
+    for side in [-1.0, 1.0] {
+        for y in [-0.08, 0.06, 0.2] {
+            pen.line(
+                pen.at(side * 0.1, y),
+                pen.at(side * 0.38, y - 0.08),
+                0.03,
+                pen.light,
+            );
+        }
+    }
+}
+
+fn chain(pen: &Pen) {
+    for side in [-1.0, 1.0] {
+        pen.ring(pen.at(side * 0.2, 0.0), 0.27, 0.1, pen.dark);
+    }
+}
+
+fn flame(pen: &Pen) {
+    pen.disc(pen.at(0.0, 0.16), 0.28, pen.dark);
+    draw_triangle(
+        pen.at(0.04, -0.54),
+        pen.at(-0.24, 0.1),
+        pen.at(0.22, 0.1),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(-0.26, -0.24),
+        pen.at(-0.3, 0.16),
+        pen.at(-0.06, 0.02),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(0.3, -0.14),
+        pen.at(0.06, -0.02),
+        pen.at(0.3, 0.2),
+        pen.dark,
+    );
+    pen.disc(pen.at(0.0, 0.22), 0.13, pen.light);
+    draw_triangle(
+        pen.at(0.0, -0.04),
+        pen.at(-0.11, 0.22),
+        pen.at(0.11, 0.22),
+        pen.light,
+    );
+}
+
+fn rocket(pen: &Pen) {
+    pen.oval(pen.at(0.0, -0.06), 0.17, 0.4, pen.dark);
+    pen.disc(pen.at(0.0, -0.12), 0.08, pen.light);
+    for side in [-1.0, 1.0] {
+        draw_triangle(
+            pen.at(side * 0.14, 0.12),
+            pen.at(side * 0.34, 0.4),
+            pen.at(side * 0.1, 0.3),
+            pen.dark,
+        );
+    }
+    draw_triangle(
+        pen.at(-0.08, 0.3),
+        pen.at(0.08, 0.3),
+        pen.at(0.0, 0.52),
+        pen.light,
+    );
+}
+
+fn comet(pen: &Pen) {
+    // A tail that widens towards the head, with a streak in it.
+    draw_triangle(
+        pen.at(0.36, -0.1),
+        pen.at(0.1, -0.36),
+        pen.at(-0.46, 0.46),
+        pen.dark,
+    );
+    pen.line(pen.at(0.14, -0.14), pen.at(-0.3, 0.3), 0.04, pen.light);
+    draw_solid_star(pen.at(0.24, -0.24), pen.r * 0.27, pen.dark);
+    pen.disc(pen.at(0.24, -0.24), 0.07, pen.light);
+}
+
+fn star(pen: &Pen) {
+    draw_solid_star(pen.at(0.0, 0.03), pen.r * 0.52, pen.dark);
+}
+
+fn check(pen: &Pen) {
+    pen.stroke(pen.at(-0.32, 0.04), pen.at(-0.1, 0.28), 0.17, pen.dark);
+    pen.stroke(pen.at(-0.1, 0.28), pen.at(0.36, -0.3), 0.17, pen.dark);
+}
+
+fn three_stars(pen: &Pen) {
+    draw_solid_star(pen.at(0.0, -0.1), pen.r * 0.3, pen.dark);
+    draw_solid_star(pen.at(-0.33, 0.2), pen.r * 0.2, pen.dark);
+    draw_solid_star(pen.at(0.33, 0.2), pen.r * 0.2, pen.dark);
+}
+
+fn constellation(pen: &Pen) {
+    let stars = [
+        (-0.36, 0.2),
+        (-0.16, -0.14),
+        (0.08, 0.08),
+        (0.3, -0.26),
+        (0.4, 0.22),
+    ];
+    for pair in stars.windows(2) {
+        pen.line(
+            pen.at(pair[0].0, pair[0].1),
+            pen.at(pair[1].0, pair[1].1),
+            0.035,
+            pen.dark,
+        );
+    }
+    for (i, s) in stars.iter().enumerate() {
+        draw_solid_star(
+            pen.at(s.0, s.1),
+            pen.r * if i == 3 { 0.2 } else { 0.14 },
+            pen.dark,
+        );
+    }
+}
+
+fn ruler(pen: &Pen) {
+    let (a, b) = (pen.at(-0.4, 0.32), pen.at(0.4, -0.32));
+    pen.line(a, b, 0.32, pen.dark);
+    // Ticks across the ruler, from one edge.
+    let along = (b - a).normalize();
+    let across = vec2(-along.y, along.x);
+    for i in 0..7 {
+        let base = a + (b - a) * (0.08 + i as f32 * 0.14) + across * pen.r * 0.16;
+        let len = if i % 2 == 0 { 0.16 } else { 0.09 };
+        draw_line(
+            base.x,
+            base.y,
+            base.x - across.x * pen.r * len,
+            base.y - across.y * pen.r * len,
+            pen.r * 0.035,
+            pen.light,
+        );
+    }
+}
+
+fn scroll(pen: &Pen) {
+    pen.rect(-0.3, -0.34, 0.6, 0.68, pen.dark);
+    pen.rect(-0.38, -0.44, 0.76, 0.13, pen.dark);
+    pen.rect(-0.38, 0.31, 0.76, 0.13, pen.dark);
+    for y in [-0.16, 0.0, 0.16] {
+        pen.line(pen.at(-0.18, y), pen.at(0.18, y), 0.05, pen.light);
+    }
+}
+
+fn witch_hat(pen: &Pen) {
+    draw_triangle(
+        pen.at(0.12, -0.52),
+        pen.at(-0.24, 0.26),
+        pen.at(0.24, 0.26),
+        pen.dark,
+    );
+    pen.oval(pen.at(0.0, 0.28), 0.5, 0.1, pen.dark);
+    draw_quad(
+        pen.at(-0.22, 0.12),
+        pen.at(0.22, 0.12),
+        pen.at(0.24, 0.26),
+        pen.at(-0.24, 0.26),
+        pen.light,
+    );
+    draw_solid_star(pen.at(0.02, -0.14), pen.r * 0.09, pen.light);
+}
+
+fn card(pen: &Pen) {
+    let (w, h) = (0.62 * pen.r, 0.82 * pen.r);
+    draw_rectangle(pen.c.x - w / 2.0, pen.c.y - h / 2.0, w, h, pen.light);
+    draw_rectangle_lines(
+        pen.c.x - w / 2.0,
+        pen.c.y - h / 2.0,
+        w,
+        h,
+        0.09 * pen.r,
+        pen.dark,
+    );
+    fonts::draw_centered(
+        "?",
+        pen.c.x,
+        pen.c.y + 0.02 * pen.r,
+        (pen.r * 0.62) as u16,
+        pen.dark,
+        Style::Bold,
+    );
+}
+
+fn pencil(pen: &Pen) {
+    let (tip, end) = (pen.at(-0.42, 0.42), pen.at(0.3, -0.3));
+    let start = tip + (end - tip).normalize() * pen.r * 0.24;
+    let across = vec2(0.7, 0.7) * pen.r * 0.1;
+    draw_triangle(tip, start + across, start - across, pen.dark);
+    pen.line(start, end, 0.2, pen.dark);
+    pen.line(
+        end,
+        end + (end - tip).normalize() * pen.r * 0.12,
+        0.2,
+        pen.light,
+    );
+}
+
+fn dumbbell(pen: &Pen) {
+    pen.line(pen.at(-0.32, 0.0), pen.at(0.32, 0.0), 0.09, pen.dark);
+    for side in [-1.0, 1.0] {
+        pen.rect(side * 0.42 - 0.05, -0.22, 0.1, 0.44, pen.dark);
+        pen.rect(side * 0.31 - 0.04, -0.15, 0.08, 0.3, pen.dark);
+    }
+}
+
+fn graduation_cap(pen: &Pen) {
+    draw_quad(
+        pen.at(0.0, -0.32),
+        pen.at(0.52, -0.1),
+        pen.at(0.0, 0.12),
+        pen.at(-0.52, -0.1),
+        pen.dark,
+    );
+    draw_quad(
+        pen.at(-0.28, 0.02),
+        pen.at(0.28, 0.02),
+        pen.at(0.26, 0.26),
+        pen.at(-0.26, 0.26),
+        pen.dark,
+    );
+    pen.line(pen.at(-0.28, 0.03), pen.at(0.28, 0.03), 0.04, pen.light);
+    pen.line(pen.at(0.42, -0.08), pen.at(0.42, 0.22), 0.04, pen.light);
+    pen.disc(pen.at(0.42, 0.26), 0.06, pen.light);
+}
+
+fn heart(pen: &Pen) {
+    pen.disc(pen.at(-0.15, -0.12), 0.21, pen.dark);
+    pen.disc(pen.at(0.15, -0.12), 0.21, pen.dark);
+    draw_triangle(
+        pen.at(-0.34, -0.03),
+        pen.at(0.34, -0.03),
+        pen.at(0.0, 0.42),
+        pen.dark,
+    );
+    pen.disc(pen.at(-0.2, -0.16), 0.06, pen.light);
+}
+
+fn calendar(pen: &Pen) {
+    pen.rect(-0.38, -0.3, 0.76, 0.72, pen.dark);
+    pen.rect(-0.38, -0.3, 0.76, 0.16, pen.light);
+    for x in [-0.2, 0.14] {
+        pen.rect(x, -0.4, 0.06, 0.16, pen.dark);
+    }
+    for row in 0..2 {
+        for col in 0..3 {
+            pen.rect(
+                -0.27 + col as f32 * 0.21,
+                -0.04 + row as f32 * 0.22,
+                0.13,
+                0.13,
+                pen.light,
+            );
+        }
+    }
+}
+
+fn rainbow(pen: &Pen) {
+    pen.disc(pen.at(0.0, 0.1), 0.46, pen.dark);
+    pen.disc(pen.at(0.0, 0.1), 0.36, pen.light);
+    pen.disc(pen.at(0.0, 0.1), 0.26, pen.dark);
+    pen.disc(pen.at(0.0, 0.1), 0.16, pen.face);
+    pen.rect(-0.5, 0.1, 1.0, 0.5, pen.face);
+    for side in [-1.0, 1.0] {
+        pen.disc(pen.at(side * 0.36, 0.14), 0.09, pen.light);
+    }
+}
+
+fn flower(pen: &Pen) {
+    for i in 0..6 {
+        let p = pen.c + Vec2::from_angle(i as f32 * std::f32::consts::TAU / 6.0) * pen.r * 0.25;
+        draw_circle(p.x, p.y, pen.r * 0.16, pen.dark);
+    }
+    pen.disc(pen.at(0.0, 0.0), 0.13, pen.light);
+}
+
+fn moon(pen: &Pen) {
+    pen.disc(pen.at(0.0, 0.0), 0.42, pen.dark);
+    pen.disc(pen.at(-0.13, -0.1), 0.09, pen.light);
+    pen.disc(pen.at(0.14, 0.14), 0.12, pen.light);
+    pen.disc(pen.at(0.16, -0.2), 0.06, pen.light);
+}
+
+fn sun(pen: &Pen) {
+    pen.disc(pen.at(0.0, 0.0), 0.24, pen.dark);
+    for i in 0..8 {
+        let dir = Vec2::from_angle(i as f32 * std::f32::consts::FRAC_PI_4);
+        pen.line(
+            pen.c + dir * pen.r * 0.36,
+            pen.c + dir * pen.r * 0.58,
+            0.08,
+            pen.dark,
+        );
+    }
+}
+
+fn stopwatch(pen: &Pen) {
+    pen.ring(pen.at(0.0, 0.08), 0.34, 0.08, pen.dark);
+    pen.rect(-0.07, -0.5, 0.14, 0.11, pen.dark);
+    pen.line(pen.at(0.0, 0.08), pen.at(0.14, -0.1), 0.06, pen.dark);
+    for (x, y) in [(0.0, -0.16), (0.24, 0.08), (0.0, 0.32), (-0.24, 0.08)] {
+        pen.disc(pen.at(x, y), 0.03, pen.dark);
+    }
+}
+
+fn bolt(pen: &Pen) {
+    draw_triangle(
+        pen.at(0.14, -0.56),
+        pen.at(-0.32, 0.1),
+        pen.at(0.06, 0.1),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(-0.14, 0.56),
+        pen.at(0.32, -0.1),
+        pen.at(-0.06, -0.1),
+        pen.dark,
+    );
+    draw_quad(
+        pen.at(0.14, -0.56),
+        pen.at(0.06, 0.1),
+        pen.at(-0.06, -0.1),
+        pen.at(0.06, -0.1),
+        pen.dark,
+    );
+}
+
+fn crystal_ball(pen: &Pen) {
+    pen.disc(pen.at(0.0, -0.06), 0.36, pen.dark);
+    draw_quad(
+        pen.at(-0.28, 0.3),
+        pen.at(0.28, 0.3),
+        pen.at(0.2, 0.44),
+        pen.at(-0.2, 0.44),
+        pen.dark,
+    );
+    pen.disc(pen.at(-0.14, -0.18), 0.08, pen.light);
+    draw_solid_star(pen.at(0.06, -0.02), pen.r * 0.15, pen.light);
+}
+
+fn gem(pen: &Pen) {
+    draw_quad(
+        pen.at(-0.2, -0.4),
+        pen.at(0.2, -0.4),
+        pen.at(0.38, -0.14),
+        pen.at(-0.38, -0.14),
+        pen.dark,
+    );
+    draw_triangle(
+        pen.at(-0.38, -0.08),
+        pen.at(0.38, -0.08),
+        pen.at(0.0, 0.46),
+        pen.dark,
+    );
+    pen.line(pen.at(-0.1, -0.4), pen.at(-0.2, -0.14), 0.03, pen.light);
+    pen.line(pen.at(0.1, -0.4), pen.at(0.2, -0.14), 0.03, pen.light);
+    pen.line(pen.at(-0.2, -0.02), pen.at(0.0, 0.3), 0.03, pen.light);
 }
 
 /// A star of `radius` in one colour.
