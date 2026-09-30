@@ -60,64 +60,59 @@ pub fn mastery_tier(difficulty: f32) -> u8 {
     }
 }
 
-#[derive(Default)]
-pub struct ProgressScreen;
+/// Returns true when the player wants to go back to the title.
+pub fn update(frame: &Frame, pointers: &[Pointer]) -> bool {
+    let tapped = pointers.iter().any(|p| p.phase == TouchPhase::Ended);
+    tapped
+        || frame.pressed(KeyCode::Escape)
+        || frame.pressed(KeyCode::Enter)
+        || frame.pressed(KeyCode::Space)
+        || frame.pressed(KeyCode::Backspace)
+}
 
-impl ProgressScreen {
-    /// Returns true when the player wants to go back to the title.
-    pub fn update(&mut self, frame: &Frame, pointers: &[Pointer]) -> bool {
-        let tapped = pointers.iter().any(|p| p.phase == TouchPhase::Ended);
-        tapped
-            || frame.pressed(KeyCode::Escape)
-            || frame.pressed(KeyCode::Enter)
-            || frame.pressed(KeyCode::Space)
-            || frame.pressed(KeyCode::Backspace)
-    }
+pub fn draw(data: &SaveData, memory: &Memory, touch: bool) {
+    clear_background(BACKGROUND);
+    let cx = ARENA_W / 2.0;
+    fonts::draw_centered("Edistyminen", cx, 36.0, 44, GOLD, Style::Heading);
 
-    pub fn draw(&self, data: &SaveData, memory: &Memory, touch: bool) {
-        clear_background(BACKGROUND);
-        let cx = ARENA_W / 2.0;
-        fonts::draw_centered("Edistyminen", cx, 36.0, 44, GOLD, Style::Heading);
+    let stars: u32 = data.stars.values().map(|&s| u32::from(s)).sum();
+    let stats = format!(
+        "Opittu {} / {}     Päiviä putkeen {}",
+        learned_count(memory),
+        PAIRS.len(),
+        data.streak
+    );
+    // The total of stars earned follows the other numbers, and the
+    // whole line is centred.
+    let stars_text = format!("{stars}");
+    let stats_w = fonts::measure(&stats, Style::Body, 22).width;
+    let stars_w = fonts::measure(&stars_text, Style::Body, 22).width;
+    let gap = 40.0;
+    let left = cx - (stats_w + gap + 16.0 + stars_w) / 2.0;
+    fonts::draw(&stats, left, 82.0, 22, WHITE, Style::Body);
+    let star_x = left + stats_w + gap;
+    draw_star(vec2(star_x, 74.0), 11.0, true);
+    fonts::draw(&stars_text, star_x + 16.0, 82.0, 22, WHITE, Style::Body);
 
-        let stars: u32 = data.stars.values().map(|&s| u32::from(s)).sum();
-        let stats = format!(
-            "Opittu {} / {}     Päiviä putkeen {}",
-            learned_count(memory),
-            PAIRS.len(),
-            data.streak
-        );
-        // The total of stars earned follows the other numbers, and the
-        // whole line is centred.
-        let stars_text = format!("{stars}");
-        let stats_w = fonts::measure(&stats, Style::Body, 22).width;
-        let stars_w = fonts::measure(&stars_text, Style::Body, 22).width;
-        let gap = 40.0;
-        let left = cx - (stats_w + gap + 16.0 + stars_w) / 2.0;
-        fonts::draw(&stats, left, 82.0, 22, WHITE, Style::Body);
-        let star_x = left + stats_w + gap;
-        draw_star(vec2(star_x, 74.0), 11.0, true);
-        fonts::draw(&stars_text, star_x + 16.0, 82.0, 22, WHITE, Style::Body);
-
-        for (i, row) in pair_rows().iter().enumerate() {
-            for pair in row {
-                draw_cell(pair, memory, cell_rect(i, pair));
-            }
+    for (i, row) in pair_rows().iter().enumerate() {
+        for pair in row {
+            draw_cell(pair, memory, cell_rect(i, pair));
         }
-
-        draw_legend(GRID_TOP + 11.0 * ROW_H + 22.0);
-        let back = if touch {
-            "Napauta palataksesi"
-        } else {
-            "Esc tai Enter: takaisin"
-        };
-        draw_centered_text(
-            back,
-            cx,
-            ARENA_H - 16.0,
-            18,
-            Color::new(0.6, 0.6, 0.65, 1.0),
-        );
     }
+
+    draw_legend(GRID_TOP + 11.0 * ROW_H + 22.0);
+    let back = if touch {
+        "Napauta palataksesi"
+    } else {
+        "Esc tai Enter: takaisin"
+    };
+    draw_centered_text(
+        back,
+        cx,
+        ARENA_H - 16.0,
+        18,
+        Color::new(0.6, 0.6, 0.65, 1.0),
+    );
 }
 
 /// Where the cell of `pair` goes, in grid row `row`: the columns are the
@@ -377,18 +372,17 @@ mod tests {
 
     #[test]
     fn the_progress_screen_closes_on_a_tap_or_a_leaving_key() {
-        let mut screen = ProgressScreen;
-        assert!(!screen.update(&Frame::default(), &[]));
-        assert!(screen.update(&Frame::default(), &tap()));
+        assert!(!update(&Frame::default(), &[]));
+        assert!(update(&Frame::default(), &tap()));
         for key in [
             KeyCode::Escape,
             KeyCode::Enter,
             KeyCode::Space,
             KeyCode::Backspace,
         ] {
-            assert!(screen.update(&pressed(key), &[]), "{key:?}");
+            assert!(update(&pressed(key), &[]), "{key:?}");
         }
-        assert!(!screen.update(&pressed(KeyCode::A), &[]));
+        assert!(!update(&pressed(KeyCode::A), &[]));
     }
 
     #[test]
@@ -397,6 +391,6 @@ mod tests {
             phase: TouchPhase::Started,
             ..tap()[0]
         }];
-        assert!(!ProgressScreen.update(&Frame::default(), &started));
+        assert!(!update(&Frame::default(), &started));
     }
 }

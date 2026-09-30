@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::float_cmp))]
+
 mod analytics;
 mod app;
 mod audio;

@@ -172,11 +172,11 @@ impl TitleScreen {
         // The wheel reports how far the content should move down.
         self.scroll -= frame.wheel;
 
-        self.scroll = self.scroll.clamp(0.0, self.max_scroll());
+        self.scroll = self.scroll.clamp(0.0, Self::max_scroll());
         TitleAction::Stay
     }
 
-    fn max_scroll(&self) -> f32 {
+    fn max_scroll() -> f32 {
         (content_height() - (ARENA_H - FOOTER_HEIGHT)).max(0.0)
     }
 
@@ -258,7 +258,7 @@ impl TitleScreen {
     }
 
     fn draw_scrollbar(&self) {
-        let max = self.max_scroll();
+        let max = Self::max_scroll();
         if max <= 0.0 {
             return;
         }
@@ -662,10 +662,10 @@ mod tests {
         title.update(&holding(KeyCode::Up, 1.0), &[]);
         assert_eq!(title.scroll, 0.0);
         title.update(&pressed(KeyCode::End), &[]);
-        assert_eq!(title.scroll, title.max_scroll());
-        assert!(title.max_scroll() > 0.0, "there is more than fits");
+        assert_eq!(title.scroll, TitleScreen::max_scroll());
+        assert!(TitleScreen::max_scroll() > 0.0, "there is more than fits");
         title.update(&holding(KeyCode::Down, 1.0), &[]);
-        assert_eq!(title.scroll, title.max_scroll());
+        assert_eq!(title.scroll, TitleScreen::max_scroll());
         title.update(&pressed(KeyCode::Home), &[]);
         assert_eq!(title.scroll, 0.0);
     }

@@ -14,6 +14,16 @@ homepage = "https://lukuloitsu.fi"
 members = ["core"]
 default-members = [".", "core"]
 
+# Lints beyond clippy's defaults, kept clean in both crates. Exact float
+# comparisons are still fine in tests, which check exact constants.
+[workspace.lints.clippy]
+format_push_string = "warn"
+unused_self = "warn"
+float_cmp = "warn"
+
+[lints]
+workspace = true
+
 [dependencies]
 lukuloitsu-core = { path = "core" }
 macroquad = { version = "0.4.16", features = ["audio"] }

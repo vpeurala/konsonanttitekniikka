@@ -21,7 +21,7 @@ use crate::game_render;
 use crate::keyboard::Key;
 use crate::levels::{LevelAction, LevelSelect};
 use crate::practice::{PracticeAction, PracticeScreen};
-use crate::progress::ProgressScreen;
+use crate::progress;
 use crate::save::SaveData;
 use crate::title::{TitleAction, TitleScreen};
 use crate::toast::Toasts;
@@ -51,7 +51,7 @@ enum Screen {
     Levels(LevelSelect),
     Game(Box<Game>),
     Practice(Box<PracticeScreen>),
-    Progress(ProgressScreen),
+    Progress,
     Badges(Box<BadgeScreen>),
 }
 
@@ -165,7 +165,7 @@ impl App {
         match screen {
             Screen::Title => self.update_title(frame, escape),
             Screen::Levels(levels) => self.update_levels(levels, frame),
-            Screen::Progress(screen) => back_to_title(screen.update(frame, &menu_pointers(frame))),
+            Screen::Progress => back_to_title(progress::update(frame, &menu_pointers(frame))),
             Screen::Badges(screen) => back_to_title(screen.update(frame, &menu_pointers(frame))),
             Screen::Practice(practice) => self.update_practice(practice, frame, escape),
             Screen::Game(game) => self.update_game(game, frame, escape),
@@ -201,7 +201,7 @@ impl App {
                 analytics::Event::Practice,
             ),
             TitleAction::Progress => {
-                Step::go_counting(Screen::Progress(ProgressScreen), analytics::Event::Progress)
+                Step::go_counting(Screen::Progress, analytics::Event::Progress)
             }
             TitleAction::Badges => {
                 Step::go_counting(Screen::Badges(Box::default()), analytics::Event::Badges)
@@ -331,9 +331,9 @@ impl App {
                 levels.draw();
                 view::mask_outside(view, menu_rect(), BLACK);
             }
-            Screen::Progress(screen) => {
+            Screen::Progress => {
                 let view = view::begin(menu_rect());
-                screen.draw(progress, memory, self.touch_mode);
+                progress::draw(progress, memory, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Badges(screen) => {

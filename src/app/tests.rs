@@ -151,7 +151,7 @@ fn practice_is_counted_and_left_with_a_save() {
 fn the_progress_screen_is_counted_and_left_with_a_key() {
     let mut app = app();
     let effects = app.update(&press(KeyCode::E));
-    assert!(matches!(app.screen, Screen::Progress(_)));
+    assert!(matches!(app.screen, Screen::Progress));
     assert_eq!(counted(&effects), vec!["edistyminen"]);
     app.update(&press(KeyCode::Escape));
     assert!(on_title(&app));

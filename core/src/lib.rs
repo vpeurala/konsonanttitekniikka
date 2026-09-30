@@ -6,6 +6,8 @@
 //! whatever this wants done goes out as return values. The crate has no
 //! graphics or audio dependency, so the compiler keeps it that way.
 
+#![cfg_attr(test, allow(clippy::float_cmp))]
+
 pub mod arena;
 pub mod badges;
 pub mod color;

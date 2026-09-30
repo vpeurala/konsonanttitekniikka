@@ -18,6 +18,7 @@
 //! ```
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
 use crate::badges::{self, Stats};
 use crate::memory::{Memory, PairRecord};
@@ -65,28 +66,36 @@ impl Default for SaveData {
 
 impl SaveData {
     pub fn to_text(&self) -> String {
-        let mut text = format!("{HEADER}\n");
-        text += &format!("music {}\n", if self.music_on { "on" } else { "off" });
-        text += &format!("best-level {}\n", self.best_level);
+        // Writing to a `String` can't fail.
+        let mut text = String::new();
+        let _ = self.write_text(&mut text);
+        text
+    }
+
+    fn write_text(&self, text: &mut String) -> std::fmt::Result {
+        writeln!(text, "{HEADER}")?;
+        writeln!(text, "music {}", if self.music_on { "on" } else { "off" })?;
+        writeln!(text, "best-level {}", self.best_level)?;
         for (level, stars) in &self.stars {
-            text += &format!("stars {level} {stars}\n");
+            writeln!(text, "stars {level} {stars}")?;
         }
-        text += &format!("streak {} {}\n", self.streak_day, self.streak);
+        writeln!(text, "streak {} {}", self.streak_day, self.streak)?;
         for (name, value) in self.stats.fields() {
             if value > 0 {
-                text += &format!("stat {name} {value}\n");
+                writeln!(text, "stat {name} {value}")?;
             }
         }
         for (id, day) in &self.badges {
-            text += &format!("badge {id} {day}\n");
+            writeln!(text, "badge {id} {day}")?;
         }
         for (number, r) in &self.pairs {
-            text += &format!(
-                "pair {number} {:.4} {:.0} {} {}\n",
+            writeln!(
+                text,
+                "pair {number} {:.4} {:.0} {} {}",
                 r.difficulty, r.last_seen, r.times_seen, r.streak
-            );
+            )?;
         }
-        text
+        Ok(())
     }
 
     /// Reads a save file, skipping lines it can't understand. Returns the
