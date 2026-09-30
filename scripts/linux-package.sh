@@ -15,7 +15,7 @@ cargo build --release
 OUT=target/linux
 rm -rf "$OUT"
 mkdir -p "$OUT/lukuloitsu"
-cp target/release/lukuloitsu LICENSE-MIT LICENSE-APACHE \
+cp target/release/lukuloitsu LICENSE-MIT LICENSE-APACHE LICENSE-CC-BY-SA \
     assets/fonts/OFL-Nunito.txt assets/fonts/OFL-Fredoka.txt "$OUT/lukuloitsu/"
 tar -C "$OUT" -czf "$OUT/lukuloitsu-linux.tar.gz" lukuloitsu
 echo "Built $OUT/lukuloitsu-linux.tar.gz"

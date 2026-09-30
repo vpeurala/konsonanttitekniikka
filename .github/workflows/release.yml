@@ -35,7 +35,7 @@ jobs:
       shell: pwsh
       run: |
         Compress-Archive -DestinationPath lukuloitsu-windows.zip -Path `
-          target/release/lukuloitsu.exe, LICENSE-MIT, LICENSE-APACHE, `
+          target/release/lukuloitsu.exe, LICENSE-MIT, LICENSE-APACHE, LICENSE-CC-BY-SA, `
           assets/fonts/OFL-Nunito.txt, assets/fonts/OFL-Fredoka.txt
     - name: Publish the release
       shell: bash

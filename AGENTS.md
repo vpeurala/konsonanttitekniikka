@@ -13,7 +13,8 @@ code fits together, and pitfalls already found the hard way.
   MUUMIO that way). Every pair has a picture in `src/pictures.rs`.
 - **Licenses.** The code is MIT OR Apache-2.0 (`LICENSE-MIT`,
   `LICENSE-APACHE`); the fonts are under the SIL Open Font License; the word
-  list is CC BY-NC-SA 4.0, and the name and icon are not licensed (the README
+  list is CC BY-SA 4.0 (`LICENSE-CC-BY-SA`; releases up to 0.4.4 said
+  CC BY-NC-SA), and the name and icon are not licensed (the README
   explains all of it). Don't put anything under a different license, and keep
   the README's License section true when adding assets or dependencies.
 - **The players are children and teens.** Keep the learning curve gentle and
@@ -252,7 +253,7 @@ so it can be tested without a screen; do the same for new layouts.
 - The executable is unsigned, so Chrome and SmartScreen warn about it
   (`.github/release-notes.md` tells players what to click). Free signing
   through SignPath Foundation needs every component under an OSI-approved
-  license, which the CC BY-NC-SA word list isn't.
+  license, which the CC BY-SA word list isn't.
 - On the one Windows machine tried, neither the executable nor the web
   version made any sound. It is unresolved and probably not the game's fault
   (a muted device or a virtual machine without audio, say).

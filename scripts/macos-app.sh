@@ -72,6 +72,6 @@ PLIST
 codesign --force --sign - "$APP"
 
 # The licenses travel with the app: it contains the fonts too.
-cp LICENSE-MIT LICENSE-APACHE assets/fonts/OFL-Nunito.txt assets/fonts/OFL-Fredoka.txt "$OUT/"
-(cd "$OUT" && zip -qry lukuloitsu-macos.zip Lukuloitsu.app LICENSE-MIT LICENSE-APACHE OFL-Nunito.txt OFL-Fredoka.txt)
+cp LICENSE-MIT LICENSE-APACHE LICENSE-CC-BY-SA assets/fonts/OFL-Nunito.txt assets/fonts/OFL-Fredoka.txt "$OUT/"
+(cd "$OUT" && zip -qry lukuloitsu-macos.zip Lukuloitsu.app LICENSE-MIT LICENSE-APACHE LICENSE-CC-BY-SA OFL-Nunito.txt OFL-Fredoka.txt)
 echo "Built $OUT/lukuloitsu-macos.zip"

@@ -625,8 +625,8 @@ fn back_cover() -> Page {
          <h2>Tekijä ja lisenssit</h2>\
          <div class=\"credits\">\
          <p>Lukuloitsun on tehnyt Ville Peurala. Pelin ja oppaan ohjelmakoodi on lisensoitu ehdoilla MIT tai Apache-2.0. \
-         Lukujen ja sanojen lista on lisensoitu CC BY-NC-SA 4.0 -lisenssillä: sitä saa käyttää ja muokata \
-         ei-kaupallisesti, tekijä mainiten ja samoilla ehdoilla. Kirjasimet Nunito ja Fredoka ovat SIL Open Font License \
+         Lukujen ja sanojen lista on lisensoitu CC BY-SA 4.0 -lisenssillä: sitä saa käyttää ja muokata \
+         myös kaupallisesti, tekijä mainiten ja samoilla ehdoilla. Kirjasimet Nunito ja Fredoka ovat SIL Open Font License \
          -lisenssin alaisia. Nimi Lukuloitsu ja pelin kuvake eivät kuulu lisensseihin.</p>\
          <p><b>Pelaa: lukuloitsu.fi</b><br>Lähdekoodi: github.com/vpeurala/lukuloitsu.fi</p></div>{}{}{}{}{}",
         sparkles(24, 192.0, 292.0),

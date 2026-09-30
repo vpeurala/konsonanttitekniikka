@@ -129,11 +129,13 @@ license files.
 **The word list.** The 110 number and word pairs in `src/pairs.rs` are the
 author's own work, compiled over years. The list itself (the choice of a word
 for each number, not the Rust code around it) is licensed under
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): you may
-share and adapt it, with credit to Ville Peurala, for non-commercial purposes
-only, and adaptations must use the same license. This also means the game as a
-whole, with this list, can't be used commercially without the author's
-permission; to use the code commercially, replace the list with your own.
+[CC BY-SA 4.0](LICENSE-CC-BY-SA)
+([summary](https://creativecommons.org/licenses/by-sa/4.0/)): you may share and
+adapt it, also commercially, with credit to Ville Peurala, and adaptations must
+use the same license. As the copyright holder, the author may also distribute
+the game under other terms. Releases up to 0.4.4 offered the list under
+CC BY-NC-SA 4.0 (non-commercial); copies received under those terms stay
+under them.
 
 **The name and the icon.** The name "Lukuloitsu", the domain lukuloitsu.fi
 and the game's icon are not covered by the code licenses. You are welcome to
