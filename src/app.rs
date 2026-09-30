@@ -23,15 +23,16 @@ use crate::gfx::{game_render, touch_render};
 use crate::input::keyboard::Key;
 use crate::platform::analytics;
 use crate::progress::{Progress, day_of};
-use crate::screens::badge_screen::BadgeScreen;
-use crate::screens::levels::{LevelAction, LevelSelect};
 use crate::screens::practice::{PracticeAction, PracticeScreen};
 use crate::screens::progress;
-use crate::screens::title::{TitleAction, TitleScreen};
-use crate::screens::toast;
+use crate::screens::{badge_screen, levels, title, toast};
 use crate::sound::audio::Sfx;
 use events::analytics_of;
 use lukuloitsu_core::game::rules::MAX_FRAME_SECONDS;
+use lukuloitsu_core::screens::badge_screen::BadgeScreen;
+use lukuloitsu_core::screens::levels::{LevelAction, LevelSelect};
+use lukuloitsu_core::screens::progress_map;
+use lukuloitsu_core::screens::title::{TitleAction, TitleScreen};
 use persistence::Persistence;
 
 /// Something the app wants done outside itself.
@@ -178,7 +179,7 @@ impl App {
         match screen {
             Screen::Title => self.update_title(frame, escape),
             Screen::Levels(levels) => self.update_levels(levels, frame),
-            Screen::Progress => back_to_title(progress::update(frame, &menu_pointers(frame))),
+            Screen::Progress => back_to_title(progress_map::update(frame, &menu_pointers(frame))),
             Screen::Badges(screen) => back_to_title(screen.update(frame, &menu_pointers(frame))),
             Screen::Practice(practice) => self.update_practice(practice, frame, escape),
             Screen::Game(game) => self.update_game(game, frame, escape),
@@ -198,7 +199,7 @@ impl App {
                 // With only the first level to start from, there is
                 // nothing to choose.
                 let levels = LevelSelect::new(self.data.progress.best_level, self.touch_mode);
-                Step::go(if levels.len() > 1 {
+                Step::go(if levels.choices() > 1 {
                     Screen::Levels(levels)
                 } else {
                     Screen::Game(Box::new(self.new_game(1)))
@@ -344,12 +345,12 @@ impl App {
         match &self.screen {
             Screen::Title => {
                 let view = view::begin(menu_rect());
-                self.title.draw(progress, view, self.time as f32);
+                title::draw(&self.title, progress, view, self.time as f32);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Levels(levels) => {
                 let view = view::begin(menu_rect());
-                levels.draw();
+                levels::draw(levels);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Progress => {
@@ -359,7 +360,7 @@ impl App {
             }
             Screen::Badges(screen) => {
                 let view = view::begin(menu_rect());
-                screen.draw(progress, self.touch_mode);
+                badge_screen::draw(screen, progress, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Practice(practice) => {

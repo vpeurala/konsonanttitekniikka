@@ -72,6 +72,18 @@ impl Curriculum {
     }
 }
 
+/// The pairs unlocked by the time the player reaches `level`, as in a
+/// game's curriculum.
+pub fn unlocked_pairs(level: u32) -> Vec<Pair> {
+    let mut curriculum = Curriculum::new();
+    for _ in 1..level {
+        if curriculum.next_level() == 0 {
+            break;
+        }
+    }
+    curriculum.unlocked().to_vec()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

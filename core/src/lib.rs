@@ -27,6 +27,7 @@ pub mod portals;
 pub mod progress;
 pub mod rng;
 pub mod save;
+pub mod screens;
 pub mod sfx;
 pub mod toast;
 pub mod touch;

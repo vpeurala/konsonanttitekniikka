@@ -7,7 +7,7 @@ use macroquad::prelude::*;
 use lukuloitsu_core::geometry::Rect;
 use lukuloitsu_core::input::{Frame, KeyCode};
 
-use crate::curriculum::Curriculum;
+use crate::curriculum::unlocked_pairs;
 use crate::game::{InputOutcome, resolve_input};
 use crate::gfx::fonts::draw_centered_text;
 use crate::gfx::fonts::{self, Style};
@@ -26,18 +26,6 @@ const REVEALED_SECONDS: f32 = 3.0;
 
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 const CARD: Color = Color::new(0.14, 0.13, 0.22, 1.0);
-
-/// The pairs unlocked by the time the player reaches `level`, as in the
-/// game's curriculum.
-pub fn unlocked_pairs(level: u32) -> Vec<Pair> {
-    let mut curriculum = Curriculum::new();
-    for _ in 1..level {
-        if curriculum.next_level() == 0 {
-            break;
-        }
-    }
-    curriculum.unlocked().to_vec()
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum State {

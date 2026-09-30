@@ -1,276 +1,115 @@
-//! The opening screen: the title, a few monsters, a short explanation of
-//! the system and every number-word pair, scrollable, so the player can
-//! study before starting.
+//! Drawing the opening screen. What it does, and where things are, is
+//! `TitleScreen`, in the core crate.
 
 use macroquad::prelude::*;
-
-use lukuloitsu_core::geometry::Rect;
-use lukuloitsu_core::input::{Frame, KeyCode, Phase, Pointer};
 
 use crate::gfx::fonts::draw_centered_text;
 use crate::gfx::fonts::{self, Style};
 use crate::gfx::pictures::draw_picture;
 use crate::gfx::sprites::{draw_boss, draw_cyclops, draw_girl, draw_monster};
 use crate::gfx::view::{ARENA_H, ARENA_W, View};
-use crate::pairs::{DIGIT_CONSONANTS, PAIRS, Pair};
+use crate::pairs::DIGIT_CONSONANTS;
 use crate::progress::Progress;
-
-/// Pixels scrolled per second while an arrow key is held.
-const KEY_SCROLL_SPEED: f32 = 500.0;
-const FOOTER_HEIGHT: f32 = 44.0;
-const SIDE_MARGIN: f32 = 60.0;
+use lukuloitsu_core::screens::title::{
+    BUTTON_H, CONSONANT_TABLE_SPACE, EXPLANATION_AFTER_TABLE, EXPLANATION_BEFORE_TABLE,
+    FOOTER_HEIGHT, MENU, MENU_SPACE, MENU_Y, PAIR_ROW_HEIGHT, PICTURE_MARGIN, PRIVACY_NOTE,
+    SIDE_MARGIN, TitleScreen, button_rect, pair_rows,
+};
 
 const TITLE_COLOR: Color = GOLD;
 const TEXT_COLOR: Color = Color::new(0.9, 0.9, 0.9, 1.0);
 const DIM: Color = Color::new(0.6, 0.6, 0.65, 1.0);
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 
-const EXPLANATION_BEFORE_TABLE: &[&str] = &[
-    "Lukuloitsussa opit konsonanttitekniikan,",
-    "jolla muistat minkä tahansa luvun.",
-    "Jokainen numero vastaa yhtä konsonanttia:",
-];
+pub fn draw(screen: &TitleScreen, progress: &Progress, view: View, time: f32) {
+    clear_background(BACKGROUND);
+    let cx = ARENA_W / 2.0;
+    let mut y = 70.0 - screen.scroll();
 
-const EXPLANATION_AFTER_TABLE: &[&str] = &[
-    "Vokaalit ovat pelkkää täytettä. Muita kirjaimia ei käytetä.",
-    "Näin jokaiselle luvulle löytyy sana, jonka voi kuvitella:",
-    "KEKO = K ja K = 2 ja 2 = 22.",
-    "",
-    "Pelissä hirviöissä on luku tai sana. Kirjoita sen vastine",
-    "ennen kuin hirviö saa sinut kiinni! Liiku nuolinäppäimillä.",
-];
+    draw_logo(cx, y, time, view);
+    y += 90.0;
+    draw_cast(cx, y, time);
+    y += 90.0;
+    draw_menu(screen, progress);
+    y += MENU_SPACE;
 
-/// The last thing on the screen: what the game does and doesn't do with
-/// the player's information. The page has the details.
-const PRIVACY_NOTE: &[&str] = &[
-    "Peli ei käytä evästeitä eikä kysy nimeäsi tai muita tietoja.",
-    "Edistymisesi tallentuu vain omalle laitteellesi.",
-    "Verkkosivu laskee nimettömästi käyntejä ja pelitapahtumia.",
-    "Lisää: lukuloitsu.fi/tietosuoja",
-];
+    for line in EXPLANATION_BEFORE_TABLE {
+        draw_text(line, SIDE_MARGIN, y, 22.0, TEXT_COLOR);
+        y += 28.0;
+    }
+    y += 10.0;
+    draw_consonant_table(y);
+    y += CONSONANT_TABLE_SPACE;
+    for line in EXPLANATION_AFTER_TABLE {
+        // On touch screens she steers with the joystick instead.
+        let line = if screen.touch() {
+            line.replace("nuolinäppäimillä", "ohjaussauvalla")
+        } else {
+            line.to_string()
+        };
+        draw_text(&line, SIDE_MARGIN, y, 22.0, TEXT_COLOR);
+        y += 28.0;
+    }
 
-/// A finger movement shorter than this is a tap, not a drag.
-const TAP_SLOP: f32 = 12.0;
+    y += 30.0;
+    fonts::draw_centered("Kaikki parit", cx, y, 36, TITLE_COLOR, Style::Heading);
+    y += 40.0;
+    draw_pair_table(y, time);
+    y += PAIR_ROW_HEIGHT * pair_rows().len() as f32;
 
-pub struct TitleScreen {
-    /// How far the content is scrolled up, in pixels.
-    scroll: f32,
-    /// The finger (or mouse) dragging the list: its id, where it was last
-    /// frame, and how far it has moved in total.
-    drag: Option<(u64, f32, f32)>,
-    /// Whether to describe touch controls instead of keys.
-    touch: bool,
+    y += 30.0;
+    fonts::draw_centered("Tietosuoja", cx, y, 28, TITLE_COLOR, Style::Heading);
+    y += 40.0;
+    for line in PRIVACY_NOTE {
+        draw_text(line, SIDE_MARGIN, y, 20.0, DIM);
+        y += 28.0;
+    }
+
+    draw_scrollbar(screen);
+    draw_footer(screen.touch());
 }
 
-/// What the title screen wants to happen next.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TitleAction {
-    Stay,
-    StartGame,
-    Practice,
-    Progress,
-    Badges,
+fn draw_menu(screen: &TitleScreen, progress: &Progress) {
+    for (i, (label, key, _)) in MENU.iter().enumerate() {
+        let rect = button_rect(i, screen.scroll());
+        let primary = i == 0;
+        let (fill, edge) = if primary {
+            (Color::new(0.85, 0.45, 0.1, 1.0), GOLD)
+        } else {
+            (
+                Color::new(0.2, 0.18, 0.32, 1.0),
+                Color::new(0.55, 0.45, 0.85, 1.0),
+            )
+        };
+        draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
+        draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 3.0, edge);
+        let c = rect.center();
+        fonts::draw_centered(label, c.x, c.y - 4.0, 24, WHITE, Style::Heading);
+        // The keyboard shortcut, for those with a keyboard.
+        if !screen.touch() {
+            fonts::draw_centered(key, c.x, c.y + 17.0, 13, DIM, Style::Body);
+        }
+    }
+    let status = format!(
+        "Päiviä putkeen: {}     Paras taso: {}",
+        progress.streak, progress.best_level
+    );
+    let y = MENU_Y + BUTTON_H / 2.0 + 26.0 - screen.scroll();
+    draw_centered_text(&status, ARENA_W / 2.0, y, 20, DIM);
 }
 
-/// Where the menu buttons' centers are, before scrolling.
-const MENU_Y: f32 = 262.0;
-/// The room the menu and the status line under it take.
-const MENU_SPACE: f32 = 105.0;
-const BUTTON_W: f32 = 170.0;
-const BUTTON_H: f32 = 54.0;
-const BUTTON_GAP: f32 = 20.0;
-
-/// The menu: each button's label, key and action.
-const MENU: [(&str, &str, TitleAction); 4] = [
-    ("Pelaa", "Enter", TitleAction::StartGame),
-    ("Harjoittele", "H", TitleAction::Practice),
-    ("Edistyminen", "E", TitleAction::Progress),
-    ("Kunniamerkit", "K", TitleAction::Badges),
-];
-
-/// Where menu button `i` is, with the content scrolled by `scroll`.
-fn button_rect(i: usize, scroll: f32) -> Rect {
-    let total = MENU.len() as f32 * BUTTON_W + (MENU.len() - 1) as f32 * BUTTON_GAP;
-    let x = (ARENA_W - total) / 2.0 + i as f32 * (BUTTON_W + BUTTON_GAP);
-    Rect::new(x, MENU_Y - BUTTON_H / 2.0 - scroll, BUTTON_W, BUTTON_H)
-}
-
-impl TitleScreen {
-    pub fn new(touch: bool) -> Self {
-        TitleScreen {
-            scroll: 0.0,
-            drag: None,
-            touch,
-        }
+fn draw_scrollbar(screen: &TitleScreen) {
+    let max = TitleScreen::max_scroll();
+    if max <= 0.0 {
+        return;
     }
-
-    pub fn update(&mut self, frame: &Frame, pointers: &[Pointer]) -> TitleAction {
-        if frame.pressed(KeyCode::Enter) || frame.pressed(KeyCode::Space) {
-            return TitleAction::StartGame;
-        }
-        if frame.pressed(KeyCode::H) {
-            return TitleAction::Practice;
-        }
-        if frame.pressed(KeyCode::E) {
-            return TitleAction::Progress;
-        }
-        if frame.pressed(KeyCode::K) {
-            return TitleAction::Badges;
-        }
-        // Dragging scrolls the list; a tap on a menu button picks it.
-        for p in pointers {
-            match p.phase {
-                Phase::Started if self.drag.is_none() => {
-                    self.drag = Some((p.id, p.pos.y, 0.0));
-                }
-                Phase::Moved | Phase::Stationary => {
-                    if let Some((id, last_y, moved)) = &mut self.drag
-                        && *id == p.id
-                    {
-                        self.scroll -= p.pos.y - *last_y;
-                        *moved += (p.pos.y - *last_y).abs();
-                        *last_y = p.pos.y;
-                    }
-                }
-                Phase::Ended | Phase::Cancelled => {
-                    if let Some((id, _, moved)) = self.drag
-                        && id == p.id
-                    {
-                        self.drag = None;
-                        if moved < TAP_SLOP && p.phase == Phase::Ended {
-                            for (i, &(_, _, action)) in MENU.iter().enumerate() {
-                                if button_rect(i, self.scroll).contains(p.pos) {
-                                    return action;
-                                }
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let dt = frame.dt;
-        let page = ARENA_H - FOOTER_HEIGHT;
-        if frame.down(KeyCode::Down) {
-            self.scroll += KEY_SCROLL_SPEED * dt;
-        }
-        if frame.down(KeyCode::Up) {
-            self.scroll -= KEY_SCROLL_SPEED * dt;
-        }
-        if frame.pressed(KeyCode::PageDown) {
-            self.scroll += page * 0.9;
-        }
-        if frame.pressed(KeyCode::PageUp) {
-            self.scroll -= page * 0.9;
-        }
-        if frame.pressed(KeyCode::Home) {
-            self.scroll = 0.0;
-        }
-        if frame.pressed(KeyCode::End) {
-            self.scroll = f32::INFINITY;
-        }
-        // The wheel reports how far the content should move down.
-        self.scroll -= frame.wheel;
-
-        self.scroll = self.scroll.clamp(0.0, Self::max_scroll());
-        TitleAction::Stay
-    }
-
-    fn max_scroll() -> f32 {
-        (content_height() - (ARENA_H - FOOTER_HEIGHT)).max(0.0)
-    }
-
-    pub fn draw(&self, progress: &Progress, view: View, time: f32) {
-        clear_background(BACKGROUND);
-        let cx = ARENA_W / 2.0;
-        let mut y = 70.0 - self.scroll;
-
-        draw_logo(cx, y, time, view);
-        y += 90.0;
-        draw_cast(cx, y, time);
-        y += 90.0;
-        self.draw_menu(progress);
-        y += MENU_SPACE;
-
-        for line in EXPLANATION_BEFORE_TABLE {
-            draw_text(line, SIDE_MARGIN, y, 22.0, TEXT_COLOR);
-            y += 28.0;
-        }
-        y += 10.0;
-        draw_consonant_table(y);
-        y += CONSONANT_TABLE_SPACE;
-        for line in EXPLANATION_AFTER_TABLE {
-            // On touch screens she steers with the joystick instead.
-            let line = if self.touch {
-                line.replace("nuolinäppäimillä", "ohjaussauvalla")
-            } else {
-                line.to_string()
-            };
-            draw_text(&line, SIDE_MARGIN, y, 22.0, TEXT_COLOR);
-            y += 28.0;
-        }
-
-        y += 30.0;
-        fonts::draw_centered("Kaikki parit", cx, y, 36, TITLE_COLOR, Style::Heading);
-        y += 40.0;
-        draw_pair_table(y, time);
-        y += PAIR_ROW_HEIGHT * pair_rows().len() as f32;
-
-        y += 30.0;
-        fonts::draw_centered("Tietosuoja", cx, y, 28, TITLE_COLOR, Style::Heading);
-        y += 40.0;
-        for line in PRIVACY_NOTE {
-            draw_text(line, SIDE_MARGIN, y, 20.0, DIM);
-            y += 28.0;
-        }
-
-        self.draw_scrollbar();
-        draw_footer(self.touch);
-    }
-
-    fn draw_menu(&self, progress: &Progress) {
-        for (i, (label, key, _)) in MENU.iter().enumerate() {
-            let rect = button_rect(i, self.scroll);
-            let primary = i == 0;
-            let (fill, edge) = if primary {
-                (Color::new(0.85, 0.45, 0.1, 1.0), GOLD)
-            } else {
-                (
-                    Color::new(0.2, 0.18, 0.32, 1.0),
-                    Color::new(0.55, 0.45, 0.85, 1.0),
-                )
-            };
-            draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
-            draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 3.0, edge);
-            let c = rect.center();
-            fonts::draw_centered(label, c.x, c.y - 4.0, 24, WHITE, Style::Heading);
-            // The keyboard shortcut, for those with a keyboard.
-            if !self.touch {
-                fonts::draw_centered(key, c.x, c.y + 17.0, 13, DIM, Style::Body);
-            }
-        }
-        let status = format!(
-            "Päiviä putkeen: {}     Paras taso: {}",
-            progress.streak, progress.best_level
-        );
-        let y = MENU_Y + BUTTON_H / 2.0 + 26.0 - self.scroll;
-        draw_centered_text(&status, ARENA_W / 2.0, y, 20, DIM);
-    }
-
-    fn draw_scrollbar(&self) {
-        let max = Self::max_scroll();
-        if max <= 0.0 {
-            return;
-        }
-        let track = ARENA_H - FOOTER_HEIGHT - 20.0;
-        let visible = (ARENA_H - FOOTER_HEIGHT) / content_height();
-        let thumb = (track * visible).max(30.0);
-        let top = 10.0 + (track - thumb) * self.scroll / max;
-        let x = ARENA_W - 10.0;
-        draw_rectangle(x, 10.0, 4.0, track, Color::new(1.0, 1.0, 1.0, 0.1));
-        draw_rectangle(x, top, 4.0, thumb, Color::new(1.0, 1.0, 1.0, 0.4));
-    }
+    let track = ARENA_H - FOOTER_HEIGHT - 20.0;
+    let visible = (ARENA_H - FOOTER_HEIGHT) / lukuloitsu_core::screens::title::content_height();
+    let thumb = (track * visible).max(30.0);
+    let top = 10.0 + (track - thumb) * screen.scroll() / max;
+    let x = ARENA_W - 10.0;
+    draw_rectangle(x, 10.0, 4.0, track, Color::new(1.0, 1.0, 1.0, 0.1));
+    draw_rectangle(x, top, 4.0, thumb, Color::new(1.0, 1.0, 1.0, 0.4));
 }
 
 const LOGO_TEXT: &str = "Lukuloitsu";
@@ -394,38 +233,6 @@ fn draw_consonant_table(y: f32) {
     }
 }
 
-/// The pairs grouped into rows: the single digits, then one row per
-/// first digit of the two-digit numbers, each pair in the column of its
-/// last digit.
-pub fn pair_rows() -> Vec<Vec<Pair>> {
-    let mut rows: Vec<Vec<Pair>> = Vec::new();
-    let singles: Vec<Pair> = PAIRS
-        .iter()
-        .filter(|p| p.number.len() == 1)
-        .copied()
-        .collect();
-    if !singles.is_empty() {
-        rows.push(singles);
-    }
-    for first in '0'..='9' {
-        let row: Vec<Pair> = PAIRS
-            .iter()
-            .filter(|p| p.number.len() == 2 && p.number.starts_with(first))
-            .copied()
-            .collect();
-        if !row.is_empty() {
-            rows.push(row);
-        }
-    }
-    rows
-}
-
-const PAIR_ROW_HEIGHT: f32 = 118.0;
-/// The size of each word's picture, leaving a gap between cells.
-const PICTURE_MARGIN: f32 = 10.0;
-/// The consonant table's height plus room before the next line.
-const CONSONANT_TABLE_SPACE: f32 = 90.0;
-
 fn draw_pair_table(y: f32, time: f32) {
     let cell = (ARENA_W - 2.0 * SIDE_MARGIN) / 10.0;
     for (i, row) in pair_rows().iter().enumerate() {
@@ -458,25 +265,6 @@ fn draw_pair_table(y: f32, time: f32) {
     }
 }
 
-/// The height of everything that scrolls, matching `draw`.
-fn content_height() -> f32 {
-    let explanation =
-        28.0 * (EXPLANATION_BEFORE_TABLE.len() + EXPLANATION_AFTER_TABLE.len()) as f32;
-    70.0 + 90.0
-        + 90.0
-        + MENU_SPACE
-        + explanation
-        + 10.0
-        + CONSONANT_TABLE_SPACE
-        + 30.0
-        + 40.0
-        + PAIR_ROW_HEIGHT * pair_rows().len() as f32
-        + 30.0
-        + 40.0
-        + 28.0 * PRIVACY_NOTE.len() as f32
-        + 20.0
-}
-
 const AUTHOR: &str = "Ville Peurala";
 
 /// The controls on the left and the author's name in the lower right
@@ -504,210 +292,4 @@ fn draw_footer(touch: bool) {
         FONT_SIZE as f32,
         DIM,
     );
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_pair_is_in_the_table_once() {
-        let listed: usize = pair_rows().iter().map(Vec::len).sum();
-        assert_eq!(listed, PAIRS.len());
-    }
-
-    #[test]
-    fn the_explanation_mentions_the_arrow_keys_that_touch_mode_replaces() {
-        assert!(
-            EXPLANATION_AFTER_TABLE
-                .iter()
-                .any(|l| l.contains("nuolinäppäimillä"))
-        );
-    }
-
-    #[test]
-    fn the_example_in_the_explanation_is_a_real_pair() {
-        assert!(PAIRS.iter().any(|p| p.number == "22" && p.word == "keko"));
-    }
-
-    const DT: f32 = 1.0 / 60.0;
-
-    fn frame() -> Frame {
-        Frame {
-            dt: DT,
-            ..Frame::default()
-        }
-    }
-
-    fn pressed(key: KeyCode) -> Frame {
-        Frame {
-            pressed: vec![key],
-            ..frame()
-        }
-    }
-
-    fn holding(key: KeyCode, dt: f32) -> Frame {
-        Frame {
-            down: vec![key],
-            dt,
-            ..Frame::default()
-        }
-    }
-
-    fn pointer(phase: Phase, pos: Vec2) -> Pointer {
-        Pointer { id: 1, pos, phase }
-    }
-
-    fn tap_on(pos: Vec2) -> Vec<Pointer> {
-        vec![pointer(Phase::Started, pos), pointer(Phase::Ended, pos)]
-    }
-
-    #[test]
-    fn keys_pick_the_menu_actions() {
-        let mut title = TitleScreen::new(false);
-        assert_eq!(
-            title.update(&pressed(KeyCode::Enter), &[]),
-            TitleAction::StartGame
-        );
-        assert_eq!(
-            title.update(&pressed(KeyCode::Space), &[]),
-            TitleAction::StartGame
-        );
-        assert_eq!(
-            title.update(&pressed(KeyCode::H), &[]),
-            TitleAction::Practice
-        );
-        assert_eq!(
-            title.update(&pressed(KeyCode::E), &[]),
-            TitleAction::Progress
-        );
-        assert_eq!(title.update(&pressed(KeyCode::K), &[]), TitleAction::Badges);
-        assert_eq!(title.update(&pressed(KeyCode::A), &[]), TitleAction::Stay);
-    }
-
-    #[test]
-    fn tapping_a_button_picks_its_action() {
-        for (i, (_, _, action)) in MENU.iter().enumerate() {
-            let mut title = TitleScreen::new(true);
-            let center = button_rect(i, 0.0).center();
-            assert_eq!(title.update(&frame(), &tap_on(center)), *action);
-        }
-    }
-
-    #[test]
-    fn tapping_beside_the_buttons_does_nothing() {
-        let mut title = TitleScreen::new(true);
-        assert_eq!(
-            title.update(&frame(), &tap_on(vec2(5.0, 5.0))),
-            TitleAction::Stay
-        );
-    }
-
-    #[test]
-    fn a_tap_on_a_scrolled_button_uses_where_it_is_now() {
-        let mut title = TitleScreen::new(true);
-        title.scroll = 40.0;
-        let moved = button_rect(0, 40.0).center();
-        assert_eq!(
-            title.update(&frame(), &tap_on(moved)),
-            TitleAction::StartGame
-        );
-        // Where it used to be, another button or nothing is under the finger.
-        let mut title = TitleScreen::new(true);
-        title.scroll = 300.0;
-        let old = button_rect(0, 0.0).center();
-        assert_eq!(title.update(&frame(), &tap_on(old)), TitleAction::Stay);
-    }
-
-    #[test]
-    fn dragging_scrolls_and_does_not_pick_a_button() {
-        let mut title = TitleScreen::new(true);
-        let button = button_rect(0, 0.0).center();
-        let up = button - vec2(0.0, 100.0);
-        let pointers = [
-            pointer(Phase::Started, button),
-            pointer(Phase::Moved, up),
-            pointer(Phase::Ended, up),
-        ];
-        assert_eq!(title.update(&frame(), &pointers), TitleAction::Stay);
-        assert!((title.scroll - 100.0).abs() < 1e-3, "{}", title.scroll);
-    }
-
-    #[test]
-    fn a_wobbly_tap_is_still_a_tap() {
-        let mut title = TitleScreen::new(true);
-        let center = button_rect(1, 0.0).center();
-        let pointers = [
-            pointer(Phase::Started, center),
-            pointer(Phase::Moved, center + vec2(2.0, 3.0)),
-            pointer(Phase::Ended, center + vec2(2.0, 3.0)),
-        ];
-        assert_eq!(title.update(&frame(), &pointers), TitleAction::Practice);
-    }
-
-    #[test]
-    fn holding_down_scrolls_at_a_steady_speed_and_up_scrolls_back() {
-        let mut title = TitleScreen::new(false);
-        title.update(&holding(KeyCode::Down, 0.2), &[]);
-        assert!((title.scroll - KEY_SCROLL_SPEED * 0.2).abs() < 1e-3);
-        title.update(&holding(KeyCode::Up, 0.2), &[]);
-        assert!(title.scroll.abs() < 1e-3);
-    }
-
-    #[test]
-    fn the_scroll_stays_between_the_top_and_the_end() {
-        let mut title = TitleScreen::new(false);
-        title.update(&holding(KeyCode::Up, 1.0), &[]);
-        assert_eq!(title.scroll, 0.0);
-        title.update(&pressed(KeyCode::End), &[]);
-        assert_eq!(title.scroll, TitleScreen::max_scroll());
-        assert!(TitleScreen::max_scroll() > 0.0, "there is more than fits");
-        title.update(&holding(KeyCode::Down, 1.0), &[]);
-        assert_eq!(title.scroll, TitleScreen::max_scroll());
-        title.update(&pressed(KeyCode::Home), &[]);
-        assert_eq!(title.scroll, 0.0);
-    }
-
-    #[test]
-    fn page_down_and_up_move_by_most_of_a_page() {
-        let mut title = TitleScreen::new(false);
-        title.update(&pressed(KeyCode::PageDown), &[]);
-        let page = ARENA_H - FOOTER_HEIGHT;
-        assert!((title.scroll - page * 0.9).abs() < 1e-3);
-        title.update(&pressed(KeyCode::PageUp), &[]);
-        assert_eq!(title.scroll, 0.0);
-    }
-
-    #[test]
-    fn the_mouse_wheel_scrolls() {
-        let mut title = TitleScreen::new(false);
-        title.scroll = 100.0;
-        title.update(
-            &Frame {
-                wheel: 30.0,
-                ..frame()
-            },
-            &[],
-        );
-        assert_eq!(title.scroll, 70.0);
-        title.update(
-            &Frame {
-                wheel: -50.0,
-                ..frame()
-            },
-            &[],
-        );
-        assert_eq!(title.scroll, 120.0);
-    }
-
-    #[test]
-    fn the_buttons_fit_side_by_side_in_the_arena() {
-        for i in 0..MENU.len() {
-            let r = button_rect(i, 0.0);
-            assert!(r.x >= 0.0 && r.right() <= ARENA_W);
-        }
-        for i in 1..MENU.len() {
-            assert!(button_rect(i - 1, 0.0).right() < button_rect(i, 0.0).x);
-        }
-    }
 }
