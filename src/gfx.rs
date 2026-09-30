@@ -7,4 +7,5 @@ pub mod game_render;
 pub mod icon;
 pub mod pictures;
 pub mod sprites;
+pub mod touch_render;
 pub mod view;

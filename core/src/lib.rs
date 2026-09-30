@@ -8,6 +8,7 @@
 
 #![cfg_attr(test, allow(clippy::float_cmp))]
 
+pub mod analytics;
 pub mod arena;
 pub mod badges;
 pub mod color;
@@ -27,4 +28,6 @@ pub mod progress;
 pub mod rng;
 pub mod save;
 pub mod sfx;
+pub mod toast;
+pub mod touch;
 pub mod view;

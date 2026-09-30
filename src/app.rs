@@ -14,12 +14,13 @@ use macroquad::prelude::BLACK;
 
 use lukuloitsu_core::geometry::Rect;
 use lukuloitsu_core::input::{Frame, KeyCode, Pointer};
+use lukuloitsu_core::toast::Toasts;
+use lukuloitsu_core::touch::{self, Button, TouchControls, TouchInput};
 
 use crate::game::{self, Game};
-use crate::gfx::game_render;
 use crate::gfx::view::{self, ARENA_H, ARENA_W};
+use crate::gfx::{game_render, touch_render};
 use crate::input::keyboard::Key;
-use crate::input::touch::{self, Button, TouchControls, TouchInput};
 use crate::platform::analytics;
 use crate::progress::{Progress, day_of};
 use crate::screens::badge_screen::BadgeScreen;
@@ -27,7 +28,7 @@ use crate::screens::levels::{LevelAction, LevelSelect};
 use crate::screens::practice::{PracticeAction, PracticeScreen};
 use crate::screens::progress;
 use crate::screens::title::{TitleAction, TitleScreen};
-use crate::screens::toast::Toasts;
+use crate::screens::toast;
 use crate::sound::audio::Sfx;
 use events::analytics_of;
 use lukuloitsu_core::game::rules::MAX_FRAME_SECONDS;
@@ -366,7 +367,7 @@ impl App {
                 let view = view::begin(content);
                 practice.draw(self.time as f32);
                 if self.touch_mode {
-                    self.controls.draw(self.music_on(), false, false);
+                    touch_render::draw(&self.controls, self.music_on(), false, false);
                 }
                 view::mask_outside(view, content, BLACK);
             }
@@ -375,7 +376,7 @@ impl App {
                 let view = view::begin(content);
                 game_render::draw(&game.scene(), view);
                 if self.touch_mode {
-                    self.controls.draw(self.music_on(), game.is_paused(), true);
+                    touch_render::draw(&self.controls, self.music_on(), game.is_paused(), true);
                 }
                 view::mask_outside(view, content, BLACK);
             }
@@ -383,7 +384,7 @@ impl App {
         // The notice goes over whatever is showing; the camera set for that
         // screen is still in place, and the arena's middle is the same in
         // all of them.
-        self.toasts.draw(ARENA_W);
+        toast::draw(&self.toasts, ARENA_W);
     }
 }
 
