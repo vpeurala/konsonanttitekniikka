@@ -82,6 +82,21 @@ pub fn button_rect(i: usize, scroll: f32) -> Rect {
     Rect::new(x, MENU_Y - BUTTON_H / 2.0 - scroll, BUTTON_W, BUTTON_H)
 }
 
+/// What a key pressed this frame picks from the menu, if any.
+fn key_action(frame: &Frame) -> Option<TitleAction> {
+    if frame.pressed(KeyCode::Enter) || frame.pressed(KeyCode::Space) {
+        Some(TitleAction::StartGame)
+    } else if frame.pressed(KeyCode::H) {
+        Some(TitleAction::Practice)
+    } else if frame.pressed(KeyCode::E) {
+        Some(TitleAction::Progress)
+    } else if frame.pressed(KeyCode::K) {
+        Some(TitleAction::Badges)
+    } else {
+        None
+    }
+}
+
 impl TitleScreen {
     pub fn new(touch: bool) -> Self {
         TitleScreen {
@@ -92,19 +107,18 @@ impl TitleScreen {
     }
 
     pub fn update(&mut self, frame: &Frame, pointers: &[Pointer]) -> TitleAction {
-        if frame.pressed(KeyCode::Enter) || frame.pressed(KeyCode::Space) {
-            return TitleAction::StartGame;
+        if let Some(action) = key_action(frame) {
+            return action;
         }
-        if frame.pressed(KeyCode::H) {
-            return TitleAction::Practice;
+        if let Some(action) = self.follow_pointers(pointers) {
+            return action;
         }
-        if frame.pressed(KeyCode::E) {
-            return TitleAction::Progress;
-        }
-        if frame.pressed(KeyCode::K) {
-            return TitleAction::Badges;
-        }
-        // Dragging scrolls the list; a tap on a menu button picks it.
+        self.scroll_by_keys_and_wheel(frame);
+        TitleAction::Stay
+    }
+
+    /// Dragging scrolls the list; a tap on a menu button picks it.
+    fn follow_pointers(&mut self, pointers: &[Pointer]) -> Option<TitleAction> {
         for p in pointers {
             match p.phase {
                 Phase::Started if self.drag.is_none() => {
@@ -125,10 +139,10 @@ impl TitleScreen {
                     {
                         self.drag = None;
                         if moved < TAP_SLOP && p.phase == Phase::Ended {
-                            for (i, &(_, _, action)) in MENU.iter().enumerate() {
-                                if button_rect(i, self.scroll).contains(p.pos) {
-                                    return action;
-                                }
+                            let tapped = (0..MENU.len())
+                                .find(|&i| button_rect(i, self.scroll).contains(p.pos));
+                            if let Some(i) = tapped {
+                                return Some(MENU[i].2);
                             }
                         }
                     }
@@ -136,7 +150,12 @@ impl TitleScreen {
                 _ => {}
             }
         }
+        None
+    }
 
+    /// The arrow keys, the page keys, Home, End and the wheel scroll the
+    /// list, which stays between its top and its end.
+    fn scroll_by_keys_and_wheel(&mut self, frame: &Frame) {
         let dt = frame.dt;
         let page = ARENA_H - FOOTER_HEIGHT;
         if frame.down(KeyCode::Down) {
@@ -161,7 +180,6 @@ impl TitleScreen {
         self.scroll -= frame.wheel;
 
         self.scroll = self.scroll.clamp(0.0, Self::max_scroll());
-        TitleAction::Stay
     }
 
     pub fn max_scroll() -> f32 {

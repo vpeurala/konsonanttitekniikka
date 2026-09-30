@@ -167,33 +167,9 @@ impl TouchControls {
             match p.phase {
                 Phase::Started if in_arena => {
                     input.arena_taps += 1;
-                    if self.stick.is_none() {
-                        self.stick = Some(Stick {
-                            id: p.id,
-                            base: p.pos,
-                            knob: p.pos,
-                        });
-                    }
+                    self.grab_stick(p);
                 }
-                Phase::Started => {
-                    let pressed = keys.iter().enumerate().find_map(|(i, k)| {
-                        let key = match k.label {
-                            Label::Char(c) => Key::Char(c),
-                            Label::Backspace => Key::Backspace,
-                            Label::Unused(_) => return None,
-                        };
-                        key_rect(k).contains(p.pos).then_some((i, key))
-                    });
-                    if let Some((i, key)) = pressed {
-                        input.keys.push(key);
-                        self.flashes.push((i, PRESS_FLASH_SECONDS));
-                    }
-                    for button in [Button::Pause, Button::Music] {
-                        if button_rect(button).contains(p.pos) {
-                            input.buttons.push(button);
-                        }
-                    }
-                }
+                Phase::Started => self.press(p.pos, &keys, &mut input),
                 Phase::Moved | Phase::Stationary => match &mut self.stick {
                     Some(stick) if stick.id == p.id => {
                         let offset = (p.pos - stick.base).clamp_length_max(STICK_RADIUS);
@@ -201,13 +177,7 @@ impl TouchControls {
                     }
                     // A finger moving in the arena whose start was missed
                     // (say, it landed as the game began) takes the stick.
-                    None if in_arena => {
-                        self.stick = Some(Stick {
-                            id: p.id,
-                            base: p.pos,
-                            knob: p.pos,
-                        });
-                    }
+                    None if in_arena => self.grab_stick(p),
                     _ => {}
                 },
                 Phase::Ended | Phase::Cancelled => {
@@ -225,6 +195,39 @@ impl TouchControls {
             }
         }
         input
+    }
+
+    /// A finger in the arena takes the joystick, if it is free.
+    fn grab_stick(&mut self, p: &Pointer) {
+        if self.stick.is_none() {
+            self.stick = Some(Stick {
+                id: p.id,
+                base: p.pos,
+                knob: p.pos,
+            });
+        }
+    }
+
+    /// A finger came down on the panels at `pos`: it types the key or
+    /// presses the button there, if any.
+    fn press(&mut self, pos: Vec2, keys: &[KeySpec], input: &mut TouchInput) {
+        let pressed = keys.iter().enumerate().find_map(|(i, k)| {
+            let key = match k.label {
+                Label::Char(c) => Key::Char(c),
+                Label::Backspace => Key::Backspace,
+                Label::Unused(_) => return None,
+            };
+            key_rect(k).contains(pos).then_some((i, key))
+        });
+        if let Some((i, key)) = pressed {
+            input.keys.push(key);
+            self.flashes.push((i, PRESS_FLASH_SECONDS));
+        }
+        for button in [Button::Pause, Button::Music] {
+            if button_rect(button).contains(pos) {
+                input.buttons.push(button);
+            }
+        }
     }
 
     /// Where the joystick is, as its base and knob, while a finger is on it.

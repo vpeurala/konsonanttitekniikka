@@ -265,6 +265,15 @@ impl World {
     /// which reached her. Monsters that touch her leave play, apart from a
     /// boss, which bounces away and is harmless for a while.
     pub fn advance_enemies(&mut self, dt: f32, player: Vec2, rng: &mut Rng) -> Vec<Contact> {
+        self.walk_toward(dt, player, rng);
+        let mut contacts = self.bounce_bosses(dt, player);
+        contacts.extend(self.take_ordinary_contacts(player));
+        contacts
+    }
+
+    /// Walks every monster toward `player`, around the obstacles, and keeps
+    /// them apart, on the screen (the bosses) and out of the obstacles.
+    fn walk_toward(&mut self, dt: f32, player: Vec2, rng: &mut Rng) {
         for enemy in &mut self.enemies {
             let speed = enemy.speed();
             let toward = (player - enemy.pos).normalize_or_zero();
@@ -289,13 +298,14 @@ impl World {
             }
             enemy.pos = push_out(enemy.pos, enemy.radius, &self.obstacles);
         }
+    }
 
-        let touches = |e: &Enemy| e.pos.distance(player) < PLAYER_RADIUS + e.radius;
+    /// A boss that touches her bounces off and starts slow again, unless it
+    /// is still harmless from the last time.
+    fn bounce_bosses(&mut self, dt: f32, player: Vec2) -> Vec<Contact> {
         let mut contacts = Vec::new();
-
-        // The boss bounces off her and starts slow again.
         for boss in &mut self.enemies {
-            let touching = touches(boss);
+            let touching = touches(boss, player);
             let Some(lives) = &mut boss.boss else {
                 continue;
             };
@@ -314,16 +324,22 @@ impl World {
             boss.keep_on_screen();
             boss.age = 0.0;
         }
+        contacts
+    }
 
+    /// The ordinary monsters that touch her leave play.
+    fn take_ordinary_contacts(&mut self, player: Vec2) -> Vec<Contact> {
         let (collided, remaining): (Vec<Enemy>, Vec<Enemy>) = std::mem::take(&mut self.enemies)
             .into_iter()
-            .partition(|e| !e.is_boss() && touches(e));
+            .partition(|e| !e.is_boss() && touches(e, player));
         self.enemies = remaining;
-        contacts.extend(collided.into_iter().map(|enemy| Contact {
-            enemy,
-            kind: ContactKind::Ordinary,
-        }));
-        contacts
+        collided
+            .into_iter()
+            .map(|enemy| Contact {
+                enemy,
+                kind: ContactKind::Ordinary,
+            })
+            .collect()
     }
 
     /// Pushes overlapping enemies apart, a few passes so a crowd settles.
@@ -350,6 +366,11 @@ impl World {
             }
         }
     }
+}
+
+/// Whether the monster touches her.
+fn touches(enemy: &Enemy, player: Vec2) -> bool {
+    enemy.pos.distance(player) < PLAYER_RADIUS + enemy.radius
 }
 
 /// The portals and obstacles of a level. The first level has no obstacles.

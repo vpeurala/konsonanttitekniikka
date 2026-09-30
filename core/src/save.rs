@@ -74,64 +74,76 @@ impl Progress {
         }
         for line in lines {
             let words: Vec<&str> = line.split_whitespace().collect();
-            match words.as_slice() {
-                ["music", setting] => data.music_on = *setting != "off",
-                ["best-level", level] => {
-                    if let Ok(level) = level.parse::<u32>() {
-                        data.best_level = level.clamp(1, MAX_LEVEL);
-                    }
-                }
-                ["stars", level, stars] => {
-                    if let (Ok(level), Ok(stars)) = (level.parse(), stars.parse::<u8>()) {
-                        data.stars.insert(level, stars.clamp(1, 3));
-                    }
-                }
-                ["streak", day, count] => {
-                    if let (Ok(day), Ok(count)) = (day.parse(), count.parse()) {
-                        data.streak_day = day;
-                        data.streak = count;
-                    }
-                }
-                ["stat", name, value] => {
-                    if let Ok(value) = value.parse() {
-                        data.stats.set(name, value);
-                    }
-                }
-                ["badge", id, day] => {
-                    if let (Some(badge), Ok(day)) = (badges::find(id), day.parse()) {
-                        data.badges.insert(badge.id.to_owned(), day);
-                    }
-                }
-                // The streak came later, so older saves lack it.
-                ["pair", number, difficulty, last_seen, times_seen, rest @ ..]
-                    if rest.len() <= 1 =>
-                {
-                    if let (Ok(difficulty), Ok(last_seen), Ok(times_seen), Some(streak)) = (
-                        difficulty.parse::<f32>(),
-                        last_seen.parse::<f64>(),
-                        times_seen.parse(),
-                        rest.first().map_or(Some(0), |s| s.parse().ok()),
-                    ) && difficulty.is_finite()
-                        && last_seen.is_finite()
-                        && pairs::find(number).is_some()
-                    {
-                        records.push((
-                            number.to_string(),
-                            PairRecord {
-                                difficulty: difficulty.clamp(0.0, 1.0),
-                                last_seen,
-                                times_seen,
-                                streak,
-                            },
-                        ));
-                    }
-                }
-                _ => {}
-            }
+            data.read_line(&words, &mut records);
         }
         data.memory = Memory::from_records(records);
         data
     }
+
+    /// Takes in one line of the file, already split into words: a fact
+    /// about the player, or a pair's record, which is added to `records`.
+    /// A line that isn't understood is skipped.
+    fn read_line(&mut self, words: &[&str], records: &mut Vec<(String, PairRecord)>) {
+        match words {
+            ["music", setting] => self.music_on = *setting != "off",
+            ["best-level", level] => {
+                if let Ok(level) = level.parse::<u32>() {
+                    self.best_level = level.clamp(1, MAX_LEVEL);
+                }
+            }
+            ["stars", level, stars] => {
+                if let (Ok(level), Ok(stars)) = (level.parse(), stars.parse::<u8>()) {
+                    self.stars.insert(level, stars.clamp(1, 3));
+                }
+            }
+            ["streak", day, count] => {
+                if let (Ok(day), Ok(count)) = (day.parse(), count.parse()) {
+                    self.streak_day = day;
+                    self.streak = count;
+                }
+            }
+            ["stat", name, value] => {
+                if let Ok(value) = value.parse() {
+                    self.stats.set(name, value);
+                }
+            }
+            ["badge", id, day] => {
+                if let (Some(badge), Ok(day)) = (badges::find(id), day.parse()) {
+                    self.badges.insert(badge.id.to_owned(), day);
+                }
+            }
+            // The streak came later, so older saves lack it.
+            ["pair", number, difficulty, last_seen, times_seen, rest @ ..] if rest.len() <= 1 => {
+                let streak = rest.first().map_or(Some(0), |s| s.parse().ok());
+                records.extend(pair_record(
+                    number, difficulty, last_seen, times_seen, streak,
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// A pair's record from its words in the file, if they are all sound.
+fn pair_record(
+    number: &str,
+    difficulty: &str,
+    last_seen: &str,
+    times_seen: &str,
+    streak: Option<u32>,
+) -> Option<(String, PairRecord)> {
+    let difficulty: f32 = difficulty.parse().ok()?;
+    let last_seen: f64 = last_seen.parse().ok()?;
+    let sound = difficulty.is_finite() && last_seen.is_finite() && pairs::find(number).is_some();
+    sound.then_some((
+        number.to_owned(),
+        PairRecord {
+            difficulty: difficulty.clamp(0.0, 1.0),
+            last_seen,
+            times_seen: times_seen.parse().ok()?,
+            streak: streak?,
+        },
+    ))
 }
 
 #[cfg(test)]

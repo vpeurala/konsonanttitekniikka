@@ -147,13 +147,23 @@ impl BadgeScreen {
     pub fn update(&mut self, frame: &Frame, pointers: &[Pointer]) -> bool {
         let rows = rows();
         let mut back = frame.pressed(KeyCode::Escape) || frame.pressed(KeyCode::Backspace);
+        self.move_by_keys(frame, &rows);
+        // The wheel reports how far the content should move down.
+        self.scroll -= frame.wheel;
+        back |= self.follow_pointers(pointers, &rows);
+        self.scroll = self.scroll.clamp(0.0, max_scroll(rows.len()));
+        back
+    }
 
+    /// The arrow keys move the selection, keeping it in view; the page keys
+    /// scroll.
+    fn move_by_keys(&mut self, frame: &Frame, rows: &[Vec<usize>]) {
         let step = |key| i32::from(frame.pressed(key));
         let dx = step(KeyCode::Right) - step(KeyCode::Left);
         let dy = step(KeyCode::Down) - step(KeyCode::Up);
         if dx != 0 || dy != 0 {
             self.selected = moved(self.selected, dx, dy);
-            let (row, _) = place(&rows, self.selected);
+            let (row, _) = place(rows, self.selected);
             self.scroll = scrolled_to_show(row, self.scroll, rows.len());
         }
         if frame.pressed(KeyCode::PageDown) {
@@ -162,9 +172,12 @@ impl BadgeScreen {
         if frame.pressed(KeyCode::PageUp) {
             self.scroll -= PAGE;
         }
-        // The wheel reports how far the content should move down.
-        self.scroll -= frame.wheel;
+    }
 
+    /// Dragging scrolls the list; a tap selects a medal, or goes back.
+    /// Returns true for the latter.
+    fn follow_pointers(&mut self, pointers: &[Pointer], rows: &[Vec<usize>]) -> bool {
+        let mut back = false;
         for p in pointers {
             match p.phase {
                 Phase::Started if self.drag.is_none() => {
@@ -187,7 +200,7 @@ impl BadgeScreen {
                         if moved < TAP_SLOP && p.phase == Phase::Ended {
                             if back_button().contains(p.pos) {
                                 back = true;
-                            } else if let Some(index) = self.medal_at(&rows, p.pos) {
+                            } else if let Some(index) = self.medal_at(rows, p.pos) {
                                 self.selected = index;
                             }
                         }
@@ -196,7 +209,6 @@ impl BadgeScreen {
                 _ => {}
             }
         }
-        self.scroll = self.scroll.clamp(0.0, max_scroll(rows.len()));
         back
     }
 
