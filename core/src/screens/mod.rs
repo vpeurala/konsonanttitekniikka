@@ -4,5 +4,6 @@
 
 pub mod badge_screen;
 pub mod levels;
+pub mod practice;
 pub mod progress_map;
 pub mod title;

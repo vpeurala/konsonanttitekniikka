@@ -23,14 +23,14 @@ use crate::gfx::{game_render, touch_render};
 use crate::input::keyboard::Key;
 use crate::platform::analytics;
 use crate::progress::{Progress, day_of};
-use crate::screens::practice::{PracticeAction, PracticeScreen};
 use crate::screens::progress;
-use crate::screens::{badge_screen, levels, title, toast};
+use crate::screens::{badge_screen, levels, practice, title, toast};
 use crate::sound::audio::Sfx;
 use events::analytics_of;
 use lukuloitsu_core::game::rules::MAX_FRAME_SECONDS;
 use lukuloitsu_core::screens::badge_screen::BadgeScreen;
 use lukuloitsu_core::screens::levels::{LevelAction, LevelSelect};
+use lukuloitsu_core::screens::practice::{PracticeAction, PracticeScreen};
 use lukuloitsu_core::screens::progress_map;
 use lukuloitsu_core::screens::title::{TitleAction, TitleScreen};
 use persistence::Persistence;
@@ -366,7 +366,7 @@ impl App {
             Screen::Practice(practice) => {
                 let content = touch::content_rect(self.touch_mode);
                 let view = view::begin(content);
-                practice.draw(self.time as f32);
+                practice::draw(practice, self.time as f32);
                 if self.touch_mode {
                     touch_render::draw(&self.controls, self.music_on(), false, false);
                 }

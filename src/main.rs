@@ -10,9 +10,7 @@ mod screens;
 mod sound;
 
 // The rules live in the core crate; these names keep the paths short.
-use lukuloitsu_core::{
-    badges, curriculum, game, long_numbers, memory, obstacles, pairs, progress, rng,
-};
+use lukuloitsu_core::{badges, curriculum, game, long_numbers, memory, obstacles, pairs, progress};
 use macroquad::prelude::*;
 
 use app::{App, Effect};
