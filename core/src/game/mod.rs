@@ -38,7 +38,7 @@ pub use display::{Banner, Feedback, Tone};
 pub use enemy::Enemy;
 use player::Player;
 use rules::{STEP_SECONDS, Timestep, spawn_interval};
-pub use scene::{Scene, SlotView};
+pub use scene::{NEW_PAIRS_ROWS, Scene, SlotView};
 use stage::Stage;
 use vitals::Vitals;
 use world::World;

@@ -67,6 +67,22 @@ impl Curriculum {
         new
     }
 
+    /// The most recently met pairs from before this level, at most `room`
+    /// of them, in number order: what the "new pairs" panel keeps showing
+    /// while it has space left over. Empty when nothing is new, since the
+    /// panel is gone then.
+    pub fn earlier_pairs(&self, room: usize) -> Vec<Pair> {
+        if self.new.is_empty() {
+            return Vec::new();
+        }
+        // `unlocked` is in the order the pairs were met, the new ones last.
+        let before = self.unlocked.len() - self.new.len();
+        let room = room.saturating_sub(self.new.len());
+        let mut earlier = self.unlocked[before.saturating_sub(room)..before].to_vec();
+        earlier.sort_by_key(|p| (p.number.len(), p.number));
+        earlier
+    }
+
     pub fn is_new(&self, pair: &Pair) -> bool {
         self.new.contains(pair)
     }
@@ -122,6 +138,37 @@ mod tests {
         while curriculum.next_level() > 0 {}
         assert_eq!(curriculum.unlocked().len(), PAIRS.len());
         assert!(curriculum.new_pairs().is_empty());
+    }
+
+    #[test]
+    fn earlier_pairs_fill_the_room_left_by_the_new_ones_with_the_latest_first() {
+        let mut curriculum = Curriculum::new();
+        assert!(curriculum.earlier_pairs(17).is_empty(), "nothing before");
+        curriculum.next_level();
+        let level_one: Vec<Pair> = curriculum.unlocked()[..10].to_vec();
+        let mut shown = curriculum.earlier_pairs(17);
+        assert_eq!(shown.len(), 10, "only level one came before");
+        shown.sort_by_key(|p| p.number);
+        let mut expected = level_one.clone();
+        expected.sort_by_key(|p| p.number);
+        assert_eq!(shown, expected, "all ten fit next to the five new ones");
+        // Later on the oldest are dropped, never the newest.
+        for _ in 0..5 {
+            curriculum.next_level();
+        }
+        let newest_before = curriculum.unlocked()[curriculum.unlocked().len() - 10..][..5].to_vec();
+        let shown = curriculum.earlier_pairs(17);
+        assert_eq!(shown.len(), 12);
+        assert!(newest_before.iter().all(|p| shown.contains(p)));
+        assert!(!shown.contains(&level_one[0]));
+        assert!(shown.iter().all(|p| !curriculum.new_pairs().contains(p)));
+    }
+
+    #[test]
+    fn earlier_pairs_are_gone_when_nothing_is_new() {
+        let mut curriculum = Curriculum::new();
+        while curriculum.next_level() > 0 {}
+        assert!(curriculum.earlier_pairs(17).is_empty());
     }
 
     #[test]

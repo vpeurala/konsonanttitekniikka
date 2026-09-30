@@ -50,9 +50,15 @@ pub struct Scene<'a> {
     pub boss_fight: bool,
     /// The pairs this level introduces.
     pub new_pairs: Vec<Pair>,
+    /// Pairs from earlier levels, kept in the panel while there is room
+    /// (`NEW_PAIRS_ROWS` in all).
+    pub earlier_pairs: Vec<Pair>,
     /// The number slot and the word slot.
     pub slots: [SlotView<'a>; 2],
 }
+
+/// How many rows the "new pairs" panel has room for.
+pub const NEW_PAIRS_ROWS: usize = 17;
 
 impl Game {
     /// What to draw.
@@ -84,6 +90,7 @@ impl Game {
             points_needed: rules::points_to_clear(self.level),
             boss_fight: self.stage.boss_fight,
             new_pairs: self.curriculum.new_pairs(),
+            earlier_pairs: self.curriculum.earlier_pairs(NEW_PAIRS_ROWS),
             slots: [slot(Slot::Number), slot(Slot::Word)],
         }
     }

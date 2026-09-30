@@ -321,13 +321,14 @@ fn draw_score_and_level(scene: &Scene) {
     draw_text(&level, right - size.width, 74.0, 18.0, LIGHTGRAY);
 }
 
-/// Lists the pairs introduced on this level down the right edge. The
-/// panel is gone once a level brings nothing new.
+/// Lists the pairs introduced on this level down the right edge, the new
+/// ones highlighted below the earlier ones that still fit. The panel is
+/// gone once a level brings nothing new.
 fn draw_new_pairs(scene: &Scene) {
     const WIDTH: f32 = 150.0;
     const ROW: f32 = 24.0;
     const FONT_SIZE: u16 = 18;
-    let new = &scene.new_pairs;
+    let (new, earlier) = (&scene.new_pairs, &scene.earlier_pairs);
     if new.is_empty() {
         if long_numbers::easy_long_numbers(scene.level) {
             draw_long_number_tip();
@@ -336,7 +337,8 @@ fn draw_new_pairs(scene: &Scene) {
     }
     let x = ARENA_W - WIDTH - 16.0;
     let y = 100.0;
-    let height = 40.0 + ROW * new.len() as f32;
+    let rows = (new.len() + earlier.len()) as f32;
+    let height = 34.0 + ROW * rows;
     draw_rectangle(x, y, WIDTH, height, Color::new(0.0, 0.0, 0.0, 0.55));
     draw_rectangle_lines(x, y, WIDTH, height, 2.0, GOLD);
     fonts::draw_centered(
@@ -347,8 +349,28 @@ fn draw_new_pairs(scene: &Scene) {
         GOLD,
         Style::Heading,
     );
-    for (i, pair) in new.iter().enumerate() {
+    let listed = earlier
+        .iter()
+        .map(|p| (p, false))
+        .chain(new.iter().map(|p| (p, true)));
+    for (i, (pair, is_new)) in listed.enumerate() {
         let row_y = y + 44.0 + ROW * i as f32;
+        let (number_color, word_color) = if is_new {
+            // A band behind the newest pairs makes them stand out.
+            draw_rectangle(
+                x + 4.0,
+                row_y - ROW * 0.75,
+                WIDTH - 8.0,
+                ROW - 2.0,
+                Color::new(1.0, 0.84, 0.0, 0.3),
+            );
+            (WHITE, LIME)
+        } else {
+            (
+                Color::new(1.0, 1.0, 1.0, 0.45),
+                Color::new(0.5, 1.0, 0.0, 0.45),
+            )
+        };
         let number = measure_text(pair.number, None, FONT_SIZE, 1.0);
         // Numbers are right-aligned so the words line up.
         draw_text(
@@ -356,14 +378,14 @@ fn draw_new_pairs(scene: &Scene) {
             x + 40.0 - number.width,
             row_y,
             FONT_SIZE as f32,
-            WHITE,
+            number_color,
         );
         draw_text(
             pair.word.to_uppercase(),
             x + 56.0,
             row_y,
             FONT_SIZE as f32,
-            LIME,
+            word_color,
         );
     }
 }
