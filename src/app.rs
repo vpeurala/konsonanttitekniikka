@@ -7,47 +7,39 @@
 //! decisions testable by running frames through it, and every impure
 //! call in one place, `main`. `App::draw` only reads the state.
 
+mod events;
+mod persistence;
+
 use macroquad::prelude::{BLACK, KeyCode, Rect};
 
+use crate::analytics;
 use crate::audio::Sfx;
 use crate::badge_screen::BadgeScreen;
-use crate::badges::{self, Stats};
 use crate::frame::Frame;
-use crate::game::{self, Game, GameEvent};
+use crate::game::{self, Game};
+use crate::keyboard::Key;
 use crate::levels::{LevelAction, LevelSelect};
-use crate::memory::Memory;
 use crate::practice::{PracticeAction, PracticeScreen};
 use crate::progress::ProgressScreen;
-use crate::save::{self, SaveData};
+use crate::save::SaveData;
 use crate::title::{TitleAction, TitleScreen};
 use crate::toast::Toasts;
 use crate::touch::{self, Button, TouchControls, TouchInput};
 use crate::view::{self, ARENA_H, ARENA_W, View};
-
-/// How often progress is saved while playing, in seconds, so little is lost
-/// if the app is closed or killed in the background.
-const SAVE_INTERVAL: f64 = 5.0;
+use events::analytics_of;
+use persistence::Persistence;
 
 /// Something the app wants done outside itself.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     /// Play a sound effect.
     Play(Sfx),
-    /// Write this progress to the device.
-    Save(Box<SaveData>),
+    /// Write this text, the save file's contents, to the device.
+    Save(String),
     /// Count an event in the web version's statistics.
-    Count { path: String, title: String },
+    Count(analytics::Event),
     /// Close the app.
     Quit,
-}
-
-impl Effect {
-    fn count(path: impl Into<String>, title: impl Into<String>) -> Effect {
-        Effect::Count {
-            path: path.into(),
-            title: title.into(),
-        }
-    }
 }
 
 /// What is on screen.
@@ -61,15 +53,38 @@ enum Screen {
     Badges(Box<BadgeScreen>),
 }
 
+/// What one screen made of a frame: the screen to move on to, if it is
+/// leaving, and what to do outside.
+#[derive(Default)]
+struct Step {
+    next: Option<Screen>,
+    effects: Vec<Effect>,
+}
+
+impl Step {
+    fn go(next: Screen) -> Step {
+        Step {
+            next: Some(next),
+            effects: Vec::new(),
+        }
+    }
+
+    /// Goes to `next` and counts `event`.
+    fn go_counting(next: Screen, event: analytics::Event) -> Step {
+        Step {
+            next: Some(next),
+            effects: vec![Effect::Count(event)],
+        }
+    }
+}
+
 pub struct App {
     screen: Screen,
     /// The title screen keeps its scroll position between visits.
     title: TitleScreen,
     controls: TouchControls,
-    progress: SaveData,
-    /// How well each pair is known, live: `progress` only gets it when
-    /// saving, so nothing is converted every frame.
-    memory: Memory,
+    /// The save data, the live memory and when they were last saved.
+    data: Persistence,
     touch_mode: bool,
     /// A web page can't be quit, only left.
     can_quit: bool,
@@ -77,8 +92,6 @@ pub struct App {
     /// follow. Summed from frame times, not read from the clock, so drawing
     /// depends only on state.
     time: f64,
-    /// When progress was last saved, in seconds since 1970.
-    last_save: f64,
     /// Notices of badges just earned.
     toasts: Toasts,
 }
@@ -91,21 +104,15 @@ fn menu_rect() -> Rect {
 impl App {
     /// The app at its title screen, with `progress` loaded from the
     /// device, at time `now`.
-    pub fn new(mut progress: SaveData, touch_mode: bool, can_quit: bool, now: f64) -> Self {
-        let memory = progress.memory();
-        // Badges the player already qualifies for, from before badges
-        // existed, are given quietly; the badge screen shows them.
-        badges::award(&mut progress, &memory, save::day_of(now));
+    pub fn new(progress: SaveData, touch_mode: bool, can_quit: bool, now: f64) -> Self {
         App {
             screen: Screen::Title,
             title: TitleScreen::new(touch_mode),
             controls: TouchControls::default(),
-            memory,
-            progress,
+            data: Persistence::new(progress, now),
             touch_mode,
             can_quit,
             time: 0.0,
-            last_save: now,
             toasts: Toasts::default(),
         }
     }
@@ -113,7 +120,7 @@ impl App {
     /// Whether the player has sound switched on: the music and the sound
     /// effects both.
     pub fn music_on(&self) -> bool {
-        self.progress.music_on
+        self.data.progress.music_on
     }
 
     /// Whether the screen wants music playing, if the player allows it:
@@ -130,187 +137,180 @@ impl App {
         let mut effects = Vec::new();
         self.time += f64::from(frame.dt);
         self.toasts.update(frame.dt.min(0.25));
-        // Esc leaves the game or a menu screen, and quits from the title.
-        let escape = frame.pressed(KeyCode::Escape);
         if frame.pressed(KeyCode::Tab) {
-            toggle_music(&mut self.progress, &self.memory, &mut effects);
+            effects.push(self.data.toggle_music());
         }
 
-        let mut next = None;
-        match &mut self.screen {
-            Screen::Title => {
-                if escape && self.can_quit {
-                    effects.push(Effect::Quit);
-                    return effects;
-                }
-                let view = View::fit(menu_rect(), frame.screen);
-                match self.title.update(frame, &frame.pointers(&view)) {
-                    TitleAction::Stay => {}
-                    TitleAction::StartGame => {
-                        // With only the first level to start from, there
-                        // is nothing to choose.
-                        let levels = LevelSelect::new(self.progress.best_level, self.touch_mode);
-                        next = Some(if levels.len() > 1 {
-                            Screen::Levels(levels)
-                        } else {
-                            Screen::Game(Box::new(self.new_game(1)))
-                        });
-                    }
-                    TitleAction::Practice => {
-                        effects.push(Effect::count("harjoittelu", "Harjoittelu"));
-                        next = Some(Screen::Practice(Box::new(PracticeScreen::new(
-                            self.progress.best_level,
-                            &self.memory,
-                            self.touch_mode,
-                            frame.now,
-                        ))));
-                    }
-                    TitleAction::Progress => {
-                        effects.push(Effect::count("edistyminen", "Edistyminen"));
-                        next = Some(Screen::Progress(ProgressScreen));
-                    }
-                    TitleAction::Badges => {
-                        effects.push(Effect::count("kunniamerkit", "Kunniamerkit"));
-                        next = Some(Screen::Badges(Box::default()));
-                    }
-                }
-            }
+        // The screen is taken out while it works, so it and the rest of
+        // the app can both be borrowed.
+        let mut screen = std::mem::replace(&mut self.screen, Screen::Title);
+        let step = self.update_screen(&mut screen, frame);
+        effects.extend(step.effects);
+        self.screen = step.next.unwrap_or(screen);
 
-            Screen::Levels(levels) => {
-                let view = View::fit(menu_rect(), frame.screen);
-                match levels.update(frame, &frame.pointers(&view)) {
-                    LevelAction::Stay => {}
-                    LevelAction::Back => next = Some(Screen::Title),
-                    LevelAction::Start(level) => {
-                        next = Some(Screen::Game(Box::new(self.new_game(level))));
-                    }
-                }
-            }
-
-            Screen::Progress(screen) => {
-                let view = View::fit(menu_rect(), frame.screen);
-                if screen.update(frame, &frame.pointers(&view)) {
-                    next = Some(Screen::Title);
-                }
-            }
-
-            Screen::Badges(screen) => {
-                let view = View::fit(menu_rect(), frame.screen);
-                if screen.update(frame, &frame.pointers(&view)) {
-                    next = Some(Screen::Title);
-                }
-            }
-
-            Screen::Practice(practice) => {
-                let view = View::fit(touch::content_rect(self.touch_mode), frame.screen);
-                let input = touch_input(&mut self.controls, self.touch_mode, frame, &view);
-                if input.buttons.contains(&Button::Music) {
-                    toggle_music(&mut self.progress, &self.memory, &mut effects);
-                }
-                let mut keys = frame.typed.clone();
-                keys.extend(input.keys.iter().copied());
-                // The pause button leaves practice.
-                let back = escape || input.buttons.contains(&Button::Pause);
-                let correct_before = practice.correct();
-                let action =
-                    practice.update(frame, &keys, input.arena_taps, back, &mut self.memory);
-                let stats = &mut self.progress.stats;
-                for _ in correct_before..practice.correct() {
-                    Stats::bump(&mut stats.practice_correct);
-                }
-                effects.extend(practice.take_sfx().into_iter().map(Effect::Play));
-                let leaving = matches!(action, PracticeAction::Back);
-                save(
-                    &mut self.progress,
-                    &self.memory,
-                    &mut self.last_save,
-                    frame.now,
-                    leaving,
-                    &mut effects,
-                );
-                if leaving {
-                    next = Some(Screen::Title);
-                }
-            }
-
-            Screen::Game(game) => {
-                let view = View::fit(touch::content_rect(self.touch_mode), frame.screen);
-                let input = touch_input(&mut self.controls, self.touch_mode, frame, &view);
-                if input.buttons.contains(&Button::Music) {
-                    toggle_music(&mut self.progress, &self.memory, &mut effects);
-                }
-
-                let mut keys = frame.typed.clone();
-                keys.extend(input.keys.iter().copied());
-                let was_over = game.is_over();
-                let outputs = game.update(
-                    &game::Input {
-                        dt: frame.dt,
-                        now: frame.now,
-                        away: frame.away,
-                        keys,
-                        arrows: frame.arrows(),
-                        stick: input.movement,
-                        pause: frame.pressed(KeyCode::Space)
-                            || input.buttons.contains(&Button::Pause),
-                        confirm: frame.pressed(KeyCode::Enter),
-                        taps: input.arena_taps,
-                    },
-                    &mut self.memory,
-                );
-                effects.extend(outputs.sfx.into_iter().map(Effect::Play));
-                let mut save_now = escape;
-                for event in outputs.events {
-                    save_now |= record_event(&mut self.progress, event, &mut effects);
-                }
-                if !was_over && game.is_over() {
-                    effects.push(Effect::Play(Sfx::GameOver));
-                    save_now = true;
-                }
-                save(
-                    &mut self.progress,
-                    &self.memory,
-                    &mut self.last_save,
-                    frame.now,
-                    save_now,
-                    &mut effects,
-                );
-                if escape {
-                    next = Some(Screen::Title);
-                }
-            }
-        }
-        if let Some(next) = next {
-            self.screen = next;
-        }
         self.award_badges(frame, &mut effects);
         // The sound switch (still called music in the save file) silences
         // the sound effects too, not just the music.
-        if !self.progress.music_on {
+        if !self.music_on() {
             effects.retain(|effect| !matches!(effect, Effect::Play(_)));
         }
         effects
     }
 
+    fn update_screen(&mut self, screen: &mut Screen, frame: &Frame) -> Step {
+        // Esc leaves the game or a menu screen, and quits from the title.
+        let escape = frame.pressed(KeyCode::Escape);
+        match screen {
+            Screen::Title => self.update_title(frame, escape),
+            Screen::Levels(levels) => self.update_levels(levels, frame),
+            Screen::Progress(screen) => back_to_title(screen.update(frame, &menu_pointers(frame))),
+            Screen::Badges(screen) => back_to_title(screen.update(frame, &menu_pointers(frame))),
+            Screen::Practice(practice) => self.update_practice(practice, frame, escape),
+            Screen::Game(game) => self.update_game(game, frame, escape),
+        }
+    }
+
+    fn update_title(&mut self, frame: &Frame, escape: bool) -> Step {
+        if escape && self.can_quit {
+            return Step {
+                next: None,
+                effects: vec![Effect::Quit],
+            };
+        }
+        match self.title.update(frame, &menu_pointers(frame)) {
+            TitleAction::Stay => Step::default(),
+            TitleAction::StartGame => {
+                // With only the first level to start from, there is
+                // nothing to choose.
+                let levels = LevelSelect::new(self.data.progress.best_level, self.touch_mode);
+                Step::go(if levels.len() > 1 {
+                    Screen::Levels(levels)
+                } else {
+                    Screen::Game(Box::new(self.new_game(1)))
+                })
+            }
+            TitleAction::Practice => Step::go_counting(
+                Screen::Practice(Box::new(PracticeScreen::new(
+                    self.data.progress.best_level,
+                    &self.data.memory,
+                    self.touch_mode,
+                    frame.now,
+                ))),
+                analytics::Event::Practice,
+            ),
+            TitleAction::Progress => {
+                Step::go_counting(Screen::Progress(ProgressScreen), analytics::Event::Progress)
+            }
+            TitleAction::Badges => {
+                Step::go_counting(Screen::Badges(Box::default()), analytics::Event::Badges)
+            }
+        }
+    }
+
+    fn update_levels(&mut self, levels: &mut LevelSelect, frame: &Frame) -> Step {
+        match levels.update(frame, &menu_pointers(frame)) {
+            LevelAction::Stay => Step::default(),
+            LevelAction::Back => Step::go(Screen::Title),
+            LevelAction::Start(level) => Step::go(Screen::Game(Box::new(self.new_game(level)))),
+        }
+    }
+
+    fn update_practice(
+        &mut self,
+        practice: &mut PracticeScreen,
+        frame: &Frame,
+        escape: bool,
+    ) -> Step {
+        let mut step = Step::default();
+        let (input, keys) = self.arena_input(frame, &mut step.effects);
+        // The pause button leaves practice.
+        let back = escape || input.buttons.contains(&Button::Pause);
+        let correct_before = practice.correct();
+        let action = practice.update(frame, &keys, input.arena_taps, back, &mut self.data.memory);
+        self.data
+            .count_practice_correct(practice.correct() - correct_before);
+        step.effects
+            .extend(practice.take_sfx().into_iter().map(Effect::Play));
+        let leaving = matches!(action, PracticeAction::Back);
+        step.effects
+            .extend(self.data.save_if_due(frame.now, leaving));
+        if leaving {
+            step.next = Some(Screen::Title);
+        }
+        step
+    }
+
+    fn update_game(&mut self, game: &mut Game, frame: &Frame, escape: bool) -> Step {
+        let mut step = Step::default();
+        let (input, keys) = self.arena_input(frame, &mut step.effects);
+        let was_over = game.is_over();
+        let outputs = game.update(
+            &game::Input {
+                dt: frame.dt,
+                now: frame.now,
+                away: frame.away,
+                keys,
+                arrows: frame.arrows(),
+                stick: input.movement,
+                pause: frame.pressed(KeyCode::Space) || input.buttons.contains(&Button::Pause),
+                confirm: frame.pressed(KeyCode::Enter),
+                taps: input.arena_taps,
+            },
+            &mut self.data.memory,
+        );
+        step.effects
+            .extend(outputs.sfx.into_iter().map(Effect::Play));
+        let mut save_now = escape;
+        for event in &outputs.events {
+            save_now |= self.data.record(event);
+            step.effects.extend(analytics_of(event).map(Effect::Count));
+        }
+        if !was_over && game.is_over() {
+            step.effects.push(Effect::Play(Sfx::GameOver));
+            save_now = true;
+        }
+        step.effects
+            .extend(self.data.save_if_due(frame.now, save_now));
+        if escape {
+            step.next = Some(Screen::Title);
+        }
+        step
+    }
+
+    /// What the touch controls did this frame (nothing without them) and
+    /// every key typed, on the keyboard or on screen. Pressing the sound
+    /// button switches it and saves.
+    fn arena_input(&mut self, frame: &Frame, effects: &mut Vec<Effect>) -> (TouchInput, Vec<Key>) {
+        let input = if self.touch_mode {
+            let view = View::fit(touch::content_rect(true), frame.screen);
+            self.controls.update(&frame.pointers(&view), frame.dt)
+        } else {
+            TouchInput::default()
+        };
+        if input.buttons.contains(&Button::Music) {
+            effects.push(self.data.toggle_music());
+        }
+        let mut keys = frame.typed.clone();
+        keys.extend(input.keys.iter().copied());
+        (input, keys)
+    }
+
     /// Gives the badges the player has just earned: a notice, a sound, a
     /// count for the statistics, and saving right away.
     fn award_badges(&mut self, frame: &Frame, effects: &mut Vec<Effect>) {
-        let memory = &self.memory;
-        let earned = badges::award(&mut self.progress, memory, save::day_of(frame.now));
+        let earned = self.data.award_badges(frame.now);
         if earned.is_empty() {
             return;
         }
         for badge in earned {
             self.toasts.push(badge);
             effects.push(Effect::Play(Sfx::Badge));
-            effects.push(Effect::count(
-                format!("merkki/{}", badge.id),
-                format!("Kunniamerkki: {}", badge.name),
-            ));
+            effects.push(Effect::Count(analytics::Event::BadgeEarned {
+                id: badge.id,
+                name: badge.name,
+            }));
         }
-        self.progress.set_memory(memory);
-        effects.push(Effect::Save(Box::new(self.progress.clone())));
-        self.last_save = frame.now;
+        effects.push(self.data.save(frame.now));
     }
 
     fn new_game(&self, level: u32) -> Game {
@@ -319,10 +319,11 @@ impl App {
 
     /// Draws the current screen.
     pub fn draw(&self) {
+        let (progress, memory) = (&self.data.progress, &self.data.memory);
         match &self.screen {
             Screen::Title => {
                 let view = view::begin(menu_rect());
-                self.title.draw(&self.progress, view, self.time as f32);
+                self.title.draw(progress, view, self.time as f32);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Levels(levels) => {
@@ -332,12 +333,12 @@ impl App {
             }
             Screen::Progress(screen) => {
                 let view = view::begin(menu_rect());
-                screen.draw(&self.progress, &self.memory, self.touch_mode);
+                screen.draw(progress, memory, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Badges(screen) => {
                 let view = view::begin(menu_rect());
-                screen.draw(&self.progress, &self.memory, self.touch_mode);
+                screen.draw(progress, memory, self.touch_mode);
                 view::mask_outside(view, menu_rect(), BLACK);
             }
             Screen::Practice(practice) => {
@@ -366,90 +367,17 @@ impl App {
     }
 }
 
-/// What the touch controls did this frame; nothing without them.
-fn touch_input(
-    controls: &mut TouchControls,
-    touch_mode: bool,
-    frame: &Frame,
-    view: &View,
-) -> TouchInput {
-    if touch_mode {
-        controls.update(&frame.pointers(view), frame.dt)
+/// The touches and clicks as a menu screen sees them.
+fn menu_pointers(frame: &Frame) -> Vec<touch::Pointer> {
+    frame.pointers(&View::fit(menu_rect(), frame.screen))
+}
+
+/// Leaves for the title screen if the screen said it is done.
+fn back_to_title(done: bool) -> Step {
+    if done {
+        Step::go(Screen::Title)
     } else {
-        TouchInput::default()
-    }
-}
-
-/// Switches the music on or off and remembers the choice.
-fn toggle_music(progress: &mut SaveData, memory: &Memory, effects: &mut Vec<Effect>) {
-    progress.music_on = !progress.music_on;
-    progress.set_memory(memory);
-    effects.push(Effect::Save(Box::new(progress.clone())));
-}
-
-/// Saves `progress` if `now` is `forced`, or it has been a while since the
-/// last time.
-fn save(
-    progress: &mut SaveData,
-    memory: &Memory,
-    last_save: &mut f64,
-    now: f64,
-    forced: bool,
-    effects: &mut Vec<Effect>,
-) {
-    if forced || now - *last_save > SAVE_INTERVAL {
-        progress.set_memory(memory);
-        effects.push(Effect::Save(Box::new(progress.clone())));
-        *last_save = now;
-    }
-}
-
-/// Counts and remembers what happened in the game. Returns whether it
-/// is worth saving right away.
-fn record_event(progress: &mut SaveData, event: GameEvent, effects: &mut Vec<Effect>) -> bool {
-    match event {
-        GameEvent::Started { level } => {
-            effects.push(Effect::count(
-                format!("peli-alkoi/taso-{level}"),
-                format!("Peli alkoi tasolta {level}"),
-            ));
-            false
-        }
-        GameEvent::Answered { quick, long, combo } => {
-            let stats = &mut progress.stats;
-            if quick {
-                Stats::bump(&mut stats.quick_answers);
-            }
-            if long {
-                Stats::bump(&mut stats.long_answers);
-            }
-            stats.best_combo = stats.best_combo.max(combo).min(badges::MAX_COUNT);
-            false
-        }
-        GameEvent::MonsterDefeated => {
-            Stats::bump(&mut progress.stats.monsters);
-            false
-        }
-        GameEvent::FlawlessLevel => {
-            Stats::bump(&mut progress.stats.flawless_levels);
-            false
-        }
-        GameEvent::Over { level } => {
-            effects.push(Effect::count(
-                format!("peli-paattyi/taso-{level}"),
-                format!("Peli päättyi tasolla {level}"),
-            ));
-            false
-        }
-        GameEvent::LevelCompleted { level, stars } => {
-            effects.push(Effect::count(
-                format!("taso-lapaisty/{level}"),
-                format!("Taso {level} läpäisty ({stars} tähteä)"),
-            ));
-            Stats::bump(&mut progress.stats.bosses);
-            progress.record_level(level, stars);
-            true
-        }
+        Step::default()
     }
 }
 

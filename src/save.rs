@@ -224,8 +224,8 @@ pub fn load() -> SaveData {
 
 /// Saves progress. Failing to save is not worth stopping the game for, so
 /// errors are only logged.
-pub fn store(data: &SaveData) {
-    write_text(&data.to_text());
+pub fn store(text: &str) {
+    write_text(text);
 }
 
 #[cfg(not(target_arch = "wasm32"))]

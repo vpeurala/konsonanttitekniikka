@@ -86,7 +86,7 @@ async fn main() {
     web::loaded();
     let mut progress = save::load();
     progress.record_play_day(save::day_of(miniquad::date::now()));
-    save::store(&progress);
+    save::store(&progress.to_text());
     let mut audio = audio;
 
     let mut app = App::new(
@@ -103,8 +103,8 @@ async fn main() {
         for effect in app.update(&inputs.read()) {
             match effect {
                 Effect::Play(sfx) => audio.play(sfx),
-                Effect::Save(data) => save::store(&data),
-                Effect::Count { path, title } => analytics::event(&path, &title),
+                Effect::Save(text) => save::store(&text),
+                Effect::Count(event) => analytics::send(&event),
                 Effect::Quit => quit = true,
             }
         }

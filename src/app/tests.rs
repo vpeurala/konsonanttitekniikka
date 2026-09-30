@@ -1,6 +1,9 @@
 //! Running the whole app frame by frame, with made-up input.
 
 use super::*;
+use crate::badges::Stats;
+use crate::game::GameEvent;
+use crate::memory::Memory;
 use macroquad::prelude::vec2;
 
 const START: f64 = 1_800_000_000.0;
@@ -54,11 +57,11 @@ fn idle(app: &mut App, from: f64, seconds: f32) -> Vec<Effect> {
     effects
 }
 
-fn counted(effects: &[Effect]) -> Vec<&str> {
+fn counted(effects: &[Effect]) -> Vec<String> {
     effects
         .iter()
         .filter_map(|e| match e {
-            Effect::Count { path, .. } => Some(path.as_str()),
+            Effect::Count(event) => Some(event.path()),
             _ => None,
         })
         .collect()
@@ -159,10 +162,7 @@ fn tab_switches_the_music_and_saves_the_choice() {
     let mut app = app();
     let effects = app.update(&press(KeyCode::Tab));
     assert!(!app.music_on());
-    let saved = effects.iter().find_map(|e| match e {
-        Effect::Save(data) => Some(data),
-        _ => None,
-    });
+    let saved = last_saved(&effects);
     assert_eq!(saved.map(|d| d.music_on), Some(false));
     app.update(&press(KeyCode::Tab));
     assert!(app.music_on());
@@ -199,25 +199,21 @@ fn a_game_is_saved_now_and_then_but_not_every_frame() {
 
 #[test]
 fn a_finished_level_is_counted_remembered_and_saved() {
-    let mut progress = SaveData::default();
-    let mut effects = Vec::new();
-    let worth_saving = record_event(
-        &mut progress,
-        GameEvent::LevelCompleted { level: 1, stars: 2 },
-        &mut effects,
+    let mut data = Persistence::new(SaveData::default(), START);
+    let event = GameEvent::LevelCompleted { level: 1, stars: 2 };
+    assert!(data.record(&event));
+    assert_eq!(
+        analytics_of(&event).map(|e| e.path()),
+        Some("taso-lapaisty/1".to_owned())
     );
-    assert!(worth_saving);
-    assert_eq!(counted(&effects), vec!["taso-lapaisty/1"]);
-    assert_eq!(progress.stars.get(&1), Some(&2));
-    assert!(progress.best_level >= 2);
+    assert_eq!(data.progress.stars.get(&1), Some(&2));
+    assert!(data.progress.best_level >= 2);
 }
 
 #[test]
 fn game_events_are_added_to_the_lifetime_stats() {
-    let mut progress = SaveData::default();
-    let mut effects = Vec::new();
     let answered = |quick, long, combo| GameEvent::Answered { quick, long, combo };
-    for event in [
+    let stats = [
         GameEvent::MonsterDefeated,
         GameEvent::MonsterDefeated,
         answered(true, false, 2),
@@ -225,11 +221,11 @@ fn game_events_are_added_to_the_lifetime_stats() {
         answered(false, false, 3),
         GameEvent::FlawlessLevel,
         GameEvent::LevelCompleted { level: 1, stars: 3 },
-    ] {
-        record_event(&mut progress, event, &mut effects);
-    }
+    ]
+    .iter()
+    .fold(Stats::default(), events::tally);
     assert_eq!(
-        progress.stats,
+        stats,
         Stats {
             monsters: 2,
             bosses: 1,
@@ -244,8 +240,6 @@ fn game_events_are_added_to_the_lifetime_stats() {
 
 #[test]
 fn answers_are_not_worth_a_save_by_themselves() {
-    let mut progress = SaveData::default();
-    let mut effects = Vec::new();
     for event in [
         GameEvent::MonsterDefeated,
         GameEvent::Answered {
@@ -254,15 +248,15 @@ fn answers_are_not_worth_a_save_by_themselves() {
             combo: 1,
         },
     ] {
-        assert!(!record_event(&mut progress, event, &mut effects));
+        assert!(!events::worth_saving(&event));
+        assert_eq!(analytics_of(&event), None);
     }
-    assert!(effects.is_empty());
 }
 
 #[test]
 fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
     let mut app = app();
-    app.progress.stats.monsters = 1;
+    app.data.progress.stats.monsters = 1;
     let effects = app.update(&frame());
     assert!(effects.contains(&Effect::Play(Sfx::Badge)));
     assert_eq!(counted(&effects), vec!["merkki/monsters-1"]);
@@ -283,7 +277,7 @@ fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
 #[test]
 fn several_badges_at_once_each_get_their_notice_in_turn() {
     let mut app = app();
-    app.progress.stats.monsters = 10;
+    app.data.progress.stats.monsters = 10;
     let effects = app.update(&frame());
     assert_eq!(
         counted(&effects),
@@ -297,17 +291,17 @@ fn several_badges_at_once_each_get_their_notice_in_turn() {
 fn the_sound_switch_silences_the_badge_sound_but_not_the_badge() {
     let mut app = app();
     app.update(&press(KeyCode::Tab));
-    app.progress.stats.monsters = 1;
+    app.data.progress.stats.monsters = 1;
     let effects = app.update(&frame());
     assert!(!effects.iter().any(|e| matches!(e, Effect::Play(_))));
-    assert!(app.progress.badges.contains_key("monsters-1"));
+    assert!(app.data.progress.badges.contains_key("monsters-1"));
     assert!(app.toasts.current().is_some());
 }
 
 #[test]
 fn badges_earned_before_they_existed_are_given_quietly() {
     let mut app = veteran(6);
-    assert!(app.progress.badges.contains_key("levels-5"));
+    assert!(app.data.progress.badges.contains_key("levels-5"));
     let effects = app.update(&frame());
     assert!(!effects.contains(&Effect::Play(Sfx::Badge)));
     assert!(app.toasts.current().is_none());
@@ -324,9 +318,9 @@ fn learning_pairs_earns_their_badge_at_once() {
             learned.record_answer(*pair, 1.0, false, START);
         }
     }
-    app.memory = learned;
+    app.data.memory = learned;
     let effects = app.update(&frame());
-    assert!(counted(&effects).contains(&"merkki/pairs-digits"));
+    assert!(counted(&effects).contains(&"merkki/pairs-digits".to_owned()));
 }
 
 #[test]
@@ -341,23 +335,20 @@ fn k_opens_the_badges_and_escape_comes_back() {
 
 #[test]
 fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
-    let mut progress = SaveData::default();
-    let mut effects = Vec::new();
-    assert!(!record_event(
-        &mut progress,
-        GameEvent::Started { level: 5 },
-        &mut effects
-    ));
-    assert!(!record_event(
-        &mut progress,
-        GameEvent::Over { level: 7 },
-        &mut effects
-    ));
+    let mut data = Persistence::new(SaveData::default(), START);
+    let started = GameEvent::Started { level: 5 };
+    let over = GameEvent::Over { level: 7 };
+    assert!(!data.record(&started));
+    assert!(!data.record(&over));
     assert_eq!(
-        counted(&effects),
+        [started, over]
+            .iter()
+            .filter_map(analytics_of)
+            .map(|e| e.path())
+            .collect::<Vec<_>>(),
         vec!["peli-alkoi/taso-5", "peli-paattyi/taso-7"]
     );
-    assert_eq!(progress, SaveData::default());
+    assert_eq!(data.progress, SaveData::default());
 }
 
 #[test]
@@ -404,9 +395,9 @@ fn the_same_frames_give_the_same_effects() {
     assert_eq!(run(), run());
 }
 
-fn last_saved(effects: &[Effect]) -> Option<&SaveData> {
+fn last_saved(effects: &[Effect]) -> Option<SaveData> {
     effects.iter().rev().find_map(|e| match e {
-        Effect::Save(data) => Some(&**data),
+        Effect::Save(text) => Some(SaveData::from_text(text)),
         _ => None,
     })
 }
@@ -439,8 +430,11 @@ fn the_progress_screen_shows_what_was_learned_without_saving_first() {
     let mut app = app();
     app.update(&press(KeyCode::H));
     app.update(&press(KeyCode::Space));
-    assert_eq!(app.memory.records().count(), 1, "kept live in the app");
-    assert!(app.progress.pairs.is_empty(), "not converted every frame");
+    assert_eq!(app.data.memory.records().count(), 1, "kept live in the app");
+    assert!(
+        app.data.progress.pairs.is_empty(),
+        "not converted every frame"
+    );
 }
 
 #[test]
