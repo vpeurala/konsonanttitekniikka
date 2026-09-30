@@ -11,7 +11,7 @@ use super::rules::{
 };
 use crate::arena::{ARENA_H, ARENA_W};
 use crate::long_numbers::Question;
-use crate::memory::{self, Memory};
+use crate::memory::{self, Happened, Lesson};
 
 pub const LABEL_FONT_SIZE: u16 = 22;
 pub(super) const LABEL_PAD: f32 = 6.0;
@@ -208,14 +208,24 @@ impl Enemy {
         &self.answer
     }
 
-    /// Records a right answer for each pair of the question, at time
-    /// `now`. A long number's time is shared out between its pairs.
-    pub fn record_answer(&self, memory: &mut Memory, now: f64) {
+    /// What there is to learn from a right answer at time `now`: one
+    /// lesson for each pair of the question. A long number's time is
+    /// shared out between its pairs.
+    pub fn answer_lessons(&self, now: f64) -> Vec<Lesson> {
         let pairs = self.question.pairs();
         let seconds = self.shown_for / pairs.len() as f32;
-        for &pair in pairs {
-            memory.record_answer(pair, seconds, self.shows_hint(), now);
-        }
+        let what = Happened::Answered {
+            seconds,
+            with_hint: self.shows_hint(),
+        };
+        pairs
+            .iter()
+            .map(|&pair| Lesson {
+                pair,
+                what,
+                at: now,
+            })
+            .collect()
     }
 
     /// Whether the answer, if given now, is a quick one: at once, without
@@ -225,11 +235,18 @@ impl Enemy {
         memory::is_quick(seconds, self.shows_hint())
     }
 
-    /// Records a miss for each pair of the question, at time `now`.
-    pub fn record_miss(&self, memory: &mut Memory, now: f64) {
-        for &pair in self.question.pairs() {
-            memory.record_miss(pair, now);
-        }
+    /// What there is to learn from a miss at time `now`: one lesson for
+    /// each pair of the question.
+    pub fn miss_lessons(&self, now: f64) -> Vec<Lesson> {
+        self.question
+            .pairs()
+            .iter()
+            .map(|&pair| Lesson {
+                pair,
+                what: Happened::Missed,
+                at: now,
+            })
+            .collect()
     }
 }
 

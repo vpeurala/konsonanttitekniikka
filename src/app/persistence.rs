@@ -6,6 +6,7 @@ use super::Effect;
 use super::events::{tally, worth_saving};
 use crate::badges::{self, Badge, Stats};
 use crate::game::GameEvent;
+use crate::memory::Lesson;
 use crate::platform::save::day_of;
 use crate::progress::Progress;
 
@@ -63,6 +64,14 @@ impl Persistence {
             self.progress.record_level(level, stars);
         }
         worth_saving(event)
+    }
+
+    /// Learns what the game or practice reported into the memory of the
+    /// pairs.
+    pub fn learn(&mut self, lessons: &[Lesson]) {
+        for lesson in lessons {
+            self.progress.memory.learn(lesson);
+        }
     }
 
     /// Counts `n` more flash cards answered right.

@@ -12,17 +12,17 @@ use super::rules::{
 use super::spawn::SpawnContext;
 use super::stage::Stage;
 use super::world::{ContactKind, Hit, HitOutcome, ImpactTarget, SpellEvent};
-use super::{Game, GameEvent, Outputs};
+use super::{Game, GameEvent, Known, Outputs};
 use crate::key::Key;
 use crate::long_numbers::{self, Question};
-use crate::memory::Memory;
+use crate::memory::{Lesson, Memory};
 use crate::pairs;
 use crate::sfx::Sfx;
 
 impl Game {
     /// A key typed: Backspace starts over by emptying both slots, an
     /// answer character goes to its slot.
-    pub(super) fn handle_key(&mut self, key: Key, now: f64, memory: &mut Memory) -> Outputs {
+    pub(super) fn handle_key(&mut self, key: Key, now: f64, memory: &mut Known) -> Outputs {
         match key {
             Key::Backspace => {
                 self.typed.clear();
@@ -63,7 +63,7 @@ impl Game {
 
     /// A dead-end slot is only shown in red at first. Typing past it costs
     /// energy, which leaves room to fix a typo with backspace.
-    fn type_into(&mut self, slot: Slot, c: char, now: f64, memory: &mut Memory) -> Outputs {
+    fn type_into(&mut self, slot: Slot, c: char, now: f64, memory: &mut Known) -> Outputs {
         let mut out = Outputs::default();
         if self.is_dead_end(slot) {
             self.mistake();
@@ -105,11 +105,19 @@ impl Game {
         out
     }
 
+    /// Learns `lessons` into `memory`, and reports them in `out`.
+    fn learn(lessons: Vec<Lesson>, memory: &mut Known, out: &mut Outputs) {
+        for lesson in &lessons {
+            memory.to_mut().learn(lesson);
+        }
+        out.lessons.extend(lessons);
+    }
+
     /// What a right answer means for her: she learns the pair, the combo
     /// grows, and a spell is cast.
-    pub(super) fn learn_from(&mut self, hit: &Hit, now: f64, memory: &mut Memory) -> Outputs {
+    pub(super) fn learn_from(&mut self, hit: &Hit, now: f64, memory: &mut Known) -> Outputs {
         let mut out = Outputs::default();
-        hit.answered.record_answer(memory, now);
+        Self::learn(hit.answered.answer_lessons(now), memory, &mut out);
         self.vitals = self.vitals.answered();
         out.events.push(GameEvent::Answered {
             quick: hit.answered.is_quick(),
@@ -217,7 +225,7 @@ impl Game {
     }
 
     /// Moves the monsters on and deals with those that reach her.
-    pub(super) fn move_enemies(&mut self, dt: f32, now: f64, memory: &mut Memory) -> Outputs {
+    pub(super) fn move_enemies(&mut self, dt: f32, now: f64, memory: &mut Known) -> Outputs {
         let mut out = Outputs::default();
         let contacts = self
             .world
@@ -225,7 +233,7 @@ impl Game {
         let hurt = !contacts.is_empty();
         for contact in contacts {
             let enemy = contact.enemy;
-            enemy.record_miss(memory, now);
+            Self::learn(enemy.miss_lessons(now), memory, &mut out);
             self.vitals = self.vitals.hurt();
             match contact.kind {
                 ContactKind::Boss { at } => {

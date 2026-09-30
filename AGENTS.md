@@ -108,8 +108,9 @@ so it can be tested without a screen; do the same for new layouts.
 - `app.rs`: which screen is showing (title, level choice, game, practice,
   progress) and the `Effect`s; each screen has its own method returning a
   `Step` (where to go next, what to do outside). `app/persistence.rs` holds
-  the save data and the one live `Memory`, which the game and practice learn
-  into (it is passed to `Game::update`, never copied), and `app/events.rs` says
+  the live `Progress` (its `Memory` included). The game and practice only
+  read the memory and report what she learned as `Lesson`s (`Outputs::lessons`),
+  which `App` learns into it; `app/events.rs` says
   what game events mean for the counters and the statistics. `Effect::Save`
   carries the save file's text; `analytics::Event` is what gets counted, and
   the Finnish paths and titles are made there.
@@ -118,7 +119,7 @@ so it can be tested without a screen; do the same for new layouts.
 - `core/src/game/`: the game itself. Monsters show a number or a word; typed digits
   go to the number slot and letters to the word slot, each answering the
   monsters showing the other kind. Backspace empties both slots.
-  `Game::update(&Input, &mut Memory) -> Outputs` is the only way in; `Outputs`
+  `Game::update(&Input, &Memory) -> Outputs` is the only way in; `Outputs`
   carry sound effects and `GameEvent`s (started, level completed, game over)
   for saving and analytics, and every step inside returns the `Outputs` it
   caused instead of writing to a hidden buffer. The game advances in fixed

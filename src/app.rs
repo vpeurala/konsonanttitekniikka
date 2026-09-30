@@ -232,8 +232,9 @@ impl App {
             &keys,
             input.arena_taps,
             back,
-            &mut self.data.progress.memory,
+            &self.data.progress.memory,
         );
+        self.data.learn(&outcome.lessons);
         self.data.count_practice_correct(outcome.answered_right);
         step.effects
             .extend(outcome.sfx.into_iter().map(Effect::Play));
@@ -262,8 +263,9 @@ impl App {
                 confirm: frame.pressed(KeyCode::Enter),
                 taps: input.arena_taps,
             },
-            &mut self.data.progress.memory,
+            &self.data.progress.memory,
         );
+        self.data.learn(&outputs.lessons);
         step.effects
             .extend(outputs.sfx.into_iter().map(Effect::Play));
         let mut save_now = escape;

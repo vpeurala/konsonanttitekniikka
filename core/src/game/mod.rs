@@ -20,11 +20,13 @@ mod stage;
 mod vitals;
 mod world;
 
+use std::borrow::Cow;
+
 use glam::Vec2;
 
 use crate::curriculum::Curriculum;
 use crate::key::Key;
-use crate::memory::Memory;
+use crate::memory::{Lesson, Memory};
 use crate::rng::{Rng, Stream};
 use crate::sfx::Sfx;
 
@@ -73,12 +75,16 @@ pub struct Outputs {
     pub sfx: Vec<Sfx>,
     /// Things to save or count.
     pub events: Vec<GameEvent>,
+    /// What she answered right or missed, for the caller to learn into
+    /// its memory.
+    pub lessons: Vec<Lesson>,
 }
 
 impl Outputs {
     fn extend(&mut self, later: Outputs) {
         self.sfx.extend(later.sfx);
         self.events.extend(later.events);
+        self.lessons.extend(later.lessons);
     }
 }
 
@@ -100,6 +106,9 @@ pub enum GameEvent {
     /// no wrong key and no hit.
     FlawlessLevel,
 }
+
+/// The memory the game reads, copied only once something is learned in it.
+type Known<'a> = Cow<'a, Memory>;
 
 /// What was typed or tapped since the game last advanced. A frame can be
 /// shorter than a step, so these wait for the step that acts on them.
@@ -216,9 +225,12 @@ impl Game {
     }
 
     /// Plays one frame and returns what the outside world should do about
-    /// it. What she answers right or wrong is learned into `memory`, which
-    /// the game also reads to choose what comes next; the caller owns it.
-    pub fn update(&mut self, input: &Input, memory: &mut Memory) -> Outputs {
+    /// it. The game reads `memory` to choose what comes next and reports
+    /// what she learns as `Outputs::lessons`, which the caller, who owns
+    /// the memory, learns from. Within the frame the game goes on as if it
+    /// had, so what comes next depends on what she just answered.
+    pub fn update(&mut self, input: &Input, memory: &Memory) -> Outputs {
+        let mut known = Known::Borrowed(memory);
         let mut out = self.report_start();
         // Coming back after being away finds the game paused, not lost.
         if input.away {
@@ -241,7 +253,7 @@ impl Game {
             for step in 0..steps {
                 // What was typed is acted on in the first step only.
                 let acts = (step == 0).then(|| std::mem::take(&mut self.pending));
-                out.extend(self.advance(STEP_SECONDS, input, acts, memory));
+                out.extend(self.advance(STEP_SECONDS, input, acts, &mut known));
             }
         }
         out
@@ -254,7 +266,7 @@ impl Game {
         dt: f32,
         input: &Input,
         acts: Option<Pending>,
-        memory: &mut Memory,
+        memory: &mut Known,
     ) -> Outputs {
         let mut out = Outputs::default();
         self.play_time += f64::from(dt);

@@ -79,6 +79,25 @@ pub struct PairRecord {
     pub streak: u32,
 }
 
+/// Something that happened to a pair, for memory to learn from. The game
+/// and practice report these instead of writing to memory themselves.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Lesson {
+    pub pair: Pair,
+    pub what: Happened,
+    /// When, in seconds since 1970.
+    pub at: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Happened {
+    /// The pair was answered `seconds` after it appeared.
+    Answered { seconds: f32, with_hint: bool },
+    /// The pair's monster reached the player unanswered, or the answer was
+    /// given up on or wrong.
+    Missed,
+}
+
 /// Each pair's record, kept across games and, through saving, across
 /// launches of the app.
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -104,6 +123,16 @@ impl Memory {
         self.records
             .iter()
             .map(|(id, r)| (pairs::get(*id).number, r))
+    }
+
+    /// Learns from what happened.
+    pub fn learn(&mut self, lesson: &Lesson) {
+        match lesson.what {
+            Happened::Answered { seconds, with_hint } => {
+                self.record_answer(lesson.pair, seconds, with_hint, lesson.at);
+            }
+            Happened::Missed => self.record_miss(lesson.pair, lesson.at),
+        }
     }
 
     /// Records that `pair` was answered `seconds` after it appeared, at

@@ -5,6 +5,7 @@ use super::rules::*;
 use super::*;
 use crate::arena::ARENA_W;
 use crate::long_numbers::{self, Question};
+use crate::memory::Happened;
 use crate::pairs::PAIRS;
 use enemy::EnemyId;
 use glam::vec2;
@@ -22,7 +23,16 @@ struct Rig {
 
 impl Rig {
     fn update(&mut self, input: &Input) -> Outputs {
-        self.game.update(input, &mut self.memory)
+        let out = self.game.update(input, &self.memory);
+        self.learn(&out);
+        out
+    }
+
+    /// Learns what the caller is told to, as `App` does.
+    fn learn(&mut self, out: &Outputs) {
+        for lesson in &out.lessons {
+            self.memory.learn(lesson);
+        }
     }
 
     fn memory(&self) -> &Memory {
@@ -34,7 +44,11 @@ impl Rig {
         let Some(hit) = self.game.world.hit(id, player) else {
             return Outputs::default();
         };
-        self.game.learn_from(&hit, START, &mut self.memory)
+        let out = self
+            .game
+            .learn_from(&hit, START, &mut Known::Borrowed(&self.memory));
+        self.learn(&out);
+        out
     }
 
     fn add_points(&mut self, points: u32) -> Outputs {
@@ -172,6 +186,19 @@ fn typing_a_monsters_answer_casts_a_spell_and_scores() {
     // The spell explodes it a moment later.
     assert!(idle(&mut game, 1.0).sfx.contains(&Sfx::Explode));
     assert!(game.world.spells().is_empty());
+}
+
+#[test]
+fn the_game_reports_what_she_learns_and_leaves_the_memory_to_the_caller() {
+    let mut game = game();
+    with_monster(&mut game);
+    let pair = game.world.enemies()[0].question.first();
+    let answer = game.world.enemies()[0].answer().to_owned();
+    let out = game.game.update(&typing(&answer), &game.memory);
+    assert!(game.memory.record(&pair).is_none(), "not written to");
+    assert_eq!(out.lessons.len(), 1);
+    assert_eq!(out.lessons[0].pair, pair);
+    assert!(matches!(out.lessons[0].what, Happened::Answered { .. }));
 }
 
 #[test]
