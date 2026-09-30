@@ -48,7 +48,7 @@ jobs:
     - name: Measure coverage
       run: >
         cargo llvm-cov --lcov --output-path lcov.info
-        --ignore-filename-regex 'src/main\.rs|src/gfx/(fonts|icon|pictures|sprites|badge_art|game_render)\.rs|src/booklet/images\.rs'
+        --ignore-filename-regex 'src/main\.rs|src/app_render\.rs|src/screens/|src/gfx/(fonts|icon|pictures|sprites|badge_art|game_render|touch_render)\.rs|src/booklet/images\.rs'
     - name: Upload to Codecov
       uses: codecov/codecov-action@v7
       with:
