@@ -315,7 +315,7 @@ fn badges_earned_before_they_existed_are_given_quietly() {
 }
 
 #[test]
-fn learning_pairs_in_a_game_earns_their_badge_before_the_memory_is_copied() {
+fn learning_pairs_earns_their_badge_at_once() {
     let mut app = app();
     app.update(&press(KeyCode::Enter));
     let mut learned = Memory::default();
@@ -324,10 +324,7 @@ fn learning_pairs_in_a_game_earns_their_badge_before_the_memory_is_copied() {
             learned.record_answer(*pair, 1.0, false, START);
         }
     }
-    let Screen::Game(game) = &mut app.screen else {
-        panic!("a game should be showing");
-    };
-    **game = Game::new(false, learned, 1);
+    app.memory = learned;
     let effects = app.update(&frame());
     assert!(counted(&effects).contains(&"merkki/pairs-digits"));
 }
@@ -435,19 +432,6 @@ fn what_a_game_teaches_is_saved_when_leaving() {
     let saved = last_saved(&effects).expect("leaving a game saves");
     assert!(!saved.pairs.is_empty(), "the misses are in the save");
     assert!(on_title(&app));
-}
-
-#[test]
-fn a_new_game_starts_from_what_practice_taught() {
-    let mut app = app();
-    app.update(&press(KeyCode::H));
-    app.update(&press(KeyCode::Space));
-    app.update(&press(KeyCode::Escape));
-    app.update(&press(KeyCode::Enter));
-    let Screen::Game(game) = &app.screen else {
-        panic!("a game should be showing");
-    };
-    assert_eq!(game.memory().records().count(), 1);
 }
 
 #[test]

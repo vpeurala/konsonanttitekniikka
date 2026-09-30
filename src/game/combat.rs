@@ -1,5 +1,6 @@
 //! Spells, collisions and the movement of monsters.
 
+use crate::memory::Memory;
 use macroquad::prelude::{Vec2, YELLOW};
 
 use super::enemy::{Enemy, EnemyId};
@@ -39,11 +40,11 @@ impl Game {
     /// Casts a spell at the enemy at `index`. Ordinary enemies and a boss
     /// on its last life leave play at once; a boss with lives left moves on
     /// to its next pair.
-    pub(super) fn hit_enemy(&mut self, id: EnemyId) {
+    pub(super) fn hit_enemy(&mut self, id: EnemyId, memory: &mut Memory) {
         let Some(index) = self.enemies.iter().position(|e| e.id == id) else {
             return;
         };
-        self.enemies[index].record_answer(&mut self.memory, self.now);
+        self.enemies[index].record_answer(memory, self.now);
         self.combo += 1;
         self.out.events.push(GameEvent::Answered {
             quick: self.enemies[index].is_quick(),
@@ -141,7 +142,7 @@ impl Game {
         }
     }
 
-    pub(super) fn move_enemies(&mut self, dt: f32) {
+    pub(super) fn move_enemies(&mut self, dt: f32, memory: &mut Memory) {
         let player = self.player;
         for enemy in &mut self.enemies {
             let speed = enemy.speed();
@@ -182,7 +183,7 @@ impl Game {
                 continue;
             }
             lives.harmless_for = BOSS_HARMLESS_SECONDS;
-            boss.record_miss(&mut self.memory, self.now);
+            boss.record_miss(memory, self.now);
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.out.sfx.push(Sfx::Hurt);
@@ -202,7 +203,7 @@ impl Game {
             .partition(|e| !e.is_boss() && touches(e));
         self.enemies = remaining;
         for enemy in &collided {
-            enemy.record_miss(&mut self.memory, self.now);
+            enemy.record_miss(memory, self.now);
             hurt = true;
             self.energy -= COLLISION_PENALTY;
             self.out.sfx.extend([Sfx::Explode, Sfx::Hurt]);

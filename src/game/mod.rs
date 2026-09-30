@@ -173,8 +173,6 @@ pub struct Game {
     paused: bool,
     /// Whether she plays with touch controls, which changes some texts.
     touch: bool,
-    /// How well she knows each pair; kept across games.
-    memory: Memory,
     /// The level the game started from, where it starts again after a
     /// game over.
     start_level: u32,
@@ -190,9 +188,8 @@ pub struct Game {
 }
 
 impl Game {
-    /// A new game starting from `start_level`, knowing what `memory` says
-    /// about each pair.
-    pub fn new(touch: bool, memory: Memory, start_level: u32) -> Self {
+    /// A new game starting from `start_level`.
+    pub fn new(touch: bool, start_level: u32) -> Self {
         let mut game = Game {
             player: vec2(ARENA_W / 2.0, ARENA_H / 2.0),
             player_moving: false,
@@ -215,7 +212,6 @@ impl Game {
             obstacles: Vec::new(),
             paused: false,
             touch,
-            memory,
             start_level: 1,
             now: 0.0,
             timestep: Timestep::default(),
@@ -253,16 +249,10 @@ impl Game {
     /// Starts over from the level this game started from. What she has
     /// learned carries over to the new game.
     fn restart(&mut self) {
-        let memory = std::mem::take(&mut self.memory);
         let mut out = std::mem::take(&mut self.out);
-        *self = Game::new(self.touch, memory, self.start_level);
+        *self = Game::new(self.touch, self.start_level);
         out.extend(std::mem::take(&mut self.out));
         self.out = out;
-    }
-
-    /// What the game knows about each pair, for saving.
-    pub fn memory(&self) -> &Memory {
-        &self.memory
     }
 
     pub fn is_paused(&self) -> bool {
@@ -281,8 +271,9 @@ impl Game {
     }
 
     /// Plays one frame and returns what the outside world should do about
-    /// it.
-    pub fn update(&mut self, input: &Input) -> Outputs {
+    /// it. What she answers right or wrong is learned into `memory`, which
+    /// the game also reads to choose what comes next; the caller owns it.
+    pub fn update(&mut self, input: &Input, memory: &mut Memory) -> Outputs {
         self.now = input.now;
         // Coming back after being away finds the game paused, not lost.
         if input.away {
@@ -305,7 +296,7 @@ impl Game {
             for step in 0..steps {
                 // What was typed is acted on in the first step only.
                 let acts = (step == 0).then(|| std::mem::take(&mut self.pending));
-                self.advance(STEP_SECONDS, input, acts);
+                self.advance(STEP_SECONDS, input, acts, memory);
             }
         }
         std::mem::take(&mut self.out)
@@ -313,7 +304,7 @@ impl Game {
 
     /// Advances the game by `dt` seconds, acting on what was typed or
     /// tapped (`acts`) if there is anything new.
-    fn advance(&mut self, dt: f32, input: &Input, acts: Option<Pending>) {
+    fn advance(&mut self, dt: f32, input: &Input, acts: Option<Pending>, memory: &mut Memory) {
         self.play_time += f64::from(dt);
         self.display.update_motion(dt);
         self.update_spells(dt);
@@ -330,9 +321,9 @@ impl Game {
 
         self.move_player(dt, input.arrows, input.stick);
         for key in acts.into_iter().flat_map(|a| a.keys) {
-            self.handle_key(key);
+            self.handle_key(key, memory);
         }
-        self.move_enemies(dt);
+        self.move_enemies(dt, memory);
         if self.is_over() {
             self.out.events.push(GameEvent::Over { level: self.level });
         }
@@ -342,7 +333,7 @@ impl Game {
             self.spawn_timer -= dt;
             if self.spawn_timer <= 0.0 {
                 self.spawn_timer = spawn_interval(self.stage.time);
-                self.spawn_enemy();
+                self.spawn_enemy(memory);
             }
         }
     }
@@ -365,11 +356,11 @@ impl Game {
         self.player = push_out(self.player, PLAYER_RADIUS, &self.obstacles);
     }
 
-    fn handle_key(&mut self, key: Key) {
+    fn handle_key(&mut self, key: Key, memory: &mut Memory) {
         match key {
             // Backspace starts over: it empties both slots.
             Key::Backspace => self.clear_typed(),
-            Key::Char(c) if pairs::is_answer_char(c) => self.type_into(Slot::of_char(c), c),
+            Key::Char(c) if pairs::is_answer_char(c) => self.type_into(Slot::of_char(c), c, memory),
             Key::Char(_) => {}
         }
     }
@@ -415,7 +406,7 @@ impl Game {
 
     /// A dead-end slot is only shown in red at first. Typing past it costs
     /// energy, which leaves room to fix a typo with backspace.
-    fn type_into(&mut self, slot: Slot, c: char) {
+    fn type_into(&mut self, slot: Slot, c: char, memory: &mut Memory) {
         if self.is_dead_end(slot) {
             self.mistake();
             self.energy = after_wrong_key(self.energy);
@@ -442,12 +433,12 @@ impl Game {
                 .map(|e| e.question.clone())
                 .expect("a hit enemy is in the game");
             for id in ids {
-                self.hit_enemy(id);
+                self.hit_enemy(id, memory);
             }
             self.energy = (self.energy + HIT_REWARD * hits.len() as f32).min(MAX_ENERGY);
             self.show_question(&first, GREEN);
             self.typed.get_mut(slot).clear();
-            self.add_points(hits.len() as u32);
+            self.add_points(hits.len() as u32, memory);
         }
     }
 
@@ -465,7 +456,7 @@ impl Game {
         *count - 1
     }
 
-    fn add_points(&mut self, points: u32) {
+    fn add_points(&mut self, points: u32, memory: &Memory) {
         self.score += points;
         if self.stage.boss_fight {
             return;
@@ -473,7 +464,7 @@ impl Game {
         self.stage.points += points;
         if self.stage.points >= points_to_clear(self.level) {
             self.stage.points = points_to_clear(self.level);
-            self.summon_boss();
+            self.summon_boss(memory);
         }
     }
 

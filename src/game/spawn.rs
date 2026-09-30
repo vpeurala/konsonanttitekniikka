@@ -1,5 +1,6 @@
 //! Bringing monsters and bosses into the arena.
 
+use crate::memory::Memory;
 use macroquad::prelude::{VIOLET, Vec2, vec2};
 
 use super::Game;
@@ -31,7 +32,7 @@ impl Game {
 
     /// Spawns an enemy just outside a screen edge, away from the player and
     /// the other enemies, never repeating a pair that is already on screen.
-    pub(super) fn spawn_enemy(&mut self) {
+    pub(super) fn spawn_enemy(&mut self, memory: &Memory) {
         if self.enemies.len() >= MAX_ENEMIES {
             return;
         }
@@ -51,9 +52,7 @@ impl Game {
         };
         // Pairs she knows less well come up more often.
         let now = self.now;
-        let pair = pool[self
-            .rng
-            .weighted_index(pool, |p| self.memory.weight(p, now))];
+        let pair = pool[self.rng.weighted_index(pool, |p| memory.weight(p, now))];
         let question = Question::single(pair);
         let earlier = self.count_appearance(&question);
         let shows_word = self.rng.chance(0.5);
@@ -112,7 +111,7 @@ impl Game {
         best.0
     }
 
-    pub(super) fn summon_boss(&mut self) {
+    pub(super) fn summon_boss(&mut self, memory: &Memory) {
         let mut available = self.available_pairs();
         let count = boss_hits(self.level).min(available.len());
         if count == 0 {
@@ -125,14 +124,13 @@ impl Game {
         for _ in long..count {
             let i = self
                 .rng
-                .weighted_index(&available, |p| self.memory.weight(p, now));
+                .weighted_index(&available, |p| memory.weight(p, now));
             numbers.push(Question::single(available.swap_remove(i)));
         }
         // The long numbers come last. At first they are made of the pairs
         // she knows best, later of the ones due for practice.
         let unlocked = self.curriculum.unlocked().to_vec();
         for _ in 0..long {
-            let memory = &self.memory;
             let question = if easy {
                 long_numbers::random_long_number(self.level, &unlocked, &mut self.rng, |p| {
                     (1.0 - memory.difficulty(p)).powi(3) + 0.01

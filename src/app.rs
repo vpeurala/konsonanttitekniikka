@@ -182,11 +182,7 @@ impl App {
                     LevelAction::Stay => {}
                     LevelAction::Back => next = Some(Screen::Title),
                     LevelAction::Start(level) => {
-                        next = Some(Screen::Game(Box::new(Game::new(
-                            self.touch_mode,
-                            self.memory.clone(),
-                            level,
-                        ))));
+                        next = Some(Screen::Game(Box::new(self.new_game(level))));
                     }
                 }
             }
@@ -247,17 +243,21 @@ impl App {
                 let mut keys = frame.typed.clone();
                 keys.extend(input.keys.iter().copied());
                 let was_over = game.is_over();
-                let outputs = game.update(&game::Input {
-                    dt: frame.dt,
-                    now: frame.now,
-                    away: frame.away,
-                    keys,
-                    arrows: frame.arrows(),
-                    stick: input.movement,
-                    pause: frame.pressed(KeyCode::Space) || input.buttons.contains(&Button::Pause),
-                    confirm: frame.pressed(KeyCode::Enter),
-                    taps: input.arena_taps,
-                });
+                let outputs = game.update(
+                    &game::Input {
+                        dt: frame.dt,
+                        now: frame.now,
+                        away: frame.away,
+                        keys,
+                        arrows: frame.arrows(),
+                        stick: input.movement,
+                        pause: frame.pressed(KeyCode::Space)
+                            || input.buttons.contains(&Button::Pause),
+                        confirm: frame.pressed(KeyCode::Enter),
+                        taps: input.arena_taps,
+                    },
+                    &mut self.memory,
+                );
                 effects.extend(outputs.sfx.into_iter().map(Effect::Play));
                 let mut save_now = escape;
                 for event in outputs.events {
@@ -266,10 +266,6 @@ impl App {
                 if !was_over && game.is_over() {
                     effects.push(Effect::Play(Sfx::GameOver));
                     save_now = true;
-                }
-                if save_now || frame.now - self.last_save > SAVE_INTERVAL {
-                    // The game has been learning; take what it knows.
-                    self.memory = game.memory().clone();
                 }
                 save(
                     &mut self.progress,
@@ -299,11 +295,7 @@ impl App {
     /// Gives the badges the player has just earned: a notice, a sound, a
     /// count for the statistics, and saving right away.
     fn award_badges(&mut self, frame: &Frame, effects: &mut Vec<Effect>) {
-        // A game keeps the newest memory until it is copied here.
-        let memory = match &self.screen {
-            Screen::Game(game) => game.memory(),
-            _ => &self.memory,
-        };
+        let memory = &self.memory;
         let earned = badges::award(&mut self.progress, memory, save::day_of(frame.now));
         if earned.is_empty() {
             return;
@@ -322,7 +314,7 @@ impl App {
     }
 
     fn new_game(&self, level: u32) -> Game {
-        Game::new(self.touch_mode, self.memory.clone(), level)
+        Game::new(self.touch_mode, level)
     }
 
     /// Draws the current screen.

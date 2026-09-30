@@ -8,11 +8,52 @@ use crate::pairs::PAIRS;
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
 
-fn game_from(level: u32) -> Game {
-    Game::new(false, Memory::default(), level)
+/// A game together with the memory the caller keeps for it, as `App`
+/// does. It reads through to the game, so tests look at its fields.
+struct Rig {
+    game: Game,
+    memory: Memory,
 }
 
-fn game() -> Game {
+impl Rig {
+    fn update(&mut self, input: &Input) -> Outputs {
+        self.game.update(input, &mut self.memory)
+    }
+
+    fn memory(&self) -> &Memory {
+        &self.memory
+    }
+
+    fn hit_enemy(&mut self, id: EnemyId) {
+        self.game.hit_enemy(id, &mut self.memory);
+    }
+
+    fn add_points(&mut self, points: u32) {
+        self.game.add_points(points, &self.memory);
+    }
+}
+
+impl std::ops::Deref for Rig {
+    type Target = Game;
+    fn deref(&self) -> &Game {
+        &self.game
+    }
+}
+
+impl std::ops::DerefMut for Rig {
+    fn deref_mut(&mut self) -> &mut Game {
+        &mut self.game
+    }
+}
+
+fn game_from(level: u32) -> Rig {
+    Rig {
+        game: Game::new(false, level),
+        memory: Memory::default(),
+    }
+}
+
+fn game() -> Rig {
     game_from(1)
 }
 
@@ -51,7 +92,7 @@ impl Log {
 }
 
 /// Plays `seconds` of frames with `input` held, returning what happened.
-fn play(game: &mut Game, seconds: f32, input: &Input) -> Log {
+fn play(game: &mut Rig, seconds: f32, input: &Input) -> Log {
     let mut log = Log::default();
     for _ in 0..(seconds / FRAME).round() as usize {
         log.add(game.update(input));
@@ -59,20 +100,20 @@ fn play(game: &mut Game, seconds: f32, input: &Input) -> Log {
     log
 }
 
-fn idle(game: &mut Game, seconds: f32) -> Log {
+fn idle(game: &mut Rig, seconds: f32) -> Log {
     play(game, seconds, &frame())
 }
 
 /// A game with one monster showing `pair` right on top of the player, so
 /// it hurts her on the next frame.
-fn with_collision(game: &mut Game) {
+fn with_collision(game: &mut Rig) {
     let mut enemy = Enemy::new(Question::single(PAIRS[0]), false, 0, 0.0);
     enemy.pos = game.player;
     game.admit(enemy);
 }
 
 /// A game with one monster far from the player.
-fn with_monster(game: &mut Game) {
+fn with_monster(game: &mut Rig) {
     let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), false, 0, 0.0);
     enemy.pos = vec2(50.0, 50.0);
     game.admit(enemy);
@@ -383,7 +424,7 @@ fn beating_the_boss_completes_the_level() {
 }
 
 /// Every answer of a boss fight, typed one after another.
-fn beat_the_boss(game: &mut Game, level: u32) -> Log {
+fn beat_the_boss(game: &mut Rig, level: u32) -> Log {
     game.add_points(points_to_clear(level));
     let mut log = Log::default();
     for _ in 0..boss_hits(level) {
@@ -737,7 +778,7 @@ fn enemies_keep_their_ids_when_others_leave() {
 /// Plays like a perfect typist who never moves: each frame, types the
 /// answer to the first monster on screen. Stops after `max_seconds` or
 /// once `done` says so; returns everything that happened.
-fn autoplay(game: &mut Game, max_seconds: f32, done: impl Fn(&Game) -> bool) -> Log {
+fn autoplay(game: &mut Rig, max_seconds: f32, done: impl Fn(&Game) -> bool) -> Log {
     let mut log = Log::default();
     for _ in 0..(max_seconds / FRAME) as usize {
         let input = match game.enemies.first() {
@@ -812,7 +853,7 @@ fn a_typist_who_never_types_loses_on_the_first_level() {
 }
 
 /// Plays `seconds` at `fps` frames per second, moving right all the time.
-fn play_at(fps: f32, seconds: f32) -> Game {
+fn play_at(fps: f32, seconds: f32) -> Rig {
     let mut game = game();
     for _ in 0..(seconds * fps).round() as usize {
         game.update(&Input {
