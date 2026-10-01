@@ -8,8 +8,9 @@ use glam::{Vec2, vec2};
 use super::answer::Slot;
 use super::metrics::text_width;
 use super::rules::{
-    BOSS_RADIUS, BOSS_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED, SPEED_GROWTH, enemy_speed,
-    shows_hint,
+    BOSS_ENERGY_PER_HIT, BOSS_POINTS_PER_HIT, BOSS_RADIUS, BOSS_SPEED_FACTOR, CYCLOPS_ENERGY,
+    CYCLOPS_GROWTH_FACTOR, CYCLOPS_POINTS, CYCLOPS_START_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED,
+    SPEED_GROWTH, STAR_ENERGY, STAR_POINTS, START_SPEED, enemy_speed, shows_hint, speed_growth,
 };
 use crate::arena::{ARENA_H, ARENA_W};
 use crate::long_numbers::Question;
@@ -23,6 +24,24 @@ pub const LABEL_HEIGHT: f32 = LABEL_FONT_SIZE as f32 + 2.0;
 pub const HINT_FONT_SIZE: u16 = 20;
 /// Extra room below the label for a hint.
 pub const HINT_SPACE: f32 = 28.0;
+
+/// The kinds of enemy, from the easiest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// One eye, shows a word, answered with its number.
+    Cyclops,
+    /// Star-like, shows a number, answered with its word.
+    Star,
+    Boss,
+}
+
+/// What answering an enemy gives her.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Worth {
+    pub points: u32,
+    /// Percent of full energy.
+    pub energy: f32,
+}
 
 /// A boss's extra lives: the numbers it shows after its current one.
 #[derive(Clone)]
@@ -66,6 +85,8 @@ pub struct Enemy {
     pub age: f32,
     /// Speed gained per second on screen, which the level sets.
     pub speed_growth: f32,
+    /// How fast it is when it appears.
+    pub start_speed: f32,
     /// Seconds the current pair has been shown; sets the hint.
     pub shown_for: f32,
     /// Offsets the animation so enemies don't move in sync.
@@ -91,6 +112,7 @@ impl Enemy {
             difficulty: 0.0,
             age: 0.0,
             speed_growth: SPEED_GROWTH,
+            start_speed: START_SPEED,
             shown_for: 0.0,
             phase,
             boss: None,
@@ -151,8 +173,56 @@ impl Enemy {
         self.boss.is_some()
     }
 
+    pub fn kind(&self) -> Kind {
+        if self.is_boss() {
+            Kind::Boss
+        } else if self.shows_word {
+            Kind::Cyclops
+        } else {
+            Kind::Star
+        }
+    }
+
+    /// Sets how it speeds up for `level`: the level's growth, and a one-eyed
+    /// monster's head start and quicker growth.
+    pub fn set_level(&mut self, level: u32) {
+        let growth = speed_growth(level);
+        if self.kind() == Kind::Cyclops {
+            self.start_speed = START_SPEED * CYCLOPS_START_SPEED_FACTOR;
+            self.speed_growth = growth * CYCLOPS_GROWTH_FACTOR;
+        } else {
+            self.start_speed = START_SPEED;
+            self.speed_growth = growth;
+        }
+    }
+
+    /// What answering it once is worth. A boss is worth this for each of
+    /// its numbers.
+    pub fn worth(&self) -> Worth {
+        match self.kind() {
+            Kind::Cyclops => Worth {
+                points: CYCLOPS_POINTS,
+                energy: CYCLOPS_ENERGY,
+            },
+            Kind::Star => Worth {
+                points: STAR_POINTS,
+                energy: STAR_ENERGY,
+            },
+            Kind::Boss => Worth {
+                points: BOSS_POINTS_PER_HIT,
+                energy: BOSS_ENERGY_PER_HIT,
+            },
+        }
+    }
+
+    /// Whether it steers around the other monsters as well as the
+    /// obstacles on its way to her.
+    pub fn avoids_monsters(&self) -> bool {
+        self.kind() == Kind::Star
+    }
+
     pub fn speed(&self) -> f32 {
-        let speed = enemy_speed(self.age, self.speed_growth);
+        let speed = enemy_speed(self.age, self.start_speed, self.speed_growth);
         if self.is_boss() {
             speed * BOSS_SPEED_FACTOR
         } else {
@@ -183,7 +253,7 @@ impl Enemy {
         // cancels out of the fraction. Hints follow the full growth rate,
         // not the level's, so they still appear after the same time on the
         // slow early levels.
-        let speed_fraction = enemy_speed(self.age, SPEED_GROWTH) / PLAYER_SPEED;
+        let speed_fraction = enemy_speed(self.age, START_SPEED, SPEED_GROWTH) / PLAYER_SPEED;
         shows_hint(self.difficulty, self.shown_for, speed_fraction)
     }
 
@@ -396,5 +466,54 @@ mod tests {
         e.show(Question::single(PAIRS[4]), 0.5);
         assert_eq!(e.shown_for, 0.0);
         assert_eq!(e.label, "4");
+    }
+
+    #[test]
+    fn the_kind_follows_the_label_and_the_boss() {
+        assert_eq!(enemy(3, true).kind(), Kind::Cyclops);
+        assert_eq!(enemy(3, false).kind(), Kind::Star);
+        assert_eq!(boss().kind(), Kind::Boss);
+    }
+
+    #[test]
+    fn the_kinds_are_worth_different_amounts() {
+        let worth = |e: Enemy| (e.worth().points, e.worth().energy);
+        assert_eq!(worth(enemy(3, true)), (1, 10.0));
+        assert_eq!(worth(enemy(3, false)), (2, 20.0));
+        assert_eq!(worth(boss()), (1, 10.0), "for each of its numbers");
+    }
+
+    #[test]
+    fn a_one_eyed_monster_starts_faster_and_speeds_up_faster_than_a_star() {
+        let (mut cyclops, mut star) = (enemy(3, true), enemy(3, false));
+        for level in [1, 10, 40] {
+            cyclops.set_level(level);
+            star.set_level(level);
+            assert!(cyclops.speed() > star.speed());
+            cyclops.age = 5.0;
+            star.age = 5.0;
+            let (gain_c, gain_s) = (
+                cyclops.speed() - cyclops.start_speed,
+                star.speed() - star.start_speed,
+            );
+            assert!(gain_c > gain_s, "level {level}");
+            cyclops.age = 0.0;
+            star.age = 0.0;
+        }
+    }
+
+    #[test]
+    fn a_stars_speed_is_the_same_as_before_the_kinds() {
+        let mut star = enemy(3, false);
+        star.set_level(21);
+        assert_eq!(star.start_speed, START_SPEED);
+        assert_eq!(star.speed_growth, SPEED_GROWTH);
+    }
+
+    #[test]
+    fn only_stars_steer_around_other_monsters() {
+        assert!(enemy(3, false).avoids_monsters());
+        assert!(!enemy(3, true).avoids_monsters());
+        assert!(!boss().avoids_monsters());
     }
 }

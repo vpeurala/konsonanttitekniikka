@@ -177,11 +177,28 @@ pub fn steer(
     obstacles: &[Obstacle],
     prefer_left: bool,
 ) -> Vec2 {
+    steer_around(
+        pos,
+        radius,
+        desired,
+        obstacles.iter().map(|o| (o.pos, o.radius)),
+        prefer_left,
+    )
+}
+
+/// `steer` for any circles in the way, given as a center and a radius.
+pub fn steer_around(
+    pos: Vec2,
+    radius: f32,
+    desired: Vec2,
+    circles: impl IntoIterator<Item = (Vec2, f32)>,
+    prefer_left: bool,
+) -> Vec2 {
     let mut dir = desired;
-    for o in obstacles {
-        let to_obstacle = o.pos - pos;
+    for (center, circle_radius) in circles {
+        let to_obstacle = center - pos;
         let distance = to_obstacle.length();
-        let clearance = o.radius + radius;
+        let clearance = circle_radius + radius;
         if distance < 0.001 || distance > clearance + LOOK_AHEAD {
             continue;
         }
@@ -299,6 +316,13 @@ mod tests {
     fn steering_turns_away_from_an_obstacle_dead_ahead() {
         let obstacles = [stone_at(vec2(100.0, 0.0), 30.0)];
         let dir = steer(vec2(40.0, 0.0), 10.0, vec2(1.0, 0.0), &obstacles, true);
+        assert!(dir.y.abs() > 0.1, "{dir}");
+    }
+
+    #[test]
+    fn steering_goes_around_any_circle_in_the_way() {
+        let circles = [(vec2(100.0, 0.0), 30.0)];
+        let dir = steer_around(vec2(40.0, 0.0), 10.0, vec2(1.0, 0.0), circles, true);
         assert!(dir.y.abs() > 0.1, "{dir}");
     }
 

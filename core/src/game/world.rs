@@ -14,7 +14,7 @@ use super::rules::{
 };
 use crate::arena::{ARENA_H, ARENA_W, girl_hand};
 use crate::memory::Memory;
-use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer};
+use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer_around};
 use crate::portals::portal_positions;
 use crate::rng::Rng;
 
@@ -246,17 +246,26 @@ impl World {
     /// Walks every monster toward `player`, around the obstacles, and keeps
     /// them apart, on the screen (the bosses) and out of the obstacles.
     fn walk_toward(&mut self, dt: f32, player: Vec2, rng: &mut Rng) {
-        for enemy in &mut self.enemies {
+        // Where everyone stood at the start of the step, for those who steer
+        // around the others.
+        let crowd: Vec<(Vec2, f32)> = self.enemies.iter().map(|e| (e.pos, e.radius)).collect();
+        for (i, enemy) in self.enemies.iter_mut().enumerate() {
             let speed = enemy.speed();
             let toward = (player - enemy.pos).normalize_or_zero();
             // Enemies with an even phase go left around obstacles, the rest
             // right, so they don't all bunch up on one side.
             let prefer_left = (enemy.phase as u32).is_multiple_of(2);
-            let dir = steer(
+            let obstacles = self.obstacles.iter().map(|o| (o.pos, o.radius));
+            let others = crowd
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| enemy.avoids_monsters() && *j != i)
+                .map(|(_, &circle)| circle);
+            let dir = steer_around(
                 enemy.pos,
                 enemy.radius,
                 toward,
-                &self.obstacles,
+                obstacles.chain(others),
                 prefer_left,
             );
             enemy.pos += dir * speed * dt;

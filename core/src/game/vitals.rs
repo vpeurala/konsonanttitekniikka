@@ -55,12 +55,11 @@ impl Vitals {
         }
     }
 
-    /// The energy given for `hits` monsters answered at once, `reward`
-    /// each, up to `cap`. Energy above the cap (there is none, unless the
-    /// level's cap was lowered) is left as it is.
-    pub fn rewarded(self, hits: usize, reward: f32, cap: f32) -> Vitals {
+    /// `energy` more, up to `cap`. Energy above the cap (there is none,
+    /// unless the level's cap was lowered) is left as it is.
+    pub fn rewarded(self, energy: f32, cap: f32) -> Vitals {
         Vitals {
-            energy: (self.energy + reward * hits as f32).min(cap.max(self.energy)),
+            energy: (self.energy + energy).min(cap.max(self.energy)),
             ..self
         }
     }
@@ -122,10 +121,10 @@ mod tests {
 
     #[test]
     fn a_reward_never_passes_the_maximum() {
-        assert_eq!(Vitals::new().rewarded(3, 5.0, 150.0).energy(), 115.0);
-        assert_eq!(Vitals::new().rewarded(30, 5.0, 150.0).energy(), 150.0);
+        assert_eq!(Vitals::new().rewarded(15.0, 150.0).energy(), 115.0);
+        assert_eq!(Vitals::new().rewarded(150.0, 150.0).energy(), 150.0);
         let low = Vitals::new().with_energy(50.0);
-        assert_eq!(low.rewarded(2, 5.0, 150.0).energy(), 60.0);
+        assert_eq!(low.rewarded(10.0, 150.0).energy(), 60.0);
     }
 
     #[test]

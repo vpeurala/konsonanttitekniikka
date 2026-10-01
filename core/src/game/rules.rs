@@ -59,12 +59,17 @@ pub fn energy_cap(level: u32) -> f32 {
     (FIRST_LEVEL_ENERGY_CAP + ENERGY_CAP_PER_LEVEL * level.saturating_sub(1) as f32)
         .min(HARD_ENERGY_CAP)
 }
-/// Energy given for defeating a monster on the first level, when a lot of
-/// energy comes back...
-const FIRST_LEVEL_HIT_REWARD: f32 = 15.0;
-/// ...falling evenly to this on `HIT_REWARD_FLOOR_LEVEL`, and staying there.
-const LOWEST_HIT_REWARD: f32 = 5.0;
-const HIT_REWARD_FLOOR_LEVEL: u32 = 30;
+/// What answering a one-eyed monster (the one showing a word) is worth:
+/// the easiest kind.
+pub const CYCLOPS_POINTS: u32 = 1;
+pub const CYCLOPS_ENERGY: f32 = 10.0;
+/// What answering a star-like monster (the one showing a number) is worth.
+pub const STAR_POINTS: u32 = 2;
+pub const STAR_ENERGY: f32 = 20.0;
+/// Each hit on a boss is worth this, so a boss with `n` numbers gives `n`
+/// points and `n` times the energy in all.
+pub const BOSS_POINTS_PER_HIT: u32 = 1;
+pub const BOSS_ENERGY_PER_HIT: f32 = 10.0;
 pub const WRONG_PENALTY: f32 = 10.0;
 /// Wrong keys never take energy below this, so only collisions can end
 /// the game.
@@ -83,8 +88,12 @@ pub const BANNER_SECONDS: f32 = 2.5;
 /// No new enemies appear for this long after a level starts.
 pub const LEVEL_BREAK_SECONDS: f32 = 2.0;
 
-/// A new enemy's speed.
+/// A new enemy's speed, except a one-eyed monster's.
 pub const START_SPEED: f32 = 12.0;
+/// A one-eyed monster is a little faster than the others to begin with...
+pub const CYCLOPS_START_SPEED_FACTOR: f32 = 1.3;
+/// ...and speeds up a little faster, to make up for being the easiest.
+pub const CYCLOPS_GROWTH_FACTOR: f32 = 1.25;
 /// Speed an enemy gains per second on screen, up to the player's speed, on
 /// the level where the ramp ends (`SPEED_GROWTH_LEVEL`) and after it.
 pub const SPEED_GROWTH: f32 = 3.0;
@@ -191,21 +200,10 @@ pub fn speed_growth(level: u32) -> f32 {
     )
 }
 
-/// The energy one defeated monster gives back on `level`: plenty at first,
-/// then less and less.
-pub fn hit_reward(level: u32) -> f32 {
-    ramp(
-        FIRST_LEVEL_HIT_REWARD,
-        LOWEST_HIT_REWARD,
-        level,
-        HIT_REWARD_FLOOR_LEVEL,
-    )
-}
-
-/// Every enemy starts slow and speeds up as it ages (`growth` per second,
-/// see `speed_growth`), until it is as fast as the player.
-pub fn enemy_speed(age: f32, growth: f32) -> f32 {
-    (START_SPEED + growth * age).min(PLAYER_SPEED)
+/// Every enemy starts slow (at `start`) and speeds up as it ages (`growth`
+/// per second, see `speed_growth`), until it is as fast as the player.
+pub fn enemy_speed(age: f32, start: f32, growth: f32) -> f32 {
+    (start + growth * age).min(PLAYER_SPEED)
 }
 
 /// Difficulty comes from the spawn rate: enemies appear more often the
@@ -272,7 +270,7 @@ mod tests {
             assert!(!shows_hint(
                 difficulty,
                 0.0,
-                enemy_speed(0.0, SPEED_GROWTH) / PLAYER_SPEED
+                enemy_speed(0.0, START_SPEED, SPEED_GROWTH) / PLAYER_SPEED
             ));
         }
     }
@@ -299,7 +297,7 @@ mod tests {
     #[test]
     fn a_learned_pairs_hint_comes_when_the_enemy_reaches_the_hint_speed() {
         let delay = hint_delay(0.0);
-        let speed = |age| enemy_speed(age, SPEED_GROWTH) / PLAYER_SPEED;
+        let speed = |age| enemy_speed(age, START_SPEED, SPEED_GROWTH) / PLAYER_SPEED;
         assert!(speed(delay - 0.1) < HINT_SPEED_FRACTION);
         assert!(speed(delay + 0.1) >= HINT_SPEED_FRACTION);
     }
@@ -379,9 +377,12 @@ mod tests {
 
     #[test]
     fn enemies_speed_up_with_age_to_the_players_speed() {
-        assert_eq!(enemy_speed(0.0, SPEED_GROWTH), START_SPEED);
-        assert!(enemy_speed(10.0, SPEED_GROWTH) > enemy_speed(0.0, SPEED_GROWTH));
-        assert_eq!(enemy_speed(1000.0, SPEED_GROWTH), PLAYER_SPEED);
+        assert_eq!(enemy_speed(0.0, START_SPEED, SPEED_GROWTH), START_SPEED);
+        assert!(
+            enemy_speed(10.0, START_SPEED, SPEED_GROWTH)
+                > enemy_speed(0.0, START_SPEED, SPEED_GROWTH)
+        );
+        assert_eq!(enemy_speed(1000.0, START_SPEED, SPEED_GROWTH), PLAYER_SPEED);
     }
 
     #[test]
@@ -401,16 +402,6 @@ mod tests {
             assert_eq!(spawn_interval(level, 1000.0), MIN_SPAWN_INTERVAL);
         }
         assert_eq!(spawn_interval(SPAWN_EASE_LEVEL, 0.0), START_SPAWN_INTERVAL);
-    }
-
-    #[test]
-    fn defeating_monsters_gives_back_less_energy_level_by_level_down_to_a_floor() {
-        assert_eq!(hit_reward(1), FIRST_LEVEL_HIT_REWARD);
-        for level in 1..HIT_REWARD_FLOOR_LEVEL {
-            assert!(hit_reward(level + 1) < hit_reward(level));
-        }
-        assert_eq!(hit_reward(HIT_REWARD_FLOOR_LEVEL), LOWEST_HIT_REWARD);
-        assert_eq!(hit_reward(1000), LOWEST_HIT_REWARD);
     }
 
     #[test]

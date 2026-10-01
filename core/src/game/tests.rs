@@ -141,6 +141,75 @@ fn with_monster(game: &mut Rig) {
     game.world.admit(enemy);
 }
 
+/// Answers the only monster in play, which shows a word if `cyclops`, and
+/// returns the points and the energy it gave, starting from 50% energy.
+fn worth_of_answering(cyclops: bool) -> (u32, f32) {
+    let mut game = game();
+    game.vitals = game.vitals.with_energy(50.0);
+    let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), cyclops, 0.5, 0.0);
+    enemy.pos = vec2(50.0, 50.0);
+    game.world.admit(enemy);
+    let answer = game.world.enemies()[0].answer().to_owned();
+    game.update(&typing(&answer));
+    (game.vitals.score(), game.vitals.energy() - 50.0)
+}
+
+#[test]
+fn a_one_eyed_monster_is_worth_a_point_and_10_percent_energy() {
+    assert_eq!(worth_of_answering(true), (1, 10.0));
+}
+
+#[test]
+fn a_star_monster_is_worth_two_points_and_20_percent_energy() {
+    assert_eq!(worth_of_answering(false), (2, 20.0));
+}
+
+#[test]
+fn a_boss_gives_a_point_and_10_percent_for_each_of_its_numbers() {
+    let mut game = game();
+    game.vitals = game.vitals.with_energy(50.0);
+    game.add_points(points_to_clear(1));
+    let numbers = boss_hits(1);
+    for _ in 0..numbers {
+        let answer = game.world.enemies()[0].answer().to_owned();
+        game.update(&typing(&answer));
+    }
+    assert_eq!(game.vitals.score(), points_to_clear(1) + numbers as u32);
+    assert_eq!(game.vitals.energy(), 50.0 + 10.0 * numbers as f32);
+}
+
+/// How far a walker, starting at the left with a boss in its way, strays
+/// from the straight line to the player before it gets by.
+fn detour_around_a_boss(cyclops: bool) -> f32 {
+    let mut game = game();
+    game.player.pos = vec2(700.0, 300.0);
+    let mut walker = Enemy::new(Question::single(PAIRS[22 + 10]), cyclops, 0.5, 0.0);
+    walker.pos = vec2(100.0, 300.0);
+    walker.start_speed = 150.0;
+    let id = walker.id;
+    game.world.admit(walker);
+    let numbers = [Question::single(PAIRS[1]), Question::single(PAIRS[2])];
+    let mut boss = Enemy::boss(&numbers, false, 0.5, 0.0);
+    boss.pos = vec2(250.0, 300.0);
+    boss.start_speed = 0.0;
+    boss.speed_growth = 0.0;
+    game.world.admit(boss);
+    let mut detour = 0.0f32;
+    for _ in 0..90 {
+        game.update(&frame());
+        if let Some(e) = game.world.enemy(id) {
+            detour = detour.max((e.pos.y - 300.0).abs());
+        }
+    }
+    detour
+}
+
+#[test]
+fn a_star_steers_around_monsters_in_its_way_more_than_a_one_eyed_monster_does() {
+    let (star, cyclops) = (detour_around_a_boss(false), detour_around_a_boss(true));
+    assert!(star > cyclops + 5.0, "star {star}, cyclops {cyclops}");
+}
+
 #[test]
 fn a_new_game_reports_that_it_started() {
     let mut game = game_from(4);
@@ -179,8 +248,8 @@ fn typing_a_monsters_answer_casts_a_spell_and_scores() {
         game.world.enemies().is_empty(),
         "the monster is out of play"
     );
-    assert_eq!(game.vitals.score(), 1);
-    assert_eq!(game.stage.points, 1);
+    assert_eq!(game.vitals.score(), STAR_POINTS);
+    assert_eq!(game.stage.points, STAR_POINTS);
     assert!(log.sfx.contains(&Sfx::Cast));
     // The spell explodes it a moment later.
     assert!(idle(&mut game, 1.0).sfx.contains(&Sfx::Explode));
@@ -659,7 +728,7 @@ fn stars_depend_on_the_energy_left() {
     let mut game = game();
     // Beating the boss gives some energy back too, so start low enough to
     // end up in the middle.
-    let start = 50.0 - boss_hits(1) as f32 * hit_reward(1);
+    let start = 50.0 - boss_hits(1) as f32 * BOSS_ENERGY_PER_HIT;
     game.vitals = game.vitals.with_energy(start);
     game.add_points(points_to_clear(1));
     let mut log = Log::default();
@@ -969,5 +1038,5 @@ fn typing_on_a_frame_too_short_for_a_step_is_not_lost() {
         game.update(&short(typing(&c.to_string())));
     }
     idle(&mut game, 0.1);
-    assert_eq!(game.vitals.score(), 1);
+    assert_eq!(game.vitals.score(), STAR_POINTS);
 }
