@@ -1,7 +1,7 @@
 //! How she is doing: energy, the run of right answers, the score. Every
 //! change makes a new `Vitals`, so what a change may touch is in its name.
 
-use super::rules::{COLLISION_PENALTY, MAX_ENERGY, after_wrong_key};
+use super::rules::{COLLISION_PENALTY, FULL_ENERGY, after_wrong_key};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vitals {
@@ -14,7 +14,7 @@ pub struct Vitals {
 impl Vitals {
     pub fn new() -> Vitals {
         Vitals {
-            energy: MAX_ENERGY,
+            energy: FULL_ENERGY,
             combo: 0,
             score: 0,
         }
@@ -31,7 +31,7 @@ impl Vitals {
 
     /// The energy left as a fraction of the most she can have.
     pub fn energy_fraction(self) -> f32 {
-        self.energy / MAX_ENERGY
+        self.energy / FULL_ENERGY
     }
 
     pub fn combo(self) -> u32 {
@@ -56,10 +56,11 @@ impl Vitals {
     }
 
     /// The energy given for `hits` monsters answered at once, `reward`
-    /// each.
-    pub fn rewarded(self, hits: usize, reward: f32) -> Vitals {
+    /// each, up to `cap`. Energy above the cap (there is none, unless the
+    /// level's cap was lowered) is left as it is.
+    pub fn rewarded(self, hits: usize, reward: f32, cap: f32) -> Vitals {
         Vitals {
-            energy: (self.energy + reward * hits as f32).min(MAX_ENERGY),
+            energy: (self.energy + reward * hits as f32).min(cap.max(self.energy)),
             ..self
         }
     }
@@ -107,8 +108,8 @@ mod tests {
     fn changes_leave_the_original_alone() {
         let start = Vitals::new();
         let hurt = start.hurt();
-        assert_eq!(start.energy(), MAX_ENERGY);
-        assert_eq!(hurt.energy(), MAX_ENERGY - COLLISION_PENALTY);
+        assert_eq!(start.energy(), FULL_ENERGY);
+        assert_eq!(hurt.energy(), FULL_ENERGY - COLLISION_PENALTY);
     }
 
     #[test]
@@ -121,9 +122,10 @@ mod tests {
 
     #[test]
     fn a_reward_never_passes_the_maximum() {
-        assert_eq!(Vitals::new().rewarded(3, 5.0).energy(), MAX_ENERGY);
+        assert_eq!(Vitals::new().rewarded(3, 5.0, 150.0).energy(), 115.0);
+        assert_eq!(Vitals::new().rewarded(30, 5.0, 150.0).energy(), 150.0);
         let low = Vitals::new().with_energy(50.0);
-        assert_eq!(low.rewarded(2, 5.0).energy(), 60.0);
+        assert_eq!(low.rewarded(2, 5.0, 150.0).energy(), 60.0);
     }
 
     #[test]

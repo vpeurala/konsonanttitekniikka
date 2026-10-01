@@ -272,13 +272,36 @@ fn draw_hud(scene: &Scene) {
 const BAR_WIDTH: f32 = 200.0;
 
 fn draw_energy(scene: &Scene) {
-    let fill = (scene.energy / MAX_ENERGY).clamp(0.0, 1.0);
-    draw_rectangle(16.0, 16.0, BAR_WIDTH, 16.0, DARKGRAY);
-    draw_rectangle(16.0, 16.0, BAR_WIDTH * fill, 16.0, GREEN);
-    // Marks the level wrong keys can't take her below.
-    let low_x = 16.0 + BAR_WIDTH * LOW_ENERGY / MAX_ENERGY;
+    // 100% is `BAR_WIDTH` wide; the bar is as long as the level's cap, and
+    // what she has built up above 100% is gold.
+    let per_percent = BAR_WIDTH / FULL_ENERGY;
+    let energy = scene.energy.max(0.0);
+    draw_rectangle(16.0, 16.0, per_percent * scene.energy_cap, 16.0, DARKGRAY);
+    // Red once she is down at the level wrong keys can't take her below.
+    let color = if energy <= LOW_ENERGY { RED } else { GREEN };
+    draw_rectangle(
+        16.0,
+        16.0,
+        per_percent * energy.min(FULL_ENERGY),
+        16.0,
+        color,
+    );
+    if energy > FULL_ENERGY {
+        draw_rectangle(
+            16.0 + BAR_WIDTH,
+            16.0,
+            per_percent * (energy - FULL_ENERGY),
+            16.0,
+            GOLD,
+        );
+    }
+    // Marks 100%, and the level wrong keys can't take her below.
+    let full_x = 16.0 + BAR_WIDTH;
+    draw_line(full_x, 12.0, full_x, 36.0, 2.0, LIGHTGRAY);
+    let low_x = 16.0 + per_percent * LOW_ENERGY;
     draw_line(low_x, 12.0, low_x, 36.0, 2.0, WHITE);
-    draw_text("Energia", 16.0, 54.0, 18.0, LIGHTGRAY);
+    let label = format!("Energia: {} %", energy.round() as u32);
+    draw_text(&label, 16.0, 54.0, 18.0, LIGHTGRAY);
     // The touch panel has buttons for these instead.
     if !scene.touch {
         draw_text(

@@ -217,15 +217,29 @@ fn a_wrong_key_costs_energy_after_the_first_dead_end() {
     let outputs = game.update(&typing("1"));
     assert_eq!(
         game.vitals.energy(),
-        MAX_ENERGY,
+        FULL_ENERGY,
         "a typo is free until she types past it"
     );
     assert!(!outputs.sfx.contains(&Sfx::Wrong));
     let outputs = game.update(&typing("1"));
-    assert_eq!(game.vitals.energy(), MAX_ENERGY - WRONG_PENALTY);
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - WRONG_PENALTY);
     assert!(outputs.sfx.contains(&Sfx::Wrong));
     // The key starts afresh in the emptied slot.
     assert_eq!(game.typed.get(Slot::Number), "1");
+}
+
+#[test]
+fn defeating_monsters_raises_the_energy_above_100_up_to_the_levels_cap() {
+    let mut game = game();
+    for _ in 0..40 {
+        with_monster(&mut game);
+        let answer = game.world.enemies()[0].answer().to_owned();
+        game.update(&typing(&answer));
+        game.world.enemies_mut().clear();
+        assert!(game.vitals.energy() <= energy_cap(1));
+    }
+    assert_eq!(game.vitals.energy(), energy_cap(1));
+    assert!(game.vitals.energy() > FULL_ENERGY);
 }
 
 #[test]
@@ -235,7 +249,7 @@ fn a_wrong_key_empties_both_slots_so_the_next_word_starts_clean() {
     game.update(&typing("1"));
     game.update(&typing("s"));
     game.update(&typing("1"));
-    assert_eq!(game.vitals.energy(), MAX_ENERGY - WRONG_PENALTY);
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - WRONG_PENALTY);
     assert!(game.typed.get(Slot::Word).is_empty());
 }
 
@@ -277,7 +291,7 @@ fn a_monster_reaching_her_hurts_and_teaches() {
     let mut log = Log::default();
     log.add(game.update(&typing("1")));
     log.add(game.update(&frame()));
-    assert_eq!(game.vitals.energy(), MAX_ENERGY - COLLISION_PENALTY);
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - COLLISION_PENALTY);
     assert!(game.world.enemies().is_empty());
     assert!(log.sfx.contains(&Sfx::Hurt));
     assert!(
@@ -346,7 +360,7 @@ fn enter_starts_over_and_keeps_what_she_learned() {
     assert!(!game.is_over());
     assert_eq!(
         (game.level, game.vitals.energy(), game.vitals.score()),
-        (3, MAX_ENERGY, 0)
+        (3, FULL_ENERGY, 0)
     );
     assert_eq!(game.memory().records().count(), learned);
     assert_eq!(outputs.events, vec![GameEvent::Started { level: 3 }]);
@@ -666,7 +680,7 @@ fn a_boss_hitting_her_bounces_back_and_hurts_once_in_a_while() {
     game.add_points(points_to_clear(1));
     game.world.enemies_mut()[0].pos = game.player.pos + vec2(20.0, 0.0);
     game.update(&frame());
-    assert_eq!(game.vitals.energy(), MAX_ENERGY - COLLISION_PENALTY);
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - COLLISION_PENALTY);
     assert!(game.world.enemies()[0].pos.distance(game.player.pos) > 100.0);
     assert!(!game.is_over());
 }
@@ -881,7 +895,9 @@ fn a_perfect_typist_plays_through_the_first_levels() {
             .any(|e| matches!(e, GameEvent::Over { .. })),
         "a perfect typist never loses"
     );
-    assert_eq!(game.vitals.energy(), MAX_ENERGY);
+    // Defeating monsters builds energy up beyond 100%, never past the cap.
+    let energy = game.vitals.energy();
+    assert!(energy > FULL_ENERGY && energy <= energy_cap(game.level));
     assert!(log.sfx.contains(&Sfx::Boss), "every level ends in a boss");
 }
 

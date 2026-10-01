@@ -42,8 +42,10 @@ pub struct Scene<'a> {
     pub touch: bool,
     pub score: u32,
     pub level: u32,
-    /// From 0 to `rules::MAX_ENERGY`.
+    /// From 0 to `energy_cap`; `rules::FULL_ENERGY` is 100%.
     pub energy: f32,
+    /// The most energy she can have on this level.
+    pub energy_cap: f32,
     /// Points scored on this level, and how many the level needs.
     pub points: u32,
     pub points_needed: u32,
@@ -86,6 +88,7 @@ impl Game {
             score: self.vitals.score(),
             level: self.level,
             energy: self.vitals.energy(),
+            energy_cap: rules::energy_cap(self.level),
             points: self.stage.points,
             points_needed: rules::points_to_clear(self.level),
             boss_fight: self.stage.boss_fight,

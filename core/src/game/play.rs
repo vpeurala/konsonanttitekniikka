@@ -7,7 +7,7 @@ use super::display::Tone;
 use super::enemy::{Enemy, EnemyId};
 use super::rules::{
     COLLISION_PALETTE, ENEMY_RADIUS, KILL_PALETTE, LEVEL_BREAK_SECONDS, PORTAL_PALETTE,
-    SPELL_PALETTE, hit_reward, points_to_clear, stars_for,
+    SPELL_PALETTE, energy_cap, hit_reward, points_to_clear, stars_for,
 };
 use super::spawn::SpawnContext;
 use super::stage::Stage;
@@ -98,7 +98,9 @@ impl Game {
             for hit in &made {
                 out.extend(self.learn_from(hit, now, memory));
             }
-            self.vitals = self.vitals.rewarded(hits.len(), hit_reward(self.level));
+            self.vitals =
+                self.vitals
+                    .rewarded(hits.len(), hit_reward(self.level), energy_cap(self.level));
             self.show_question(&first, Tone::Right);
             self.typed.get_mut(slot).clear();
             out.extend(self.add_points(hits.len() as u32, now, memory));

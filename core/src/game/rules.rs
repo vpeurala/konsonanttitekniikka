@@ -42,7 +42,23 @@ pub fn shows_hint(difficulty: f32, shown_for: f32, speed_fraction: f32) -> bool 
     shown_for >= hint_delay(difficulty) || speed_fraction >= HINT_SPEED_FRACTION
 }
 
-pub const MAX_ENERGY: f32 = 100.0;
+/// 100%: the energy she starts with, and what the energy is measured
+/// against (the percentage shown, and the stars).
+pub const FULL_ENERGY: f32 = 100.0;
+/// The most energy she can build up on the first level, by defeating
+/// monsters...
+const FIRST_LEVEL_ENERGY_CAP: f32 = 150.0;
+/// ...which grows by this much with every level, to make up for the harder
+/// levels...
+const ENERGY_CAP_PER_LEVEL: f32 = 2.0;
+/// ...but never goes past this.
+const HARD_ENERGY_CAP: f32 = 200.0;
+
+/// The most energy she can have on `level`.
+pub fn energy_cap(level: u32) -> f32 {
+    (FIRST_LEVEL_ENERGY_CAP + ENERGY_CAP_PER_LEVEL * level.saturating_sub(1) as f32)
+        .min(HARD_ENERGY_CAP)
+}
 /// Energy given for defeating a monster on the first level, when a lot of
 /// energy comes back...
 const FIRST_LEVEL_HIT_REWARD: f32 = 15.0;
@@ -52,7 +68,7 @@ const HIT_REWARD_FLOOR_LEVEL: u32 = 30;
 pub const WRONG_PENALTY: f32 = 10.0;
 /// Wrong keys never take energy below this, so only collisions can end
 /// the game.
-pub const LOW_ENERGY: f32 = 20.0;
+pub const LOW_ENERGY: f32 = 30.0;
 pub const COLLISION_PENALTY: f32 = 20.0;
 
 pub const FEEDBACK_SECONDS: f32 = 2.5;
@@ -294,6 +310,19 @@ mod tests {
             assert!(!shows_hint(difficulty, 0.0, HINT_SPEED_FRACTION - 0.01));
             assert!(shows_hint(difficulty, 0.0, HINT_SPEED_FRACTION));
         }
+    }
+
+    #[test]
+    fn the_energy_cap_starts_at_150_and_grows_slowly_to_200() {
+        assert_eq!(energy_cap(1), 150.0);
+        assert_eq!(energy_cap(2), 152.0);
+        assert_eq!(energy_cap(10), 168.0);
+        for level in 1..100 {
+            assert!(energy_cap(level + 1) >= energy_cap(level));
+            assert!(energy_cap(level) <= 200.0);
+        }
+        assert_eq!(energy_cap(26), 200.0);
+        assert_eq!(energy_cap(1000), 200.0);
     }
 
     #[test]
