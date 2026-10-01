@@ -55,6 +55,12 @@ impl Persistence {
         self.snapshot()
     }
 
+    /// Switches hardcore mode on or off and saves the choice.
+    pub fn toggle_hardcore(&mut self) -> Effect {
+        self.progress.hardcore = !self.progress.hardcore;
+        self.snapshot()
+    }
+
     /// Counts and remembers what happened in the game. Returns whether it
     /// is worth saving right away.
     pub fn record(&mut self, event: &GameEvent) -> bool {

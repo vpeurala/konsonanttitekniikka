@@ -102,6 +102,8 @@ pub struct World {
     spells: Vec<Spell>,
     /// The id the next enemy to join gets.
     next_enemy_id: u32,
+    /// Whether the monsters that join may show hints.
+    hints: bool,
     /// The current level's portals.
     portals: Vec<Vec2>,
     /// The current level's stones, trees and lakes.
@@ -116,9 +118,15 @@ impl World {
             enemies: Vec::new(),
             spells: Vec::new(),
             next_enemy_id: 0,
+            hints: true,
             portals,
             obstacles,
         }
+    }
+
+    /// Lets the monsters that join afterwards show hints, or not.
+    pub fn set_hints(&mut self, hints: bool) {
+        self.hints = hints;
     }
 
     pub fn enemies(&self) -> &[Enemy] {
@@ -139,6 +147,7 @@ impl World {
 
     /// Adds `enemy` to the world, giving it an id of its own.
     pub fn admit(&mut self, mut enemy: Enemy) {
+        enemy.hints_enabled = self.hints;
         enemy.id = EnemyId(self.next_enemy_id);
         self.next_enemy_id += 1;
         self.enemies.push(enemy);

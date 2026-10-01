@@ -73,6 +73,7 @@ fn key_code(key: mq::KeyCode) -> Option<KeyCode> {
         mq::KeyCode::PageDown => KeyCode::PageDown,
         mq::KeyCode::Home => KeyCode::Home,
         mq::KeyCode::End => KeyCode::End,
+        mq::KeyCode::A => KeyCode::A,
         mq::KeyCode::E => KeyCode::E,
         mq::KeyCode::H => KeyCode::H,
         mq::KeyCode::K => KeyCode::K,

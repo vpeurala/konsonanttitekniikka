@@ -189,7 +189,9 @@ so it can be tested without a screen; do the same for new layouts.
   half again per answer past five, up to 3 weeks.
 - `progress.rs`: `Progress`, the one copy of what is known about the player:
   the memory of each pair, best level, stars, streak, stats, badges, sound
-  setting. `App` holds the live copy; nothing else keeps a second one.
+  setting and hardcore mode (`hardcore`: monsters never show hints; the
+  title screen's switch, key A; `Game::new` takes it and `World::set_hints`
+  passes it on to each monster). `App` holds the live copy; nothing else keeps a second one.
 - `save.rs`: turns a `Progress` into the save file and back, plain text with one fact per line, damaged lines
   skipped and absurd numbers clamped or dropped (tests read thousands of
   garbage files). Saves from before a field existed must keep loading. On

@@ -29,8 +29,9 @@ pub enum KeyCode {
     E,
     H,
     K,
-    /// A key that does nothing, for tests.
     A,
+    /// A key that does nothing, for tests.
+    Unused,
 }
 
 /// What a finger, or the mouse, is doing.

@@ -13,7 +13,7 @@ use crate::progress::Progress;
 use lukuloitsu_core::screens::title::{
     BUTTON_H, CONSONANT_TABLE_SPACE, EXPLANATION_AFTER_TABLE, EXPLANATION_BEFORE_TABLE,
     FOOTER_HEIGHT, MENU, MENU_SPACE, MENU_Y, PAIR_ROW_HEIGHT, PICTURE_MARGIN, PRIVACY_NOTE,
-    SIDE_MARGIN, TitleScreen, button_rect, pair_rows,
+    SIDE_MARGIN, TitleScreen, button_rect, hardcore_rect, pair_rows,
 };
 
 const TITLE_COLOR: Color = GOLD;
@@ -96,6 +96,28 @@ fn draw_menu(screen: &TitleScreen, progress: &Progress) {
     );
     let y = MENU_Y + BUTTON_H / 2.0 + 26.0 - screen.scroll();
     draw_centered_text(&status, ARENA_W / 2.0, y, 20, DIM);
+    draw_hardcore_switch(screen, progress.hardcore);
+}
+
+/// The switch for hardcore mode, a game without hints.
+fn draw_hardcore_switch(screen: &TitleScreen, on: bool) {
+    let rect = hardcore_rect(screen.scroll());
+    let (fill, edge) = if on {
+        (Color::new(0.6, 0.1, 0.1, 1.0), RED)
+    } else {
+        (Color::new(0.15, 0.14, 0.24, 1.0), DIM)
+    };
+    draw_rectangle(rect.x, rect.y, rect.w, rect.h, fill);
+    draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 2.0, edge);
+    let label = format!(
+        "Ankara tila (ei vihjeitä): {}",
+        if on { "päällä" } else { "pois" }
+    );
+    let c = rect.center();
+    fonts::draw_centered(&label, c.x, c.y - 1.0, 18, WHITE, Style::Body);
+    if !screen.touch() {
+        fonts::draw_centered("A", rect.x + rect.w + 16.0, c.y - 1.0, 13, DIM, Style::Body);
+    }
 }
 
 fn draw_scrollbar(screen: &TitleScreen) {

@@ -251,7 +251,7 @@ mod tests {
         ] {
             assert!(update(&pressed(key), &[]), "{key:?}");
         }
-        assert!(!update(&pressed(KeyCode::A), &[]));
+        assert!(!update(&pressed(KeyCode::Unused), &[]));
     }
 
     #[test]

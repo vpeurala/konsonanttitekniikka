@@ -87,6 +87,8 @@ pub struct Enemy {
     pub speed_growth: f32,
     /// How fast it is when it appears.
     pub start_speed: f32,
+    /// Whether it ever shows its answer as a hint; not in hardcore mode.
+    pub hints_enabled: bool,
     /// Seconds the current pair has been shown; sets the hint.
     pub shown_for: f32,
     /// Offsets the animation so enemies don't move in sync.
@@ -113,6 +115,7 @@ impl Enemy {
             age: 0.0,
             speed_growth: SPEED_GROWTH,
             start_speed: START_SPEED,
+            hints_enabled: true,
             shown_for: 0.0,
             phase,
             boss: None,
@@ -254,7 +257,7 @@ impl Enemy {
         // not the level's, so they still appear after the same time on the
         // slow early levels.
         let speed_fraction = enemy_speed(self.age, START_SPEED, SPEED_GROWTH) / PLAYER_SPEED;
-        shows_hint(self.difficulty, self.shown_for, speed_fraction)
+        self.hints_enabled && shows_hint(self.difficulty, self.shown_for, speed_fraction)
     }
 
     fn hint_space(&self) -> f32 {

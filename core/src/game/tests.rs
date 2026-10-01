@@ -70,7 +70,7 @@ impl std::ops::DerefMut for Rig {
 
 fn game_from(level: u32) -> Rig {
     Rig {
-        game: Game::new(false, level),
+        game: Game::new(false, level, false),
         memory: Memory::default(),
     }
 }
@@ -208,6 +208,25 @@ fn detour_around_a_boss(cyclops: bool) -> f32 {
 fn a_star_steers_around_monsters_in_its_way_more_than_a_one_eyed_monster_does() {
     let (star, cyclops) = (detour_around_a_boss(false), detour_around_a_boss(true));
     assert!(star > cyclops + 5.0, "star {star}, cyclops {cyclops}");
+}
+
+#[test]
+fn hardcore_monsters_never_show_hints_and_ordinary_ones_do() {
+    for hardcore in [false, true] {
+        let mut game = Rig {
+            game: Game::new(false, 1, hardcore),
+            memory: Memory::default(),
+        };
+        with_monster(&mut game);
+        game.world.enemies_mut()[0].shown_for = 1000.0;
+        assert_eq!(game.world.enemies()[0].shows_hint(), !hardcore);
+        // A restart keeps the mode.
+        game.update(&Input {
+            confirm: true,
+            ..frame()
+        });
+        assert_eq!(game.scene().hardcore, hardcore);
+    }
 }
 
 #[test]

@@ -17,6 +17,8 @@ pub struct Progress {
     /// How well each pair is known.
     pub memory: Memory,
     pub music_on: bool,
+    /// Hardcore mode: monsters never show hints.
+    pub hardcore: bool,
     /// The highest level reached.
     pub best_level: u32,
     /// The best stars earned on each level, from 1 to 3.
@@ -37,6 +39,7 @@ impl Default for Progress {
         Progress {
             memory: Memory::default(),
             music_on: true,
+            hardcore: false,
             best_level: 1,
             stars: BTreeMap::new(),
             streak_day: 0,

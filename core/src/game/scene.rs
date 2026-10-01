@@ -50,6 +50,8 @@ pub struct Scene<'a> {
     pub points: u32,
     pub points_needed: u32,
     pub boss_fight: bool,
+    /// Whether this is a hardcore game, without hints.
+    pub hardcore: bool,
     /// The pairs this level introduces.
     pub new_pairs: Vec<Pair>,
     /// Pairs from earlier levels, kept in the panel while there is room
@@ -92,6 +94,7 @@ impl Game {
             points: self.stage.points,
             points_needed: rules::points_to_clear(self.level),
             boss_fight: self.stage.boss_fight,
+            hardcore: self.hardcore,
             new_pairs: self.curriculum.new_pairs(),
             earlier_pairs: self.curriculum.earlier_pairs(NEW_PAIRS_ROWS),
             slots: [slot(Slot::Number), slot(Slot::Word)],

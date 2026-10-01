@@ -143,6 +143,8 @@ pub struct Game {
     paused: bool,
     /// Whether she plays with touch controls, which changes some texts.
     touch: bool,
+    /// Hardcore mode: no hints at all.
+    hardcore: bool,
     /// The level the game started from, where it starts again after a
     /// game over.
     start_level: u32,
@@ -158,15 +160,17 @@ pub struct Game {
 }
 
 impl Game {
-    /// A new game starting from `start_level`.
-    pub fn new(touch: bool, start_level: u32) -> Self {
+    /// A new game starting from `start_level`; in `hardcore` mode the
+    /// monsters never show hints.
+    pub fn new(touch: bool, start_level: u32, hardcore: bool) -> Self {
         let start_level = start_level.max(1);
         let mut curriculum = Curriculum::new();
         // Every pair of the levels before the start is already met.
         for _ in 1..start_level {
             curriculum.next_level();
         }
-        let world = World::for_level(start_level);
+        let mut world = World::for_level(start_level);
+        world.set_hints(!hardcore);
         let mut display = Display::default();
         if start_level > 1 {
             display.announce(
@@ -190,6 +194,7 @@ impl Game {
             rng: Rng::new(Stream::Gameplay, 0),
             paused: false,
             touch,
+            hardcore,
             start_level,
             timestep: Timestep::default(),
             pending: Pending::default(),
@@ -308,7 +313,7 @@ impl Game {
     /// Starts over from the level this game started from. What she has
     /// learned is not the game's to lose: it lives in the caller's memory.
     fn restart(&mut self) -> Outputs {
-        *self = Game::new(self.touch, self.start_level);
+        *self = Game::new(self.touch, self.start_level, self.hardcore);
         self.report_start()
     }
 }

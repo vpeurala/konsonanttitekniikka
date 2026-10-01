@@ -57,12 +57,14 @@ pub enum TitleAction {
     Practice,
     Progress,
     Badges,
+    /// Switches hardcore mode (no hints) on or off.
+    ToggleHardcore,
 }
 
 /// Where the menu buttons' centers are, before scrolling.
 pub const MENU_Y: f32 = 262.0;
 /// The room the menu and the status line under it take.
-pub const MENU_SPACE: f32 = 105.0;
+pub const MENU_SPACE: f32 = 165.0;
 pub const BUTTON_W: f32 = 170.0;
 pub const BUTTON_H: f32 = 54.0;
 const BUTTON_GAP: f32 = 20.0;
@@ -74,6 +76,19 @@ pub const MENU: [(&str, &str, TitleAction); 4] = [
     ("Edistyminen", "E", TitleAction::Progress),
     ("Kunniamerkit", "K", TitleAction::Badges),
 ];
+
+/// The hardcore switch under the menu, with the content scrolled by
+/// `scroll`.
+pub fn hardcore_rect(scroll: f32) -> Rect {
+    const W: f32 = 300.0;
+    const H: f32 = 36.0;
+    Rect::new(
+        (ARENA_W - W) / 2.0,
+        MENU_Y + BUTTON_H / 2.0 + 44.0 - scroll,
+        W,
+        H,
+    )
+}
 
 /// Where menu button `i` is, with the content scrolled by `scroll`.
 pub fn button_rect(i: usize, scroll: f32) -> Rect {
@@ -92,6 +107,8 @@ fn key_action(frame: &Frame) -> Option<TitleAction> {
         Some(TitleAction::Progress)
     } else if frame.pressed(KeyCode::K) {
         Some(TitleAction::Badges)
+    } else if frame.pressed(KeyCode::A) {
+        Some(TitleAction::ToggleHardcore)
     } else {
         None
     }
@@ -143,6 +160,9 @@ impl TitleScreen {
                                 .find(|&i| button_rect(i, self.scroll).contains(p.pos));
                             if let Some(i) = tapped {
                                 return Some(MENU[i].2);
+                            }
+                            if hardcore_rect(self.scroll).contains(p.pos) {
+                                return Some(TitleAction::ToggleHardcore);
                             }
                         }
                     }
@@ -325,7 +345,24 @@ mod tests {
             TitleAction::Progress
         );
         assert_eq!(title.update(&pressed(KeyCode::K), &[]), TitleAction::Badges);
-        assert_eq!(title.update(&pressed(KeyCode::A), &[]), TitleAction::Stay);
+        assert_eq!(
+            title.update(&pressed(KeyCode::Unused), &[]),
+            TitleAction::Stay
+        );
+    }
+
+    #[test]
+    fn a_picks_hardcore_mode_and_so_does_tapping_its_switch() {
+        let mut title = TitleScreen::new(false);
+        assert_eq!(
+            title.update(&pressed(KeyCode::A), &[]),
+            TitleAction::ToggleHardcore
+        );
+        let at = hardcore_rect(0.0).center();
+        assert_eq!(
+            title.update(&Frame::default(), &tap_on(at)),
+            TitleAction::ToggleHardcore
+        );
     }
 
     #[test]

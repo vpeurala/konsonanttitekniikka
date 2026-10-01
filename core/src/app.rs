@@ -256,6 +256,10 @@ impl Context {
             TitleAction::Progress => {
                 Step::go_counting(Screen::Progress, analytics::Event::Progress)
             }
+            TitleAction::ToggleHardcore => Step {
+                next: None,
+                effects: vec![self.data.toggle_hardcore()],
+            },
             TitleAction::Badges => {
                 Step::go_counting(Screen::Badges(Box::default()), analytics::Event::Badges)
             }
@@ -375,7 +379,7 @@ impl Context {
     }
 
     fn new_game(&self, level: u32) -> Game {
-        Game::new(self.touch_mode, level)
+        Game::new(self.touch_mode, level, self.data.progress.hardcore)
     }
 }
 

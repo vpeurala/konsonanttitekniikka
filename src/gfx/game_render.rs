@@ -302,6 +302,9 @@ fn draw_energy(scene: &Scene) {
     draw_line(low_x, 12.0, low_x, 36.0, 2.0, WHITE);
     let label = format!("Energia: {} %", energy.round() as u32);
     draw_text(&label, 16.0, 54.0, 18.0, LIGHTGRAY);
+    if scene.hardcore {
+        draw_text("Ankara tila", 16.0, 76.0, 18.0, RED);
+    }
     // The touch panel has buttons for these instead.
     if !scene.touch {
         draw_text(

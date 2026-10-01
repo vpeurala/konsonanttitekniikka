@@ -38,6 +38,11 @@ impl Progress {
     fn write_text(&self, text: &mut String) -> std::fmt::Result {
         writeln!(text, "{HEADER}")?;
         writeln!(text, "music {}", if self.music_on { "on" } else { "off" })?;
+        writeln!(
+            text,
+            "hardcore {}",
+            if self.hardcore { "on" } else { "off" }
+        )?;
         writeln!(text, "best-level {}", self.best_level)?;
         for (level, stars) in &self.stars {
             writeln!(text, "stars {level} {stars}")?;
@@ -86,6 +91,7 @@ impl Progress {
     fn read_line(&mut self, words: &[&str], records: &mut Vec<(String, PairRecord)>) {
         match words {
             ["music", setting] => self.music_on = *setting != "off",
+            ["hardcore", setting] => self.hardcore = *setting == "on",
             ["best-level", level] => {
                 if let Ok(level) = level.parse::<u32>() {
                     self.best_level = level.clamp(1, MAX_LEVEL);
@@ -163,6 +169,7 @@ mod tests {
     fn sample() -> Progress {
         let mut data = Progress {
             music_on: false,
+            hardcore: true,
             best_level: 4,
             streak_day: 20_356,
             streak: 5,

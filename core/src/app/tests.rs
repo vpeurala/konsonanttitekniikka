@@ -396,6 +396,34 @@ fn switching_the_sound_off_silences_the_sound_effects_too() {
 }
 
 #[test]
+fn hardcore_mode_is_switched_on_the_title_screen_saved_and_kept_across_games() {
+    let mut app = app();
+    assert!(!app.progress().hardcore);
+    let effects = app.update(&press(KeyCode::A));
+    assert!(app.progress().hardcore);
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::Save(text) if text.contains("hardcore on"))),
+        "{effects:?}"
+    );
+    app.update(&press(KeyCode::Enter));
+    let Screen::Game(game) = app.screen() else {
+        panic!("a game should have started");
+    };
+    assert!(game.scene().hardcore);
+    // Back on the title screen the mode can be switched off again.
+    app.update(&press(KeyCode::Escape));
+    app.update(&press(KeyCode::A));
+    assert!(!app.progress().hardcore);
+    app.update(&press(KeyCode::Enter));
+    let Screen::Game(game) = app.screen() else {
+        panic!("a game should have started");
+    };
+    assert!(!game.scene().hardcore);
+}
+
+#[test]
 fn the_same_frames_give_the_same_effects() {
     let run = || {
         let mut app = app();
