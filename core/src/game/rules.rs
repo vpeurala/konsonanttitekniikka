@@ -77,6 +77,9 @@ pub const BIRD_ENERGY: f32 = 30.0;
 /// Each answered number of the mould is worth this, like a boss's hit.
 pub const MOULD_POINTS_PER_HIT: u32 = 1;
 pub const MOULD_ENERGY_PER_HIT: f32 = 10.0;
+/// What answering a golem is worth: it takes a whole long number.
+pub const GOLEM_POINTS: u32 = 5;
+pub const GOLEM_ENERGY: f32 = 50.0;
 pub const WRONG_PENALTY: f32 = 10.0;
 /// Wrong keys never take energy below this, so only collisions can end
 /// the game.
@@ -181,6 +184,19 @@ pub const MOULD_RADIUS_PER_NUMBER: f32 = 1.5;
 pub const MOULD_TUBE_RADIUS: f32 = 16.0;
 /// ...and its tail end draws in this fast when it shrinks.
 pub const MOULD_TAIL_SPEED: f32 = 90.0;
+/// Golems appear from this level on, as this share of the newcomers, and
+/// never more than `MAX_GOLEMS` at once.
+pub const GOLEM_FIRST_LEVEL: u32 = 45;
+pub const GOLEM_SHARE: f32 = 0.1;
+pub const MAX_GOLEMS: usize = 2;
+/// A golem is bigger than the others, but smaller than a boss.
+pub const GOLEM_RADIUS: f32 = 28.0;
+/// It starts a little slower than a star monster...
+pub const GOLEM_START_SPEED_FACTOR: f32 = 0.85;
+/// ...speeds up a little slower...
+pub const GOLEM_GROWTH_FACTOR: f32 = 0.8;
+/// ...and is never faster than this, as a fraction of her speed.
+pub const GOLEM_TOP_SPEED_FACTOR: f32 = 0.6;
 pub const NEW_PAIR_SHARE: f32 = 0.5;
 
 /// How often a new monster comes out of a portal rather than a screen

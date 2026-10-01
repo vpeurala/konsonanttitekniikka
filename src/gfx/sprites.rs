@@ -587,6 +587,190 @@ pub fn draw_mould(pos: Vec2, radius: f32, time: f32, phase: f32) {
     );
 }
 
+const GOLEM_STONE: Color = Color::new(0.52, 0.49, 0.46, 1.0);
+const GOLEM_LIGHT: Color = Color::new(0.7, 0.67, 0.61, 1.0);
+const GOLEM_DARK: Color = Color::new(0.3, 0.28, 0.27, 1.0);
+const GOLEM_MOSS: Color = Color::new(0.33, 0.52, 0.22, 1.0);
+const GOLEM_GLOW: Color = Color::new(1.0, 0.72, 0.22, 1.0);
+
+/// A stone golem centered on `pos`, about `radius` big: a blocky head with
+/// a heavy brow and glowing eyes, boulder shoulders, big swinging fists and
+/// stumpy legs, with moss in the cracks. It lumbers: its body bobs and its
+/// arms swing with each step. `phase` keeps golems from walking in step.
+pub fn draw_golem(pos: Vec2, radius: f32, time: f32, phase: f32) {
+    let t = time + phase;
+    let r = radius;
+    let step = (t * 3.0).sin();
+    // Each heavy step jolts it down a little.
+    let pos = pos + vec2(0.0, step.abs() * r * 0.06);
+    draw_ellipse(pos.x, pos.y + r * 1.3, r * 1.1, r * 0.22, 0.0, SHADOW);
+
+    // Stumpy legs, taking turns.
+    for (side, lift) in [(-1.0f32, step.max(0.0)), (1.0, (-step).max(0.0))] {
+        let x = pos.x + side * r * 0.4;
+        let top = pos.y + r * 0.55;
+        let bottom = pos.y + r * 1.25 - lift * r * 0.12;
+        draw_rectangle(x - r * 0.3, top, r * 0.6, bottom - top, GOLEM_DARK);
+        draw_rectangle(x - r * 0.26, top, r * 0.52, bottom - top - 3.0, GOLEM_STONE);
+        draw_rectangle(
+            x - r * 0.34,
+            bottom - r * 0.18,
+            r * 0.68,
+            r * 0.18,
+            GOLEM_DARK,
+        );
+    }
+    // Arms with big fists, swinging against each other.
+    for (side, swing) in [(-1.0f32, step), (1.0, -step)] {
+        let shoulder = pos + vec2(side * r * 0.95, -r * 0.1);
+        let fist = shoulder + vec2(side * r * 0.2, r * (0.9 + swing * 0.12));
+        draw_line(shoulder.x, shoulder.y, fist.x, fist.y, r * 0.42, GOLEM_DARK);
+        draw_line(
+            shoulder.x,
+            shoulder.y,
+            fist.x,
+            fist.y,
+            r * 0.32,
+            GOLEM_STONE,
+        );
+        draw_rectangle(
+            fist.x - r * 0.3,
+            fist.y - r * 0.1,
+            r * 0.6,
+            r * 0.5,
+            GOLEM_DARK,
+        );
+        draw_rectangle(
+            fist.x - r * 0.25,
+            fist.y - r * 0.06,
+            r * 0.5,
+            r * 0.4,
+            GOLEM_LIGHT,
+        );
+        // Knuckles.
+        for k in [-1.0f32, 0.0, 1.0] {
+            draw_line(
+                fist.x + k * r * 0.16,
+                fist.y + r * 0.1,
+                fist.x + k * r * 0.16,
+                fist.y + r * 0.3,
+                1.5,
+                GOLEM_DARK,
+            );
+        }
+    }
+    // The torso: a slab with a lit face and a dark edge, cracked, with
+    // glowing seams and moss.
+    draw_rectangle(
+        pos.x - r * 0.9,
+        pos.y - r * 0.35,
+        r * 1.8,
+        r * 1.05,
+        GOLEM_DARK,
+    );
+    draw_rectangle(
+        pos.x - r * 0.84,
+        pos.y - r * 0.3,
+        r * 1.68,
+        r * 0.95,
+        GOLEM_STONE,
+    );
+    draw_rectangle(
+        pos.x - r * 0.84,
+        pos.y - r * 0.3,
+        r * 1.68,
+        r * 0.18,
+        GOLEM_LIGHT,
+    );
+    let glow = 0.7 + 0.3 * (t * 2.0).sin();
+    let seam = Color {
+        a: glow,
+        ..GOLEM_GLOW
+    };
+    draw_line(
+        pos.x - r * 0.3,
+        pos.y - r * 0.1,
+        pos.x - r * 0.1,
+        pos.y + r * 0.2,
+        2.5,
+        seam,
+    );
+    draw_line(
+        pos.x - r * 0.1,
+        pos.y + r * 0.2,
+        pos.x - r * 0.3,
+        pos.y + r * 0.5,
+        2.5,
+        seam,
+    );
+    draw_line(
+        pos.x + r * 0.35,
+        pos.y + r * 0.0,
+        pos.x + r * 0.5,
+        pos.y + r * 0.35,
+        2.0,
+        seam,
+    );
+    draw_circle(pos.x + r * 0.55, pos.y - r * 0.15, r * 0.2, GOLEM_MOSS);
+    draw_circle(pos.x + r * 0.42, pos.y - r * 0.08, r * 0.14, GOLEM_MOSS);
+    draw_circle(pos.x - r * 0.62, pos.y + r * 0.5, r * 0.16, GOLEM_MOSS);
+    // Boulder shoulders.
+    for side in [-1.0f32, 1.0] {
+        let c = pos + vec2(side * r * 0.9, -r * 0.2);
+        draw_circle(c.x, c.y, r * 0.38, GOLEM_DARK);
+        draw_circle(c.x, c.y - r * 0.02, r * 0.33, GOLEM_STONE);
+        draw_circle(c.x - r * 0.1, c.y - r * 0.12, r * 0.1, GOLEM_LIGHT);
+    }
+    // The head: a block sunk between the shoulders, with a heavy brow, two
+    // glowing eyes and a slit of a mouth.
+    let head = pos + vec2(0.0, -r * 0.7);
+    draw_rectangle(
+        head.x - r * 0.5,
+        head.y - r * 0.4,
+        r * 1.0,
+        r * 0.85,
+        GOLEM_DARK,
+    );
+    draw_rectangle(
+        head.x - r * 0.45,
+        head.y - r * 0.35,
+        r * 0.9,
+        r * 0.75,
+        GOLEM_STONE,
+    );
+    draw_rectangle(
+        head.x - r * 0.52,
+        head.y - r * 0.3,
+        r * 1.04,
+        r * 0.2,
+        GOLEM_DARK,
+    );
+    for side in [-1.0f32, 1.0] {
+        let eye = head + vec2(side * r * 0.22, -r * 0.02);
+        draw_circle(
+            eye.x,
+            eye.y,
+            r * 0.15,
+            Color {
+                a: glow,
+                ..GOLEM_GLOW
+            },
+        );
+        draw_circle(eye.x, eye.y, r * 0.06, WHITE);
+    }
+    draw_line(
+        head.x - r * 0.25,
+        head.y + r * 0.27,
+        head.x + r * 0.25,
+        head.y + r * 0.27,
+        2.5,
+        GOLEM_DARK,
+    );
+    // A bit of moss on top of the head.
+    draw_circle(head.x - r * 0.25, head.y - r * 0.4, r * 0.14, GOLEM_MOSS);
+    draw_circle(head.x - r * 0.1, head.y - r * 0.42, r * 0.1, GOLEM_MOSS);
+}
+
 const BIRD_FEATHER: Color = Color::new(0.2, 0.17, 0.3, 1.0);
 const BIRD_FEATHER_EDGE: Color = Color::new(0.38, 0.33, 0.5, 1.0);
 const BIRD_BONE: Color = Color::new(0.93, 0.9, 0.8, 1.0);

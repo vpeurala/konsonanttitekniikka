@@ -419,6 +419,49 @@ fn touching_the_body_of_a_mould_hurts_as_much_as_the_head() {
 }
 
 #[test]
+fn golems_only_appear_from_level_45_on_a_couple_at_a_time_with_six_digit_numbers() {
+    assert!(!kinds_seen_idling(GOLEM_FIRST_LEVEL - 1, 200.0).contains(&enemy::Kind::Golem));
+    let mut game = game_from(GOLEM_FIRST_LEVEL);
+    let mut seen = false;
+    for _ in 0..(200.0 / FRAME) as usize {
+        game.update(&frame());
+        game.vitals = game.vitals.with_energy(1000.0);
+        let golems: Vec<_> = game
+            .world
+            .enemies()
+            .iter()
+            .filter(|e| e.kind() == enemy::Kind::Golem)
+            .collect();
+        assert!(golems.len() <= MAX_GOLEMS);
+        for golem in golems {
+            seen = true;
+            assert_eq!(golem.label.len(), long_numbers::LONGEST_LONG);
+            assert!(golem.question.is_long());
+        }
+    }
+    assert!(seen, "a golem should have come by");
+}
+
+#[test]
+fn answering_a_golem_takes_its_whole_long_number_and_gives_five_points() {
+    let mut game = game_from(GOLEM_FIRST_LEVEL);
+    game.vitals = game.vitals.with_energy(50.0);
+    let number = Question::for_number("201377").unwrap();
+    let mut golem = Enemy::golem(number, 0.5, 0.0);
+    golem.pos = vec2(50.0, 50.0);
+    game.world.admit(golem);
+    let answer = game.world.enemies()[0].answer().to_owned();
+    assert!(
+        answer.len() > 3,
+        "a long number takes a few words: {answer}"
+    );
+    game.update(&typing(&answer));
+    assert!(game.world.enemies().is_empty());
+    assert_eq!(game.vitals.score(), GOLEM_POINTS);
+    assert_eq!(game.vitals.energy(), 50.0 + GOLEM_ENERGY);
+}
+
+#[test]
 fn moulds_only_appear_from_level_35_on_one_at_a_time() {
     assert!(!kinds_seen_idling(MOULD_FIRST_LEVEL - 1, 200.0).contains(&enemy::Kind::Mould));
     let mut game = game_from(MOULD_FIRST_LEVEL);

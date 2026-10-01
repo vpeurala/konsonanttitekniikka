@@ -10,10 +10,12 @@ use super::metrics::text_width;
 use super::rules::{
     BIRD_AIM_SECONDS, BIRD_AIM_SPEED, BIRD_ATTACK_SPEED_FACTOR, BIRD_ENERGY, BIRD_POINTS,
     BOSS_ENERGY_PER_HIT, BOSS_POINTS_PER_HIT, BOSS_RADIUS, BOSS_SPEED_FACTOR, CYCLOPS_ENERGY,
-    CYCLOPS_GROWTH_FACTOR, CYCLOPS_POINTS, CYCLOPS_START_SPEED_FACTOR, ENEMY_RADIUS,
-    MOULD_BASE_RADIUS, MOULD_ENERGY_PER_HIT, MOULD_GROWTH_DISTANCE, MOULD_POINTS_PER_HIT,
-    MOULD_RADIUS_PER_NUMBER, MOULD_SPEED, MOULD_TAIL_SPEED, MOULD_TUBE_RADIUS, PLAYER_SPEED,
-    SPEED_GROWTH, STAR_ENERGY, STAR_POINTS, START_SPEED, enemy_speed, shows_hint, speed_growth,
+    CYCLOPS_GROWTH_FACTOR, CYCLOPS_POINTS, CYCLOPS_START_SPEED_FACTOR, ENEMY_RADIUS, GOLEM_ENERGY,
+    GOLEM_GROWTH_FACTOR, GOLEM_POINTS, GOLEM_RADIUS, GOLEM_START_SPEED_FACTOR,
+    GOLEM_TOP_SPEED_FACTOR, MOULD_BASE_RADIUS, MOULD_ENERGY_PER_HIT, MOULD_GROWTH_DISTANCE,
+    MOULD_POINTS_PER_HIT, MOULD_RADIUS_PER_NUMBER, MOULD_SPEED, MOULD_TAIL_SPEED,
+    MOULD_TUBE_RADIUS, PLAYER_SPEED, SPEED_GROWTH, STAR_ENERGY, STAR_POINTS, START_SPEED,
+    enemy_speed, shows_hint, speed_growth,
 };
 use crate::arena::{ARENA_H, ARENA_W};
 use crate::long_numbers::Question;
@@ -39,6 +41,8 @@ pub enum Kind {
     Bird,
     /// Creeps slowly, growing a trail, with a number for each blob.
     Mould,
+    /// Big and stony, with one long number of the longest length.
+    Golem,
     Boss,
 }
 
@@ -148,6 +152,10 @@ pub struct Enemy {
     pub flight: Option<Flight>,
     /// The mould's trail and numbers; `None` for everything else.
     pub mould: Option<Mould>,
+    /// Whether it is a golem, which shows one long number.
+    pub golem: bool,
+    /// The fastest it ever gets.
+    pub max_speed: f32,
 }
 
 impl Enemy {
@@ -175,9 +183,21 @@ impl Enemy {
             boss: None,
             flight: None,
             mould: None,
+            golem: false,
+            max_speed: PLAYER_SPEED,
         };
         enemy.show(question, difficulty);
         enemy
+    }
+
+    /// A golem showing `question`, a long number, bigger than the other
+    /// monsters but smaller than a boss, and never as fast as she is.
+    pub fn golem(question: Question, difficulty: f32, phase: f32) -> Self {
+        let mut golem = Enemy::new(question, false, difficulty, phase);
+        golem.golem = true;
+        golem.radius = GOLEM_RADIUS;
+        golem.max_speed = GOLEM_TOP_SPEED_FACTOR * PLAYER_SPEED;
+        golem
     }
 
     /// A mould showing `question`, which will grow as it creeps by taking
@@ -266,6 +286,8 @@ impl Enemy {
             Kind::Mould
         } else if self.flight.is_some() {
             Kind::Bird
+        } else if self.golem {
+            Kind::Golem
         } else if self.shows_word {
             Kind::Cyclops
         } else {
@@ -414,7 +436,10 @@ impl Enemy {
     /// monster's head start and quicker growth.
     pub fn set_level(&mut self, level: u32) {
         let growth = speed_growth(level);
-        if self.kind() == Kind::Cyclops {
+        if self.kind() == Kind::Golem {
+            self.start_speed = START_SPEED * GOLEM_START_SPEED_FACTOR;
+            self.speed_growth = growth * GOLEM_GROWTH_FACTOR;
+        } else if self.kind() == Kind::Cyclops {
             self.start_speed = START_SPEED * CYCLOPS_START_SPEED_FACTOR;
             self.speed_growth = growth * CYCLOPS_GROWTH_FACTOR;
         } else {
@@ -443,6 +468,10 @@ impl Enemy {
                 points: BIRD_POINTS,
                 energy: BIRD_ENERGY,
             },
+            Kind::Golem => Worth {
+                points: GOLEM_POINTS,
+                energy: GOLEM_ENERGY,
+            },
             Kind::Mould => Worth {
                 points: MOULD_POINTS_PER_HIT,
                 energy: MOULD_ENERGY_PER_HIT,
@@ -465,7 +494,7 @@ impl Enemy {
             Some(Flight::Attacking { .. }) => return BIRD_ATTACK_SPEED_FACTOR * PLAYER_SPEED,
             None => {}
         }
-        let speed = enemy_speed(self.age, self.start_speed, self.speed_growth);
+        let speed = enemy_speed(self.age, self.start_speed, self.speed_growth).min(self.max_speed);
         if self.is_boss() {
             speed * BOSS_SPEED_FACTOR
         } else {
@@ -978,5 +1007,48 @@ mod tests {
             mould.creep_to(mould.pos, 0.01);
         }
         assert_eq!(mould.mould.as_ref().unwrap().tail, Some(bend));
+    }
+
+    fn golem() -> Enemy {
+        let number = Question::for_number("201377").unwrap();
+        Enemy::golem(number, 0.5, 0.0)
+    }
+
+    #[test]
+    fn a_golem_has_one_long_number_and_is_worth_five_points_and_50_percent() {
+        let golem = golem();
+        assert_eq!(golem.kind(), Kind::Golem);
+        assert!(golem.question.is_long());
+        assert_eq!(golem.label.len(), 6);
+        assert_eq!(golem.answer_slot(), Slot::Word);
+        assert_eq!((golem.worth().points, golem.worth().energy), (5, 50.0));
+    }
+
+    #[test]
+    fn a_golem_is_bigger_than_the_others_and_smaller_than_a_boss() {
+        let golem = golem();
+        for other in [enemy(3, true), enemy(3, false), bird()] {
+            assert!(golem.radius > other.radius);
+        }
+        assert!(golem.radius < boss().radius);
+    }
+
+    #[test]
+    fn a_golem_starts_slower_and_speeds_up_slower_than_a_star_and_tops_out_at_60_percent() {
+        for level in [1, 21, 45, 60] {
+            let (mut golem, mut star) = (golem(), enemy(3, false));
+            golem.set_level(level);
+            star.set_level(level);
+            assert!(golem.speed() < star.speed(), "level {level}");
+            golem.age = 5.0;
+            star.age = 5.0;
+            let gain = |e: &Enemy| e.speed() - e.start_speed;
+            assert!(gain(&golem) < gain(&star), "level {level}");
+            // Given time, a star is as fast as she is, a golem at most 60%.
+            golem.age = 1000.0;
+            star.age = 1000.0;
+            assert_eq!(star.speed(), PLAYER_SPEED);
+            assert!((golem.speed() - 0.6 * PLAYER_SPEED).abs() < 1e-3);
+        }
     }
 }

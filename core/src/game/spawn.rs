@@ -4,9 +4,9 @@ use glam::{Vec2, vec2};
 
 use super::enemy::{Enemy, Kind};
 use super::rules::{
-    BIRD_FIRST_LEVEL, BIRD_SHARE, MAX_BIRDS, MAX_ENEMIES, MIN_PORTAL_SPAWN_DISTANCE,
-    MIN_SPAWN_DISTANCE, MOULD_FIRST_LEVEL, MOULD_MAX_NUMBERS, MOULD_SHARE, NEW_PAIR_SHARE,
-    PORTAL_SPAWN_SHARE, SPAWN_ATTEMPTS, boss_hits,
+    BIRD_FIRST_LEVEL, BIRD_SHARE, GOLEM_FIRST_LEVEL, GOLEM_SHARE, MAX_BIRDS, MAX_ENEMIES,
+    MAX_GOLEMS, MIN_PORTAL_SPAWN_DISTANCE, MIN_SPAWN_DISTANCE, MOULD_FIRST_LEVEL,
+    MOULD_MAX_NUMBERS, MOULD_SHARE, NEW_PAIR_SHARE, PORTAL_SPAWN_SHARE, SPAWN_ATTEMPTS, boss_hits,
 };
 use super::world::World;
 use crate::arena::{ARENA_H, ARENA_W};
@@ -77,7 +77,6 @@ impl World {
         // Pairs she knows less well come up more often.
         let pair = pool[rng.weighted_index(pool, |p| ctx.memory.weight(p, ctx.now))];
         let question = Question::single(pair);
-        let difficulty = Enemy::difficulty_of(&question, ctx.memory);
         // Birds come in late, a few at a time, and only over the edges. The
         // draw is made only when a bird could appear, so the levels before
         // them play out as they always did.
@@ -94,9 +93,39 @@ impl World {
             && ctx.level >= MOULD_FIRST_LEVEL
             && !self.enemies().iter().any(|e| e.kind() == Kind::Mould)
             && rng.chance(MOULD_SHARE);
+        // And golems, a couple at a time at most, even later.
+        let golem = !bird
+            && !mould
+            && ctx.level >= GOLEM_FIRST_LEVEL
+            && self
+                .enemies()
+                .iter()
+                .filter(|e| e.kind() == Kind::Golem)
+                .count()
+                < MAX_GOLEMS
+            && rng.chance(GOLEM_SHARE);
+        let difficulty = Enemy::difficulty_of(&question, ctx.memory);
         let (mut enemy, portal) = if bird {
             let phase = rng.range(0.0, 100.0);
             (Enemy::bird(question, difficulty, phase), None)
+        } else if golem {
+            // Its single number is as long as numbers get.
+            let number = long_numbers::long_number_of(
+                long_numbers::LONGEST_LONG,
+                ctx.curriculum.unlocked(),
+                rng,
+                |p| ctx.memory.weight(p, ctx.now),
+            );
+            let difficulty = Enemy::difficulty_of(&number, ctx.memory);
+            let phase = rng.range(0.0, 100.0);
+            let mut golem = Enemy::golem(number, difficulty, phase);
+            golem.set_level(ctx.level);
+            let portal = if rng.chance(PORTAL_SPAWN_SHARE) {
+                self.portal_spawn_position(ctx, rng)
+            } else {
+                None
+            };
+            (golem, portal)
         } else if mould {
             let phase = rng.range(0.0, 100.0);
             // Everything it will ever grow into is chosen now: the pairs
