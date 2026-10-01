@@ -1,6 +1,6 @@
 [package]
 name = "lukuloitsu-core"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "The rules and state machines of Lukuloitsu, with no graphics, sound or clock"
 license = "MIT OR Apache-2.0"
