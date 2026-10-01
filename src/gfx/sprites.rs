@@ -316,6 +316,277 @@ fn draw_cyclops_mouth(pos: Vec2, radius: f32) {
     }
 }
 
+const MOULD_SLIME: Color = Color::new(0.45, 0.6, 0.16, 1.0);
+const MOULD_DARK: Color = Color::new(0.24, 0.34, 0.1, 1.0);
+const MOULD_GLOSS: Color = Color::new(0.85, 0.95, 0.5, 0.55);
+const MOULD_CAP: Color = Color::new(0.62, 0.45, 0.55, 1.0);
+const MOULD_CAP_SPOT: Color = Color::new(0.93, 0.85, 0.7, 1.0);
+const MOULD_STEM: Color = Color::new(0.85, 0.8, 0.6, 1.0);
+const MOULD_ROT: Color = Color::new(0.55, 0.5, 0.12, 1.0);
+const MOULD_PUS: Color = Color::new(0.92, 0.9, 0.55, 1.0);
+const MOULD_SPORE: Color = Color::new(0.85, 0.9, 0.75, 0.9);
+const MOULD_EYE: Color = Color::new(0.95, 0.92, 0.55, 1.0);
+
+/// A wobbling slimy blob with a toadstool or two growing on it, `r` big,
+/// centered on `pos`. The blobs of a trail and the head are both this.
+fn draw_mould_blob(pos: Vec2, r: f32, t: f32, seed: f32) {
+    let wobble = (t * 2.0 + seed).sin() * 0.06;
+    draw_ellipse(pos.x, pos.y + r * 0.75, r * 1.0, r * 0.28, 0.0, SHADOW);
+    draw_ellipse(
+        pos.x,
+        pos.y + r * 0.1,
+        r * (1.05 + wobble),
+        r * (0.9 - wobble),
+        0.0,
+        MOULD_DARK,
+    );
+    draw_ellipse(
+        pos.x,
+        pos.y,
+        r * (0.95 + wobble),
+        r * (0.8 - wobble),
+        0.0,
+        MOULD_SLIME,
+    );
+    // Lumps along the edge.
+    for i in 0..5 {
+        let a = seed + i as f32 * 1.3;
+        let lump = pos + vec2(a.cos() * r * 0.8, a.sin() * r * 0.55);
+        draw_circle(lump.x, lump.y, r * 0.25, MOULD_SLIME);
+    }
+    // Blotches of rot, pale pustules and a furry fringe of spores.
+    for i in 0..6 {
+        let a = seed * 1.7 + i as f32 * 1.05;
+        let spot = pos + vec2(a.cos() * r * 0.55, a.sin() * r * 0.4);
+        let color = if i % 2 == 0 { MOULD_ROT } else { MOULD_DARK };
+        draw_circle(spot.x, spot.y, r * (0.12 + 0.05 * (i % 3) as f32), color);
+    }
+    for i in 0..3 {
+        let a = seed * 0.7 + i as f32 * 2.3;
+        let pustule = pos + vec2(a.cos() * r * 0.6, a.sin() * r * 0.4);
+        draw_circle(pustule.x, pustule.y, r * 0.09, MOULD_PUS);
+    }
+    for i in 0..9 {
+        let a = -3.1 + i as f32 * 0.4;
+        let fuzz = pos + vec2(a.cos() * r * 0.85, a.sin() * r * 0.7);
+        draw_circle(fuzz.x, fuzz.y, r * 0.05, MOULD_SPORE);
+    }
+    // Slime hangs from the bottom in strings.
+    for i in 0..3 {
+        let x = pos.x + (i as f32 - 1.0) * r * 0.5;
+        let length = r * (0.25 + 0.12 * ((t * 1.5 + seed + i as f32 * 2.0).sin() * 0.5 + 0.5));
+        draw_line(
+            x,
+            pos.y + r * 0.6,
+            x,
+            pos.y + r * 0.6 + length,
+            r * 0.08,
+            MOULD_SLIME,
+        );
+        draw_circle(x, pos.y + r * 0.6 + length, r * 0.07, MOULD_SLIME);
+    }
+    // The wet shine.
+    draw_ellipse(
+        pos.x - r * 0.3,
+        pos.y - r * 0.35,
+        r * 0.28,
+        r * 0.14,
+        -20.0,
+        MOULD_GLOSS,
+    );
+}
+
+/// A little toadstool: a stem, a spotted cap.
+fn draw_toadstool(base: Vec2, size: f32, bob: f32) {
+    let top = base + vec2(0.0, -size * (1.0 + bob));
+    draw_line(base.x, base.y, top.x, top.y, size * 0.35, MOULD_STEM);
+    draw_ellipse(top.x, top.y, size * 0.7, size * 0.38, 0.0, MOULD_CAP);
+    draw_circle(
+        top.x - size * 0.25,
+        top.y - size * 0.05,
+        size * 0.1,
+        MOULD_CAP_SPOT,
+    );
+    draw_circle(
+        top.x + size * 0.2,
+        top.y - size * 0.1,
+        size * 0.08,
+        MOULD_CAP_SPOT,
+    );
+}
+
+/// The mould's body: one slimy tube from the tail through each of its
+/// bends to the head, `radius` thick, with blotches, pustules and a
+/// toadstool or two along it. Drawn under the monsters.
+pub fn draw_mould_body(body: &[Vec2], radius: f32, time: f32, phase: f32) {
+    if body.len() < 2 {
+        return;
+    }
+    let t = time + phase;
+    let r = radius;
+    // Points along the body, close enough to look like one piece.
+    let mut samples: Vec<(Vec2, f32)> = Vec::new();
+    let mut along = 0.0;
+    for pair in body.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let length = a.distance(b);
+        let steps = (length / 4.0).ceil().max(1.0) as usize;
+        for k in 0..steps {
+            samples.push((
+                a.lerp(b, k as f32 / steps as f32),
+                along + length * k as f32 / steps as f32,
+            ));
+        }
+        along += length;
+    }
+    samples.push((body[body.len() - 1], along));
+    let swell = |arc: f32| 1.0 + 0.17 * (arc * 0.045 + t * 1.5).sin();
+    for &(p, _) in &samples {
+        draw_ellipse(p.x, p.y + r * 0.7, r * 1.05, r * 0.3, 0.0, SHADOW);
+    }
+    for &(p, arc) in &samples {
+        draw_circle(p.x, p.y + r * 0.1, r * swell(arc) * 1.1, MOULD_DARK);
+    }
+    for &(p, arc) in &samples {
+        draw_circle(p.x, p.y, r * swell(arc), MOULD_SLIME);
+    }
+    // Slime strings hang from the underside, and the wet shine runs along
+    // the top.
+    for (k, &(p, arc)) in samples.iter().enumerate() {
+        if k % 6 == 0 {
+            draw_ellipse(
+                p.x - r * 0.25,
+                p.y - r * 0.4,
+                r * 0.3,
+                r * 0.12,
+                -10.0,
+                MOULD_GLOSS,
+            );
+        }
+        if k % 9 == 4 {
+            let length = r * (0.25 + 0.15 * (t * 1.5 + arc * 0.1).sin().abs());
+            draw_line(
+                p.x,
+                p.y + r * 0.7,
+                p.x,
+                p.y + r * 0.7 + length,
+                r * 0.1,
+                MOULD_SLIME,
+            );
+            draw_circle(p.x, p.y + r * 0.7 + length, r * 0.09, MOULD_SLIME);
+        }
+    }
+    // The decorations sit in the middle of each stretch, each from its
+    // own bend, so they stay put as the head moves on.
+    for pair in body.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if a.distance(b) < r {
+            continue;
+        }
+        let seed = a.x * 0.013 + a.y * 0.017;
+        let mid = a.lerp(b, 0.5);
+        for i in 0..4 {
+            let angle = seed * 3.0 + i as f32 * 1.7;
+            let offset = a.lerp(b, 0.2 + 0.2 * i as f32)
+                + vec2(angle.cos() * r * 0.35, angle.sin() * r * 0.35);
+            let color = if i % 2 == 0 { MOULD_ROT } else { MOULD_DARK };
+            draw_circle(offset.x, offset.y, r * (0.14 + 0.04 * i as f32), color);
+        }
+        let pustule = mid + vec2(seed.cos() * r * 0.4, -r * 0.2);
+        draw_circle(pustule.x, pustule.y, r * 0.1, MOULD_PUS);
+        draw_toadstool(
+            mid + vec2(r * 0.2, -r * 0.3),
+            r * 0.5,
+            (t * 1.5 + seed).sin() * 0.05,
+        );
+    }
+    for &(p, arc) in samples.iter().step_by(5) {
+        let a = arc * 0.9 + phase;
+        draw_circle(
+            p.x + a.cos() * r * 0.5,
+            p.y - r * 0.85,
+            r * 0.05,
+            MOULD_SPORE,
+        );
+    }
+}
+
+/// The head of the mould: a disgusting blob of slime and toadstools with a
+/// vague face, a big pale eye, a small one, and a drooping mouth with a
+/// drip. It wobbles; `phase` keeps moulds from wobbling in sync.
+pub fn draw_mould(pos: Vec2, radius: f32, time: f32, phase: f32) {
+    let t = time + phase;
+    let r = radius;
+    draw_mould_blob(pos, r, t, phase);
+    draw_toadstool(
+        pos + vec2(-r * 0.45, -r * 0.45),
+        r * 0.4,
+        (t * 1.3).sin() * 0.05,
+    );
+    draw_toadstool(
+        pos + vec2(r * 0.5, -r * 0.35),
+        r * 0.3,
+        (t * 1.7 + 1.0).sin() * 0.05,
+    );
+    // A vague face: sunken eyes of different sizes, half-closed under
+    // heavy lids, and a wide crooked mouth with a strand of drool.
+    let big = pos + vec2(-r * 0.28, -r * 0.1);
+    let small = pos + vec2(r * 0.3, -r * 0.02);
+    for (eye, size) in [(big, r * 0.22), (small, r * 0.14)] {
+        draw_circle(eye.x, eye.y, size * 1.25, MOULD_DARK);
+        draw_circle(eye.x, eye.y, size, MOULD_EYE);
+        draw_circle(eye.x + size * 0.1, eye.y + size * 0.25, size * 0.4, BLACK);
+        // The lid droops over the upper half.
+        draw_ellipse(
+            eye.x,
+            eye.y - size * 0.45,
+            size * 1.15,
+            size * 0.6,
+            0.0,
+            MOULD_SLIME,
+        );
+    }
+    draw_line(
+        pos.x - r * 0.4,
+        pos.y + r * 0.32,
+        pos.x + r * 0.1,
+        pos.y + r * 0.4,
+        r * 0.12,
+        MOULD_DARK,
+    );
+    draw_line(
+        pos.x + r * 0.1,
+        pos.y + r * 0.4,
+        pos.x + r * 0.42,
+        pos.y + r * 0.26,
+        r * 0.12,
+        MOULD_DARK,
+    );
+    for tooth in [-0.2f32, 0.05, 0.25] {
+        draw_triangle(
+            vec2(pos.x + r * tooth, pos.y + r * 0.37),
+            vec2(pos.x + r * (tooth + 0.07), pos.y + r * 0.36),
+            vec2(pos.x + r * (tooth + 0.03), pos.y + r * 0.5),
+            MOULD_PUS,
+        );
+    }
+    let drool = r * (0.2 + 0.12 * (t * 2.5).sin().abs());
+    draw_line(
+        pos.x + r * 0.3,
+        pos.y + r * 0.3,
+        pos.x + r * 0.3,
+        pos.y + r * 0.45 + drool,
+        r * 0.06,
+        MOULD_GLOSS,
+    );
+    draw_circle(
+        pos.x + r * 0.3,
+        pos.y + r * 0.45 + drool,
+        r * 0.07,
+        MOULD_GLOSS,
+    );
+}
+
 const BIRD_FEATHER: Color = Color::new(0.2, 0.17, 0.3, 1.0);
 const BIRD_FEATHER_EDGE: Color = Color::new(0.38, 0.33, 0.5, 1.0);
 const BIRD_BONE: Color = Color::new(0.93, 0.9, 0.8, 1.0);

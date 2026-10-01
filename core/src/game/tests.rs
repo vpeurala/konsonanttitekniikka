@@ -310,6 +310,177 @@ fn answering_a_bird_gives_three_points_and_30_percent() {
     assert_eq!(game.vitals.energy(), 80.0);
 }
 
+/// A mould with `numbers` numbers, a head at (700, 100) and a blob at
+/// (650, 100) for each number but the first, in a game at level 35.
+fn game_with_a_mould(numbers: usize) -> Rig {
+    let mut game = game_from(MOULD_FIRST_LEVEL);
+    game.player.pos = vec2(100.0, 500.0);
+    let pending = (0..numbers - 1)
+        .map(|i| Question::single(PAIRS[40 + i]))
+        .collect();
+    let mut mould = Enemy::mould(Question::single(PAIRS[22 + 10]), pending, 0.5, 0.0);
+    mould.pos = vec2(700.0, 100.0);
+    for _ in 0..(MOULD_GROWTH_DISTANCE as usize * (numbers - 1)) {
+        mould.creep_to(mould.pos + vec2(0.0, 1.0), 0.01);
+    }
+    mould.mould.as_mut().unwrap().harmless_for = 0.0;
+    game.world.admit(mould);
+    game
+}
+
+fn mould_numbers_of(game: &Rig) -> Option<usize> {
+    game.world
+        .enemies()
+        .iter()
+        .find(|e| e.kind() == enemy::Kind::Mould)
+        .map(|m| m.mould_numbers())
+}
+
+#[test]
+fn each_word_shrinks_the_mould_and_the_last_kills_it() {
+    let mut game = game_with_a_mould(3);
+    game.vitals = game.vitals.with_energy(50.0);
+    assert_eq!(mould_numbers_of(&game), Some(3));
+    for left in [2, 1] {
+        let answer = game.world.enemies()[0].answer().to_owned();
+        game.update(&typing(&answer));
+        assert_eq!(mould_numbers_of(&game), Some(left));
+    }
+    let answer = game.world.enemies()[0].answer().to_owned();
+    game.update(&typing(&answer));
+    assert_eq!(mould_numbers_of(&game), None, "the last number kills it");
+    // Every number gave a point and 10% energy.
+    assert_eq!(game.vitals.score(), 3 * MOULD_POINTS_PER_HIT);
+    assert_eq!(game.vitals.energy(), 50.0 + 3.0 * MOULD_ENERGY_PER_HIT);
+}
+
+#[test]
+fn a_small_mould_dies_to_a_single_word() {
+    let mut game = game_with_a_mould(1);
+    let answer = game.world.enemies()[0].answer().to_owned();
+    game.update(&typing(&answer));
+    assert_eq!(mould_numbers_of(&game), None);
+}
+
+#[test]
+fn a_mould_creeps_toward_her_and_grows_a_trail_as_it_goes() {
+    let mut game = game_with_a_mould(1);
+    let start = game.world.enemies()[0].pos;
+    game.world.enemies_mut()[0]
+        .mould
+        .as_mut()
+        .unwrap()
+        .pending
+        .extend([Question::single(PAIRS[50]), Question::single(PAIRS[51])]);
+    idle(&mut game, 20.0);
+    let mould = &game.world.enemies()[0];
+    assert!(mould.pos.distance(game.player.pos) < start.distance(game.player.pos));
+    // 20 seconds at 8 px/s is 160 px: four blobs' worth, limited by the
+    // two numbers it had left to grow into.
+    assert_eq!(mould.mould_numbers(), 3);
+    assert_eq!(mould.mould.as_ref().unwrap().trail.len(), 2);
+}
+
+#[test]
+fn a_mould_touching_her_hurts_now_and_then_and_stays() {
+    let mut game = game_with_a_mould(2);
+    game.world.enemies_mut()[0].pos = game.player.pos;
+    game.update(&frame());
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - COLLISION_PENALTY);
+    assert_eq!(mould_numbers_of(&game), Some(2), "it stays");
+    game.update(&frame());
+    assert_eq!(
+        game.vitals.energy(),
+        FULL_ENERGY - COLLISION_PENALTY,
+        "not again at once"
+    );
+    idle(&mut game, BOSS_HARMLESS_SECONDS + 0.1);
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - 2.0 * COLLISION_PENALTY);
+}
+
+#[test]
+fn touching_the_body_of_a_mould_hurts_as_much_as_the_head() {
+    // The body runs straight down from (700, 100) to the head at (700, 180).
+    let mut game = game_with_a_mould(3);
+    let head = game.world.enemies()[0].pos;
+    assert_eq!(head, vec2(700.0, 180.0));
+    // Beside the body, close but clear of it: nothing happens.
+    game.player.pos = vec2(700.0 + PLAYER_RADIUS + 16.0 + 4.0, 140.0);
+    game.update(&frame());
+    assert_eq!(game.vitals.energy(), FULL_ENERGY);
+    // On the body, well away from the head.
+    game.player.pos = vec2(700.0, 120.0);
+    game.update(&frame());
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - COLLISION_PENALTY);
+    assert_eq!(mould_numbers_of(&game), Some(3), "it stays");
+    // Standing there hurts again once the pause is over.
+    idle(&mut game, BOSS_HARMLESS_SECONDS + 0.1);
+    assert!(game.vitals.energy() <= FULL_ENERGY - 2.0 * COLLISION_PENALTY);
+}
+
+#[test]
+fn moulds_only_appear_from_level_35_on_one_at_a_time() {
+    assert!(!kinds_seen_idling(MOULD_FIRST_LEVEL - 1, 200.0).contains(&enemy::Kind::Mould));
+    let mut game = game_from(MOULD_FIRST_LEVEL);
+    let mut seen = false;
+    for _ in 0..(200.0 / FRAME) as usize {
+        game.update(&frame());
+        game.vitals = game.vitals.with_energy(1000.0);
+        let moulds = game
+            .world
+            .enemies()
+            .iter()
+            .filter(|e| e.kind() == enemy::Kind::Mould)
+            .count();
+        assert!(moulds <= 1);
+        seen |= moulds == 1;
+    }
+    assert!(seen, "a mould should have come by");
+}
+
+/// How far a walker, starting at the left, strays from the straight line
+/// to the player when a mould's blob lies in its way (or not).
+fn detour_around_a_blob(blob: bool, cyclops: bool) -> f32 {
+    let mut game = game_from(MOULD_FIRST_LEVEL);
+    game.player.pos = vec2(700.0, 300.0);
+    let mut walker = Enemy::new(Question::single(PAIRS[22 + 10]), cyclops, 0.5, 0.0);
+    walker.pos = vec2(100.0, 300.0);
+    walker.start_speed = 150.0;
+    let id = walker.id;
+    game.world.admit(walker);
+    if blob {
+        // A mould whose body, from the left edge's tail to a head far off,
+        // lies across the walker's way.
+        let mut mould = Enemy::mould(Question::single(PAIRS[1]), vec![], 0.5, 0.0);
+        mould.pos = vec2(300.0, 480.0);
+        let state = mould.mould.as_mut().unwrap();
+        state.tail = Some(vec2(300.0, 200.0));
+        state.trail = vec![vec2(300.0, 300.0)];
+        mould.mould.as_mut().unwrap().harmless_for = 1000.0;
+        game.world.admit(mould);
+    }
+    let mut detour = 0.0f32;
+    for _ in 0..90 {
+        game.update(&frame());
+        if let Some(e) = game.world.enemy(id) {
+            detour = detour.max((e.pos.y - 300.0).abs());
+        }
+    }
+    detour
+}
+
+#[test]
+fn other_monsters_go_around_the_moulds_trail() {
+    for cyclops in [false, true] {
+        let free = detour_around_a_blob(false, cyclops);
+        let blocked = detour_around_a_blob(true, cyclops);
+        assert!(
+            blocked > free + 5.0,
+            "cyclops {cyclops}: {blocked} vs {free}"
+        );
+    }
+}
+
 #[test]
 fn a_new_game_reports_that_it_started() {
     let mut game = game_from(4);

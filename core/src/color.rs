@@ -24,5 +24,7 @@ pub const RED: Color = Color::new(0.90, 0.16, 0.22, 1.00);
 pub const MAROON: Color = Color::new(0.75, 0.13, 0.22, 1.00);
 pub const SKYBLUE: Color = Color::new(0.40, 0.75, 1.00, 1.00);
 pub const VIOLET: Color = Color::new(0.53, 0.24, 0.75, 1.00);
+pub const SLIME: Color = Color::new(0.55, 0.7, 0.2, 1.00);
+pub const MOULD_GREEN: Color = Color::new(0.35, 0.5, 0.15, 1.00);
 pub const WHITE: Color = Color::new(1.00, 1.00, 1.00, 1.00);
 pub const MAGENTA: Color = Color::new(1.00, 0.00, 1.00, 1.00);

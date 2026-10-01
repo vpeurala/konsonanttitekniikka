@@ -5,7 +5,8 @@ use glam::{Vec2, vec2};
 use super::enemy::{Enemy, Kind};
 use super::rules::{
     BIRD_FIRST_LEVEL, BIRD_SHARE, MAX_BIRDS, MAX_ENEMIES, MIN_PORTAL_SPAWN_DISTANCE,
-    MIN_SPAWN_DISTANCE, NEW_PAIR_SHARE, PORTAL_SPAWN_SHARE, SPAWN_ATTEMPTS, boss_hits,
+    MIN_SPAWN_DISTANCE, MOULD_FIRST_LEVEL, MOULD_MAX_NUMBERS, MOULD_SHARE, NEW_PAIR_SHARE,
+    PORTAL_SPAWN_SHARE, SPAWN_ATTEMPTS, boss_hits,
 };
 use super::world::World;
 use crate::arena::{ARENA_H, ARENA_W};
@@ -88,9 +89,28 @@ impl World {
                 .count()
                 < MAX_BIRDS
             && rng.chance(BIRD_SHARE);
+        // The same goes for the mould, which comes one at a time.
+        let mould = !bird
+            && ctx.level >= MOULD_FIRST_LEVEL
+            && !self.enemies().iter().any(|e| e.kind() == Kind::Mould)
+            && rng.chance(MOULD_SHARE);
         let (mut enemy, portal) = if bird {
             let phase = rng.range(0.0, 100.0);
             (Enemy::bird(question, difficulty, phase), None)
+        } else if mould {
+            let phase = rng.range(0.0, 100.0);
+            // Everything it will ever grow into is chosen now: the pairs
+            // nobody is asked about at the moment, each at most once.
+            let mut free: Vec<Pair> = available
+                .into_iter()
+                .filter(|p| !question.pairs().contains(p))
+                .collect();
+            let mut pending = Vec::new();
+            while pending.len() + 1 < MOULD_MAX_NUMBERS && !free.is_empty() {
+                let i = rng.weighted_index(&free, |p| ctx.memory.weight(p, ctx.now));
+                pending.push(Question::single(free.swap_remove(i)));
+            }
+            (Enemy::mould(question, pending, difficulty, phase), None)
         } else {
             let shows_word = rng.chance(0.5);
             let phase = rng.range(0.0, 100.0);

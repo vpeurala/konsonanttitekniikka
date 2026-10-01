@@ -10,8 +10,8 @@ use macroquad::prelude::*;
 
 use crate::gfx::fonts::{self, Style, draw_centered_text};
 use crate::gfx::sprites::{
-    draw_bird, draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal,
-    draw_star,
+    draw_bird, draw_boss, draw_cyclops, draw_girl, draw_monster, draw_mould, draw_mould_body,
+    draw_obstacle, draw_portal, draw_star,
 };
 use crate::gfx::view::{ARENA_H, ARENA_W, View};
 use crate::long_numbers::{self, Question};
@@ -99,6 +99,8 @@ fn draw_enemy_body(enemy: &Enemy, time: f32, player: Vec2) {
                 Color::new(1.0, 1.0, 1.0, alpha),
             );
         }
+    } else if enemy.kind() == Kind::Mould {
+        draw_mould(enemy.pos, enemy.radius, time, enemy.phase);
     } else if enemy.kind() == Kind::Bird {
         draw_bird(
             enemy.pos,
@@ -166,6 +168,10 @@ fn draw_arena(scene: &Scene) {
         draw_obstacle(obstacle, time);
     }
 
+    // The moulds' bodies lie under every monster.
+    for mould in scene.enemies.iter().filter(|e| e.mould.is_some()) {
+        draw_mould_body(&mould.mould_body(), MOULD_TUBE_RADIUS, time, mould.phase);
+    }
     for enemy in scene.enemies {
         draw_enemy_body(enemy, time, scene.player);
     }
