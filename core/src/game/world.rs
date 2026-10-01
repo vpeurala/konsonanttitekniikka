@@ -7,7 +7,7 @@
 
 use glam::Vec2;
 
-use super::enemy::{Enemy, EnemyId};
+use super::enemy::{Enemy, EnemyId, Kind};
 use super::rules::{
     BOSS_COLLISION_KNOCKBACK, BOSS_HARMLESS_SECONDS, BOSS_HIT_FLASH_SECONDS, BOSS_HIT_KNOCKBACK,
     PLAYER_RADIUS, SPELL_SPEED,
@@ -21,7 +21,7 @@ use crate::rng::Rng;
 /// What a spell is flying toward.
 pub enum SpellTarget {
     /// An enemy that is already out of play and explodes when hit.
-    Doomed(Enemy),
+    Doomed(Box<Enemy>),
     /// The boss, which is still in play and only loses a life.
     Boss,
 }
@@ -38,7 +38,7 @@ impl Spell {
     /// The enemy that is out of play and waiting for this spell.
     pub fn doomed(&self) -> Option<&Enemy> {
         match &self.target {
-            SpellTarget::Doomed(enemy) => Some(enemy),
+            SpellTarget::Doomed(enemy) => Some(enemy.as_ref()),
             SpellTarget::Boss => None,
         }
     }
@@ -182,7 +182,10 @@ impl World {
             None => {
                 let enemy = self.enemies.remove(index);
                 let boss = enemy.is_boss();
-                (SpellTarget::Doomed(enemy), HitOutcome::Defeated { boss })
+                (
+                    SpellTarget::Doomed(Box::new(enemy)),
+                    HitOutcome::Defeated { boss },
+                )
             }
         };
         self.spells.push(Spell {
@@ -257,8 +260,28 @@ impl World {
     fn walk_toward(&mut self, dt: f32, player: Vec2, rng: &mut Rng) {
         // Where everyone stood at the start of the step, for those who steer
         // around the others.
-        let crowd: Vec<(Vec2, f32)> = self.enemies.iter().map(|e| (e.pos, e.radius)).collect();
+        // Birds fly over everything, so nobody steers around them.
+        let crowd: Vec<(Vec2, f32)> = self
+            .enemies
+            .iter()
+            .map(|e| {
+                (
+                    e.pos,
+                    if e.kind() == Kind::Bird {
+                        0.0
+                    } else {
+                        e.radius
+                    },
+                )
+            })
+            .collect();
         for (i, enemy) in self.enemies.iter_mut().enumerate() {
+            if enemy.kind() == Kind::Bird {
+                enemy.fly(dt, player);
+                enemy.age += dt;
+                enemy.shown_for += dt;
+                continue;
+            }
             let speed = enemy.speed();
             let toward = (player - enemy.pos).normalize_or_zero();
             // Enemies with an even phase go left around obstacles, the rest
@@ -268,7 +291,7 @@ impl World {
             let others = crowd
                 .iter()
                 .enumerate()
-                .filter(|(j, _)| enemy.avoids_monsters() && *j != i)
+                .filter(|(j, (_, radius))| enemy.avoids_monsters() && *j != i && *radius > 0.0)
                 .map(|(_, &circle)| circle);
             let dir = steer_around(
                 enemy.pos,
@@ -283,6 +306,9 @@ impl World {
         }
         self.separate_enemies(rng);
         for enemy in &mut self.enemies {
+            if enemy.kind() == Kind::Bird {
+                continue;
+            }
             if enemy.is_boss() {
                 enemy.keep_on_screen();
             }
@@ -338,6 +364,10 @@ impl World {
             for i in 0..self.enemies.len() {
                 for j in i + 1..self.enemies.len() {
                     let (a, b) = (&self.enemies[i], &self.enemies[j]);
+                    // Birds fly over the others.
+                    if a.kind() == Kind::Bird || b.kind() == Kind::Bird {
+                        continue;
+                    }
                     let offset = b.reach_center() - a.reach_center();
                     let min_distance = a.reach() + b.reach();
                     let distance = offset.length();

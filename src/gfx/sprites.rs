@@ -316,6 +316,178 @@ fn draw_cyclops_mouth(pos: Vec2, radius: f32) {
     }
 }
 
+const BIRD_FEATHER: Color = Color::new(0.2, 0.17, 0.3, 1.0);
+const BIRD_FEATHER_EDGE: Color = Color::new(0.38, 0.33, 0.5, 1.0);
+const BIRD_BONE: Color = Color::new(0.93, 0.9, 0.8, 1.0);
+const BIRD_BONE_SHADE: Color = Color::new(0.68, 0.64, 0.56, 1.0);
+const BIRD_SOCKET: Color = Color::new(0.08, 0.05, 0.1, 1.0);
+const BIRD_EYE: Color = Color::new(1.0, 0.75, 0.2, 1.0);
+const IRON: Color = Color::new(0.52, 0.57, 0.64, 1.0);
+const IRON_DARK: Color = Color::new(0.3, 0.33, 0.4, 1.0);
+const IRON_SHINE: Color = Color::new(0.85, 0.9, 0.95, 1.0);
+
+/// A half-skeletal bird seen from the front, centered on `pos`: a round
+/// skull with hollow, glowing eyes, an iron beak and iron claws, bony wings
+/// with a few ragged feathers and an open ribcage. It beats its wings
+/// harder, and opens its beak, while `attacking`. `phase` keeps birds from
+/// flapping in sync.
+pub fn draw_bird(pos: Vec2, radius: f32, time: f32, phase: f32, attacking: bool) {
+    let t = time + phase;
+    let r = radius;
+    let flap = (t * if attacking { 14.0 } else { 6.0 }).sin();
+    // It bobs with each wingbeat.
+    let pos = pos + vec2(0.0, flap * r * 0.1);
+    draw_ellipse(pos.x, pos.y + r * 1.9, r * 0.8, 4.0, 0.0, SHADOW);
+
+    draw_bird_wings(pos, r, flap);
+    draw_bird_claws(pos, r);
+    draw_bird_body(pos, r);
+    draw_bird_skull(pos, r, t, attacking);
+}
+
+/// Each wing: a bony arm bent at the elbow and wrist, with ragged feathers
+/// along it and gaps where the bones show through.
+fn draw_bird_wings(pos: Vec2, r: f32, flap: f32) {
+    for side in [-1.0f32, 1.0] {
+        let lift = flap * r * 0.8;
+        let shoulder = pos + vec2(side * r * 0.5, -r * 0.1);
+        let elbow = pos + vec2(side * r * 1.4, -r * 0.55 - lift * 0.5);
+        let wrist = pos + vec2(side * r * 2.2, -r * 0.2 - lift);
+        let tip = pos + vec2(side * r * 2.7, r * 0.35 - lift * 1.1);
+        // Feathers hang from the arm; some are missing.
+        for (i, along) in [0.25f32, 0.5, 0.75, 1.0].into_iter().enumerate() {
+            if i == 2 {
+                continue;
+            }
+            let base = elbow.lerp(tip, along);
+            let length = r * (1.5 - 0.15 * i as f32);
+            let end = base + vec2(side * r * 0.12, length * 0.9 + lift * 0.3);
+            let width = r * 0.32;
+            draw_triangle(
+                base - vec2(width, 0.0),
+                base + vec2(width, 0.0),
+                end,
+                BIRD_FEATHER_EDGE,
+            );
+            draw_triangle(
+                base - vec2(width * 0.6, 0.0),
+                base + vec2(width * 0.6, 0.0),
+                base + (end - base) * 0.88,
+                BIRD_FEATHER,
+            );
+        }
+        for (a, b) in [(shoulder, elbow), (elbow, wrist), (wrist, tip)] {
+            draw_line(a.x, a.y, b.x, b.y, r * 0.17, BIRD_BONE_SHADE);
+            draw_line(a.x, a.y - 1.0, b.x, b.y - 1.0, r * 0.1, BIRD_BONE);
+        }
+        for joint in [elbow, wrist] {
+            draw_circle(joint.x, joint.y, r * 0.16, BIRD_BONE);
+        }
+    }
+}
+
+/// Bony legs ending in iron talons.
+fn draw_bird_claws(pos: Vec2, r: f32) {
+    for side in [-1.0f32, 1.0] {
+        let hip = pos + vec2(side * r * 0.3, r * 0.8);
+        let foot = pos + vec2(side * r * 0.45, r * 1.5);
+        draw_line(hip.x, hip.y, foot.x, foot.y, r * 0.14, BIRD_BONE);
+        for toe in [-1.0f32, 0.0, 1.0] {
+            let tip = foot + vec2((side * 0.3 + toe * 0.45) * r, r * 0.4);
+            draw_triangle(
+                foot + vec2(-r * 0.12, 0.0),
+                foot + vec2(r * 0.12, 0.0),
+                tip,
+                IRON,
+            );
+            draw_line(foot.x, foot.y, tip.x, tip.y, 1.0, IRON_SHINE);
+        }
+    }
+}
+
+/// A feathered body whose chest is open to show the ribs.
+fn draw_bird_body(pos: Vec2, r: f32) {
+    draw_ellipse(
+        pos.x,
+        pos.y + r * 0.4,
+        r * 0.85,
+        r * 0.95,
+        0.0,
+        BIRD_FEATHER_EDGE,
+    );
+    draw_ellipse(
+        pos.x,
+        pos.y + r * 0.4,
+        r * 0.75,
+        r * 0.85,
+        0.0,
+        BIRD_FEATHER,
+    );
+    // The open chest, with curved ribs across it and a bony spine.
+    draw_ellipse(pos.x, pos.y + r * 0.5, r * 0.42, r * 0.6, 0.0, BIRD_SOCKET);
+    for i in 0..3 {
+        let y = pos.y + r * (0.2 + 0.27 * i as f32);
+        let half = r * (0.4 - 0.04 * i as f32);
+        draw_line(pos.x - half, y, pos.x, y + r * 0.1, r * 0.08, BIRD_BONE);
+        draw_line(pos.x + half, y, pos.x, y + r * 0.1, r * 0.08, BIRD_BONE);
+    }
+    draw_line(
+        pos.x,
+        pos.y + r * 0.1,
+        pos.x,
+        pos.y + r * 0.95,
+        r * 0.07,
+        BIRD_BONE_SHADE,
+    );
+}
+
+/// A big round skull, friendlier than frightening: hollow eyes with a
+/// warm glow, and an iron beak that opens in the attack.
+fn draw_bird_skull(pos: Vec2, r: f32, t: f32, attacking: bool) {
+    let head = pos + vec2(0.0, -r * 0.65);
+    draw_circle(head.x, head.y, r * 0.78, BIRD_BONE_SHADE);
+    draw_circle(head.x, head.y - r * 0.03, r * 0.72, BIRD_BONE);
+    let glow = 0.8 + 0.2 * (t * 7.0).sin();
+    for side in [-1.0f32, 1.0] {
+        let eye = head + vec2(side * r * 0.3, -r * 0.05);
+        draw_circle(eye.x, eye.y, r * 0.24, BIRD_SOCKET);
+        draw_circle(
+            eye.x,
+            eye.y,
+            r * 0.12,
+            Color {
+                a: glow,
+                ..BIRD_EYE
+            },
+        );
+        // A small spark of light keeps the eyes lively.
+        draw_circle(eye.x - r * 0.04, eye.y - r * 0.05, r * 0.035, WHITE);
+    }
+    // The beak: an iron hook, split in two while attacking.
+    let top = head + vec2(0.0, r * 0.15);
+    let gap = if attacking { r * 0.18 } else { 0.0 };
+    draw_triangle(
+        top + vec2(-r * 0.26, 0.0),
+        top + vec2(r * 0.26, 0.0),
+        top + vec2(r * 0.04, r * 0.8 - gap),
+        IRON,
+    );
+    draw_triangle(
+        top + vec2(-r * 0.12, r * 0.2 + gap),
+        top + vec2(r * 0.12, r * 0.2 + gap),
+        top + vec2(0.0, r * 0.55 + gap),
+        IRON_DARK,
+    );
+    draw_line(
+        top.x - r * 0.08,
+        top.y + r * 0.04,
+        top.x + r * 0.0,
+        top.y + r * 0.5 - gap,
+        1.5,
+        IRON_SHINE,
+    );
+}
+
 const BOSS_AURA: Color = Color::new(0.7, 0.0, 0.15, 0.25);
 const BOSS_BODY: Color = Color::new(0.5, 0.03, 0.1, 1.0);
 const BOSS_EDGE: Color = Color::new(0.2, 0.0, 0.04, 1.0);

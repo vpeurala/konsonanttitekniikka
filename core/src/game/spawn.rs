@@ -2,10 +2,10 @@
 
 use glam::{Vec2, vec2};
 
-use super::enemy::Enemy;
+use super::enemy::{Enemy, Kind};
 use super::rules::{
-    MAX_ENEMIES, MIN_PORTAL_SPAWN_DISTANCE, MIN_SPAWN_DISTANCE, NEW_PAIR_SHARE, PORTAL_SPAWN_SHARE,
-    SPAWN_ATTEMPTS, boss_hits,
+    BIRD_FIRST_LEVEL, BIRD_SHARE, MAX_BIRDS, MAX_ENEMIES, MIN_PORTAL_SPAWN_DISTANCE,
+    MIN_SPAWN_DISTANCE, NEW_PAIR_SHARE, PORTAL_SPAWN_SHARE, SPAWN_ATTEMPTS, boss_hits,
 };
 use super::world::World;
 use crate::arena::{ARENA_H, ARENA_W};
@@ -77,14 +77,31 @@ impl World {
         let pair = pool[rng.weighted_index(pool, |p| ctx.memory.weight(p, ctx.now))];
         let question = Question::single(pair);
         let difficulty = Enemy::difficulty_of(&question, ctx.memory);
-        let shows_word = rng.chance(0.5);
-        let phase = rng.range(0.0, 100.0);
-        let mut enemy = Enemy::new(question, shows_word, difficulty, phase);
-        enemy.set_level(ctx.level);
-        let portal = if rng.chance(PORTAL_SPAWN_SHARE) {
-            self.portal_spawn_position(ctx, rng)
+        // Birds come in late, a few at a time, and only over the edges. The
+        // draw is made only when a bird could appear, so the levels before
+        // them play out as they always did.
+        let bird = ctx.level >= BIRD_FIRST_LEVEL
+            && self
+                .enemies()
+                .iter()
+                .filter(|e| e.kind() == Kind::Bird)
+                .count()
+                < MAX_BIRDS
+            && rng.chance(BIRD_SHARE);
+        let (mut enemy, portal) = if bird {
+            let phase = rng.range(0.0, 100.0);
+            (Enemy::bird(question, difficulty, phase), None)
         } else {
-            None
+            let shows_word = rng.chance(0.5);
+            let phase = rng.range(0.0, 100.0);
+            let mut enemy = Enemy::new(question, shows_word, difficulty, phase);
+            enemy.set_level(ctx.level);
+            let portal = if rng.chance(PORTAL_SPAWN_SHARE) {
+                self.portal_spawn_position(ctx, rng)
+            } else {
+                None
+            };
+            (enemy, portal)
         };
         enemy.pos = match portal {
             Some(pos) => pos,

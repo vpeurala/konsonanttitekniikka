@@ -3,7 +3,7 @@
 
 use super::rules::*;
 use super::*;
-use crate::arena::ARENA_W;
+use crate::arena::{ARENA_H, ARENA_W};
 use crate::long_numbers::{self, Question};
 use crate::memory::Happened;
 use crate::pairs::PAIRS;
@@ -227,6 +227,87 @@ fn hardcore_monsters_never_show_hints_and_ordinary_ones_do() {
         });
         assert_eq!(game.scene().hardcore, hardcore);
     }
+}
+
+/// Every kind of monster that was in play at any frame of `seconds` of an
+/// idle game started at `level`, and whether a bird ever stood inside the
+/// arena before it had been on screen for a second (it shouldn't come out
+/// of a portal).
+fn kinds_seen_idling(level: u32, seconds: f32) -> Vec<enemy::Kind> {
+    let mut game = game_from(level);
+    let mut seen = Vec::new();
+    for _ in 0..(seconds / FRAME) as usize {
+        game.update(&frame());
+        // She doesn't type, so keep her alive to see more of them.
+        game.vitals = game.vitals.with_energy(1000.0);
+        for e in game.world.enemies() {
+            if !seen.contains(&e.kind()) {
+                seen.push(e.kind());
+            }
+        }
+    }
+    seen
+}
+
+#[test]
+fn birds_only_appear_from_level_25_on() {
+    assert!(!kinds_seen_idling(BIRD_FIRST_LEVEL - 1, 120.0).contains(&enemy::Kind::Bird));
+    assert!(kinds_seen_idling(BIRD_FIRST_LEVEL, 120.0).contains(&enemy::Kind::Bird));
+}
+
+#[test]
+fn birds_come_in_over_the_edges_never_through_portals_and_never_too_many() {
+    let mut game = game_from(BIRD_FIRST_LEVEL);
+    let mut birds_seen = 0;
+    let mut seen_ids = Vec::new();
+    for _ in 0..(120.0 / FRAME) as usize {
+        game.update(&frame());
+        game.vitals = game.vitals.with_energy(1000.0);
+        let birds: Vec<_> = game
+            .world
+            .enemies()
+            .iter()
+            .filter(|e| e.kind() == enemy::Kind::Bird)
+            .collect();
+        assert!(birds.len() <= MAX_BIRDS);
+        for bird in birds {
+            if !seen_ids.contains(&bird.id) {
+                seen_ids.push(bird.id);
+                birds_seen += 1;
+                // A newcomer is just outside an edge, not at a portal.
+                let outside = bird.pos.x < 0.0
+                    || bird.pos.x > ARENA_W
+                    || bird.pos.y < 0.0
+                    || bird.pos.y > ARENA_H;
+                assert!(outside, "{}", bird.pos);
+            }
+        }
+    }
+    assert!(birds_seen > 0);
+}
+
+#[test]
+fn a_bird_hitting_her_hurts_and_is_gone() {
+    let mut game = game();
+    let mut bird = Enemy::bird(Question::single(PAIRS[3]), 0.5, 0.0);
+    bird.pos = game.player.pos;
+    game.world.admit(bird);
+    game.update(&frame());
+    assert_eq!(game.vitals.energy(), FULL_ENERGY - COLLISION_PENALTY);
+    assert!(game.world.enemies().is_empty());
+}
+
+#[test]
+fn answering_a_bird_gives_three_points_and_30_percent() {
+    let mut game = game();
+    game.vitals = game.vitals.with_energy(50.0);
+    let mut bird = Enemy::bird(Question::single(PAIRS[22 + 10]), 0.5, 0.0);
+    bird.pos = vec2(50.0, 50.0);
+    game.world.admit(bird);
+    let answer = game.world.enemies()[0].answer().to_owned();
+    game.update(&typing(&answer));
+    assert_eq!(game.vitals.score(), 3);
+    assert_eq!(game.vitals.energy(), 80.0);
 }
 
 #[test]

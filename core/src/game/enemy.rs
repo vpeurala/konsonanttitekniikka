@@ -8,6 +8,7 @@ use glam::{Vec2, vec2};
 use super::answer::Slot;
 use super::metrics::text_width;
 use super::rules::{
+    BIRD_AIM_SECONDS, BIRD_AIM_SPEED, BIRD_ATTACK_SPEED_FACTOR, BIRD_ENERGY, BIRD_POINTS,
     BOSS_ENERGY_PER_HIT, BOSS_POINTS_PER_HIT, BOSS_RADIUS, BOSS_SPEED_FACTOR, CYCLOPS_ENERGY,
     CYCLOPS_GROWTH_FACTOR, CYCLOPS_POINTS, CYCLOPS_START_SPEED_FACTOR, ENEMY_RADIUS, PLAYER_SPEED,
     SPEED_GROWTH, STAR_ENERGY, STAR_POINTS, START_SPEED, enemy_speed, shows_hint, speed_growth,
@@ -32,6 +33,8 @@ pub enum Kind {
     Cyclops,
     /// Star-like, shows a number, answered with its word.
     Star,
+    /// Flies in from the edges and swoops at her; shows a number.
+    Bird,
     Boss,
 }
 
@@ -52,6 +55,14 @@ pub struct BossLives {
     pub hit_flash: f32,
     /// Seconds left before it can hurt the player again.
     pub harmless_for: f32,
+}
+
+/// What a bird is doing: taking aim, drifting slowly toward her, or flying
+/// straight along `dir`, which was fixed when the attack began.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Flight {
+    Aiming { left: f32 },
+    Attacking { dir: Vec2 },
 }
 
 /// Names an enemy for as long as it lives, whatever happens to the others.
@@ -94,6 +105,8 @@ pub struct Enemy {
     /// Offsets the animation so enemies don't move in sync.
     pub phase: f32,
     pub boss: Option<BossLives>,
+    /// What a bird is doing; `None` for everything that is not a bird.
+    pub flight: Option<Flight>,
 }
 
 impl Enemy {
@@ -119,9 +132,20 @@ impl Enemy {
             shown_for: 0.0,
             phase,
             boss: None,
+            flight: None,
         };
         enemy.show(question, difficulty);
         enemy
+    }
+
+    /// A bird showing `question` (a number, answered with a word), which
+    /// starts by taking aim. `phase` offsets its animation.
+    pub fn bird(question: Question, difficulty: f32, phase: f32) -> Self {
+        let mut bird = Enemy::new(question, false, difficulty, phase);
+        bird.flight = Some(Flight::Aiming {
+            left: BIRD_AIM_SECONDS,
+        });
+        bird
     }
 
     /// A boss showing `numbers`, one after another, long numbers split
@@ -179,10 +203,52 @@ impl Enemy {
     pub fn kind(&self) -> Kind {
         if self.is_boss() {
             Kind::Boss
+        } else if self.flight.is_some() {
+            Kind::Bird
         } else if self.shows_word {
             Kind::Cyclops
         } else {
             Kind::Star
+        }
+    }
+
+    /// Whether a bird is in the middle of its attack, flying straight.
+    pub fn is_attacking(&self) -> bool {
+        matches!(self.flight, Some(Flight::Attacking { .. }))
+    }
+
+    /// Moves a bird on by `dt` seconds. Taking aim, it drifts slowly toward
+    /// `player`; then it flies in a straight line toward where she was when
+    /// the attack began, never correcting, until it is past the other edge
+    /// of the arena and takes aim again.
+    pub fn fly(&mut self, dt: f32, player: Vec2) {
+        let speed = self.speed();
+        match self.flight {
+            Some(Flight::Aiming { left }) => {
+                self.pos += (player - self.pos).normalize_or_zero() * speed * dt;
+                let left = left - dt;
+                self.flight = Some(if left > 0.0 {
+                    Flight::Aiming { left }
+                } else {
+                    Flight::Attacking {
+                        dir: (player - self.pos).normalize_or(Vec2::Y),
+                    }
+                });
+            }
+            Some(Flight::Attacking { dir }) => {
+                self.pos += dir * speed * dt;
+                let margin = self.radius * 2.0;
+                let out = self.pos.x < -margin
+                    || self.pos.x > ARENA_W + margin
+                    || self.pos.y < -margin
+                    || self.pos.y > ARENA_H + margin;
+                if out {
+                    self.flight = Some(Flight::Aiming {
+                        left: BIRD_AIM_SECONDS,
+                    });
+                }
+            }
+            None => {}
         }
     }
 
@@ -215,6 +281,10 @@ impl Enemy {
                 points: BOSS_POINTS_PER_HIT,
                 energy: BOSS_ENERGY_PER_HIT,
             },
+            Kind::Bird => Worth {
+                points: BIRD_POINTS,
+                energy: BIRD_ENERGY,
+            },
         }
     }
 
@@ -225,6 +295,11 @@ impl Enemy {
     }
 
     pub fn speed(&self) -> f32 {
+        match self.flight {
+            Some(Flight::Aiming { .. }) => return BIRD_AIM_SPEED,
+            Some(Flight::Attacking { .. }) => return BIRD_ATTACK_SPEED_FACTOR * PLAYER_SPEED,
+            None => {}
+        }
         let speed = enemy_speed(self.age, self.start_speed, self.speed_growth);
         if self.is_boss() {
             speed * BOSS_SPEED_FACTOR
@@ -235,7 +310,12 @@ impl Enemy {
 
     /// Distance from the enemy's center to the center of its label.
     pub fn label_offset(&self) -> f32 {
-        self.radius + LABEL_GAP
+        if self.kind() == Kind::Bird {
+            // Its claws hang well below the body, so the label does too.
+            self.radius * 3.2
+        } else {
+            self.radius + LABEL_GAP
+        }
     }
 
     /// The radius of the circle enemies keep clear of each other: wide
@@ -518,5 +598,80 @@ mod tests {
         assert!(enemy(3, false).avoids_monsters());
         assert!(!enemy(3, true).avoids_monsters());
         assert!(!boss().avoids_monsters());
+    }
+
+    fn bird() -> Enemy {
+        Enemy::bird(Question::single(PAIRS[3]), 0.5, 0.0)
+    }
+
+    #[test]
+    fn a_bird_shows_a_number_and_is_worth_three_points_and_30_percent() {
+        let bird = bird();
+        assert_eq!(bird.kind(), Kind::Bird);
+        assert!(!bird.shows_word, "a number, answered with a word");
+        assert_eq!(bird.answer_slot(), Slot::Word);
+        assert_eq!((bird.worth().points, bird.worth().energy), (3, 30.0));
+        assert!(!bird.avoids_monsters());
+    }
+
+    #[test]
+    fn a_bird_takes_aim_slowly_for_three_seconds_before_it_attacks() {
+        let mut bird = bird();
+        bird.pos = vec2(400.0, -40.0);
+        let player = vec2(400.0, 300.0);
+        let mut seconds = 0.0;
+        while !bird.is_attacking() {
+            bird.fly(0.01, player);
+            seconds += 0.01;
+            assert!(seconds < 3.1, "it should have attacked by now");
+        }
+        assert!((seconds - BIRD_AIM_SECONDS).abs() < 0.05, "{seconds}");
+        // It only drifted: 3 seconds at the aiming speed.
+        let drifted = bird.pos.y + 40.0;
+        assert!((drifted - 3.0 * BIRD_AIM_SPEED).abs() < 2.0, "{drifted}");
+        assert!((bird.speed() - 1.2 * PLAYER_SPEED).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_bird_flies_straight_at_where_she_was_and_never_corrects() {
+        let mut bird = bird();
+        bird.pos = vec2(100.0, 100.0);
+        bird.flight = Some(Flight::Aiming { left: 0.001 });
+        let aimed_at = vec2(500.0, 300.0);
+        bird.fly(0.01, aimed_at);
+        let Some(Flight::Attacking { dir }) = bird.flight else {
+            panic!("the attack should have begun");
+        };
+        assert!(dir.dot((aimed_at - vec2(100.0, 100.0)).normalize()) > 0.999);
+        // She moves away; the bird keeps its line, through her old spot.
+        let start = bird.pos;
+        for _ in 0..100 {
+            bird.fly(0.01, vec2(50.0, 550.0));
+        }
+        let moved = (bird.pos - start).normalize();
+        assert!(moved.dot(dir) > 0.9999, "{moved} vs {dir}");
+        assert_eq!(bird.flight, Some(Flight::Attacking { dir }));
+    }
+
+    #[test]
+    fn a_bird_that_misses_takes_aim_again_past_the_other_edge() {
+        let mut bird = bird();
+        bird.pos = vec2(400.0, 100.0);
+        bird.flight = Some(Flight::Attacking {
+            dir: vec2(0.0, 1.0),
+        });
+        let mut steps = 0;
+        while bird.is_attacking() {
+            bird.fly(0.01, vec2(50.0, 50.0));
+            steps += 1;
+            assert!(steps < 1000, "it never left");
+        }
+        assert!(bird.pos.y > ARENA_H, "{}", bird.pos);
+        assert_eq!(
+            bird.flight,
+            Some(Flight::Aiming {
+                left: BIRD_AIM_SECONDS
+            })
+        );
     }
 }

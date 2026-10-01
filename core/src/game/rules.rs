@@ -70,6 +70,9 @@ pub const STAR_ENERGY: f32 = 20.0;
 /// points and `n` times the energy in all.
 pub const BOSS_POINTS_PER_HIT: u32 = 1;
 pub const BOSS_ENERGY_PER_HIT: f32 = 10.0;
+/// What answering a bird is worth: the hardest kind.
+pub const BIRD_POINTS: u32 = 3;
+pub const BIRD_ENERGY: f32 = 30.0;
 pub const WRONG_PENALTY: f32 = 10.0;
 /// Wrong keys never take energy below this, so only collisions can end
 /// the game.
@@ -141,6 +144,18 @@ pub const COLLISION_PALETTE: [Color; 3] = [RED, MAROON, ORANGE];
 
 /// How often a new monster uses one of the level's new pairs, when one is
 /// free, so new pairs get extra practice.
+/// Birds appear from this level on...
+pub const BIRD_FIRST_LEVEL: u32 = 25;
+/// ...as this share of the newcomers, and never more than `MAX_BIRDS` at
+/// once.
+pub const BIRD_SHARE: f32 = 0.15;
+pub const MAX_BIRDS: usize = 2;
+/// A bird takes aim for this long before each attack, drifting slowly
+/// toward her so she has time to see it.
+pub const BIRD_AIM_SECONDS: f32 = 3.0;
+pub const BIRD_AIM_SPEED: f32 = 40.0;
+/// A bird in its attack flies this fast, as a fraction of her speed.
+pub const BIRD_ATTACK_SPEED_FACTOR: f32 = 1.2;
 pub const NEW_PAIR_SHARE: f32 = 0.5;
 
 /// How often a new monster comes out of a portal rather than a screen
