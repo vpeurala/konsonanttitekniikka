@@ -90,7 +90,7 @@ impl Game {
             let player = self.player.pos;
             let made: Vec<Hit> = ids
                 .into_iter()
-                .filter_map(|id| self.world.hit(id, player))
+                .filter_map(|id| self.world.hit(id, player, memory))
                 .collect();
             let Some(first) = made.first().map(|h| h.answered.question.clone()) else {
                 return out;

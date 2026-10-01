@@ -9,7 +9,6 @@ use crate::memory::Happened;
 use crate::pairs::PAIRS;
 use enemy::EnemyId;
 use glam::vec2;
-use world::Appearance;
 
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
@@ -41,7 +40,7 @@ impl Rig {
 
     fn hit_enemy(&mut self, id: EnemyId) -> Outputs {
         let player = self.game.player.pos;
-        let Some(hit) = self.game.world.hit(id, player) else {
+        let Some(hit) = self.game.world.hit(id, player, &self.memory) else {
             return Outputs::default();
         };
         let out = self
@@ -130,14 +129,14 @@ fn idle(game: &mut Rig, seconds: f32) -> Log {
 /// A game with one monster showing `pair` right on top of the player, so
 /// it hurts her on the next frame.
 fn with_collision(game: &mut Rig) {
-    let mut enemy = Enemy::new(Question::single(PAIRS[0]), false, 0, 0.0);
+    let mut enemy = Enemy::new(Question::single(PAIRS[0]), false, 0.5, 0.0);
     enemy.pos = game.player.pos;
     game.world.admit(enemy);
 }
 
 /// A game with one monster far from the player.
 fn with_monster(game: &mut Rig) {
-    let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), false, 0, 0.0);
+    let mut enemy = Enemy::new(Question::single(PAIRS[22 + 10]), false, 0.5, 0.0);
     enemy.pos = vec2(50.0, 50.0);
     game.world.admit(enemy);
 }
@@ -822,7 +821,7 @@ fn a_fast_spell_still_lands_in_a_long_frame() {
 fn enemies_keep_their_ids_when_others_leave() {
     let mut game = game();
     for x in [50.0, 150.0, 250.0] {
-        let mut enemy = Enemy::new(Question::single(PAIRS[x as usize / 100]), false, 0, 0.0);
+        let mut enemy = Enemy::new(Question::single(PAIRS[x as usize / 100]), false, 0.5, 0.0);
         enemy.pos = vec2(x, 50.0);
         game.world.admit(enemy);
     }
@@ -884,8 +883,6 @@ fn a_perfect_typist_plays_through_the_first_levels() {
     );
     assert_eq!(game.vitals.energy(), MAX_ENERGY);
     assert!(log.sfx.contains(&Sfx::Boss), "every level ends in a boss");
-    // Each level introduces pairs, and the typist met the level's pairs.
-    assert!(game.world.appearances().len() > 5);
 }
 
 #[test]
@@ -895,10 +892,6 @@ fn the_first_long_number_level_can_be_cleared() {
     let log = autoplay(&mut game, 600.0, |g| g.level > start);
 
     assert_eq!(completed_levels(&log), [start]);
-    assert!(
-        game.world.appearances().contains_key(&Appearance::Long),
-        "the boss showed a long number"
-    );
 }
 
 #[test]

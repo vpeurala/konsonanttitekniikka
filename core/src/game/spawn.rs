@@ -76,10 +76,10 @@ impl World {
         // Pairs she knows less well come up more often.
         let pair = pool[rng.weighted_index(pool, |p| ctx.memory.weight(p, ctx.now))];
         let question = Question::single(pair);
-        let earlier = self.count_appearance(&question);
+        let difficulty = Enemy::difficulty_of(&question, ctx.memory);
         let shows_word = rng.chance(0.5);
         let phase = rng.range(0.0, 100.0);
-        let mut enemy = Enemy::new(question, shows_word, earlier, phase);
+        let mut enemy = Enemy::new(question, shows_word, difficulty, phase);
         enemy.speed_growth = speed_growth(ctx.level);
         let portal = if rng.chance(PORTAL_SPAWN_SHARE) {
             self.portal_spawn_position(ctx, rng)
@@ -162,9 +162,9 @@ impl World {
             };
             numbers.push(question);
         }
-        let earlier = self.count_appearance(&numbers[0]);
+        let difficulty = Enemy::difficulty_of(&numbers[0], memory);
         let phase = rng.range(0.0, 100.0);
-        let mut boss = Enemy::boss(&numbers, easy, earlier, phase);
+        let mut boss = Enemy::boss(&numbers, easy, difficulty, phase);
         boss.speed_growth = speed_growth(ctx.level);
         // The boss is slow, so without a portal it starts just inside the
         // edge.

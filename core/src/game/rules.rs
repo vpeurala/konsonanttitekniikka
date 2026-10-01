@@ -14,25 +14,32 @@ pub const MAX_ENEMIES: usize = 6;
 pub const MIN_SPAWN_DISTANCE: f32 = 300.0;
 pub const SPAWN_ATTEMPTS: usize = 40;
 
-/// A pair's first appearances in a game get an early hint.
-pub const HINTED_APPEARANCES: u32 = 3;
-/// How long an early hint waits after the pair is shown.
-pub const EARLY_HINT_SECONDS: f32 = 2.0;
-/// Any other enemy shows its answer once it is this fast, as a fraction of
-/// its top speed. With the current speeds that takes about 22 seconds.
-pub const HINT_SPEED_FRACTION: f32 = 0.3;
+/// A pair she meets for the first time shows its hint after this long.
+pub const FIRST_HINT_SECONDS: f32 = 3.0;
+/// Every enemy shows its answer once it is this fast, as a fraction of its
+/// top speed, however well she knows it.
+pub const HINT_SPEED_FRACTION: f32 = 0.75;
+/// The difficulty (see `memory`) from which a pair counts as new to her and
+/// gets the quickest hint; the better she knows it, the longer the hint
+/// waits.
+const NEW_TO_HER: f32 = 0.5;
+
+/// How long a pair of this `difficulty` waits before it shows its hint:
+/// `FIRST_HINT_SECONDS` while it is new to her, then longer and longer as
+/// she learns it, until it is as long as it takes an enemy to reach
+/// `HINT_SPEED_FRACTION` of its top speed, when every hint shows anyway.
+pub fn hint_delay(difficulty: f32) -> f32 {
+    let learned = ((NEW_TO_HER - difficulty) / NEW_TO_HER).clamp(0.0, 1.0);
+    let slowest = (HINT_SPEED_FRACTION * PLAYER_SPEED - START_SPEED) / SPEED_GROWTH;
+    FIRST_HINT_SECONDS + (slowest - FIRST_HINT_SECONDS) * learned
+}
 
 /// Whether an enemy shows its answer. Every enemy starts without a hint.
-/// One of the first appearances of its pair in this game
-/// (`earlier_appearances`) gets it soon after the pair is shown
-/// (`shown_for` seconds ago); any other only once it has reached
-/// `HINT_SPEED_FRACTION` of its top speed (`speed_fraction`).
-pub fn shows_hint(earlier_appearances: u32, shown_for: f32, speed_fraction: f32) -> bool {
-    if earlier_appearances < HINTED_APPEARANCES {
-        shown_for >= EARLY_HINT_SECONDS
-    } else {
-        speed_fraction >= HINT_SPEED_FRACTION
-    }
+/// It comes after `hint_delay` of the pair's `difficulty`, counted from
+/// when the pair was shown (`shown_for` seconds ago), or once the enemy has
+/// reached `HINT_SPEED_FRACTION` of its top speed (`speed_fraction`).
+pub fn shows_hint(difficulty: f32, shown_for: f32, speed_fraction: f32) -> bool {
+    shown_for >= hint_delay(difficulty) || speed_fraction >= HINT_SPEED_FRACTION
 }
 
 pub const MAX_ENERGY: f32 = 100.0;
@@ -245,9 +252,9 @@ mod tests {
 
     #[test]
     fn every_enemy_appears_without_a_hint() {
-        for earlier in 0..10 {
+        for difficulty in [0.0, 0.25, 0.5, 1.0] {
             assert!(!shows_hint(
-                earlier,
+                difficulty,
                 0.0,
                 enemy_speed(0.0, SPEED_GROWTH) / PLAYER_SPEED
             ));
@@ -255,18 +262,38 @@ mod tests {
     }
 
     #[test]
-    fn first_appearances_of_a_pair_get_a_hint_soon() {
-        for earlier in 0..HINTED_APPEARANCES {
-            assert!(!shows_hint(earlier, EARLY_HINT_SECONDS - 0.1, 0.0));
-            assert!(shows_hint(earlier, EARLY_HINT_SECONDS, 0.0));
+    fn a_new_pair_gets_its_hint_after_three_seconds() {
+        for difficulty in [0.5, 0.75, 1.0] {
+            assert_eq!(hint_delay(difficulty), FIRST_HINT_SECONDS);
+            assert!(!shows_hint(difficulty, FIRST_HINT_SECONDS - 0.1, 0.0));
+            assert!(shows_hint(difficulty, FIRST_HINT_SECONDS, 0.0));
         }
     }
 
     #[test]
-    fn later_appearances_get_a_hint_only_when_fast() {
-        let earlier = HINTED_APPEARANCES;
-        assert!(!shows_hint(earlier, 1000.0, HINT_SPEED_FRACTION - 0.01));
-        assert!(shows_hint(earlier, 0.0, HINT_SPEED_FRACTION));
+    fn the_better_a_pair_is_known_the_longer_its_hint_waits() {
+        let mut difficulty = NEW_TO_HER;
+        while difficulty > 0.0 {
+            let better = difficulty - 0.05;
+            assert!(hint_delay(better.max(0.0)) > hint_delay(difficulty));
+            difficulty = better;
+        }
+    }
+
+    #[test]
+    fn a_learned_pairs_hint_comes_when_the_enemy_reaches_the_hint_speed() {
+        let delay = hint_delay(0.0);
+        let speed = |age| enemy_speed(age, SPEED_GROWTH) / PLAYER_SPEED;
+        assert!(speed(delay - 0.1) < HINT_SPEED_FRACTION);
+        assert!(speed(delay + 0.1) >= HINT_SPEED_FRACTION);
+    }
+
+    #[test]
+    fn every_hint_shows_once_the_enemy_is_fast() {
+        for difficulty in [0.0, 0.3, 1.0] {
+            assert!(!shows_hint(difficulty, 0.0, HINT_SPEED_FRACTION - 0.01));
+            assert!(shows_hint(difficulty, 0.0, HINT_SPEED_FRACTION));
+        }
     }
 
     #[test]

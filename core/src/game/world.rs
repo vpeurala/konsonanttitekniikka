@@ -5,8 +5,6 @@
 //! it says so in a report (`Hit`, `Contact`, `SpellEvent`), and the game
 //! decides what that means for her.
 
-use std::collections::HashMap;
-
 use glam::Vec2;
 
 use super::enemy::{Enemy, EnemyId};
@@ -15,9 +13,8 @@ use super::rules::{
     PLAYER_RADIUS, SPELL_SPEED,
 };
 use crate::arena::{ARENA_H, ARENA_W, girl_hand};
-use crate::long_numbers::Question;
+use crate::memory::Memory;
 use crate::obstacles::{Obstacle, obstacles_for_level, push_out, steer};
-use crate::pairs::PairId;
 use crate::portals::portal_positions;
 use crate::rng::Rng;
 
@@ -45,14 +42,6 @@ impl Spell {
             SpellTarget::Boss => None,
         }
     }
-}
-
-/// What counts appearances of a pair: each pair on its own, and all long
-/// numbers together.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) enum Appearance {
-    Pair(PairId),
-    Long,
 }
 
 /// An enemy was answered.
@@ -113,8 +102,6 @@ pub struct World {
     spells: Vec<Spell>,
     /// The id the next enemy to join gets.
     next_enemy_id: u32,
-    /// How many times each pair has appeared in this game.
-    appearances: HashMap<Appearance, u32>,
     /// The current level's portals.
     portals: Vec<Vec2>,
     /// The current level's stones, trees and lakes.
@@ -129,7 +116,6 @@ impl World {
             enemies: Vec::new(),
             spells: Vec::new(),
             next_enemy_id: 0,
-            appearances: HashMap::new(),
             portals,
             obstacles,
         }
@@ -158,20 +144,6 @@ impl World {
         self.enemies.push(enemy);
     }
 
-    /// Records that `question` is appearing, returning how many times it
-    /// had appeared before. Long numbers are counted together, so the first
-    /// few in a game get an early hint.
-    pub(super) fn count_appearance(&mut self, question: &Question) -> u32 {
-        let key = if question.is_long() {
-            Appearance::Long
-        } else {
-            Appearance::Pair(question.first().id)
-        };
-        let count = self.appearances.entry(key).or_default();
-        *count += 1;
-        *count - 1
-    }
-
     /// Moves on to the arena of `level`. Every monster in play leaves, and
     /// is handed back; spells already flying carry on.
     pub fn next_level(&mut self, level: u32) -> Vec<Enemy> {
@@ -184,7 +156,7 @@ impl World {
     /// Answers the enemy called `id`, if it is still in play: a boss with
     /// lives left moves on to its next number, anything else leaves play.
     /// Either way a spell flies from `player`'s hand toward it.
-    pub fn hit(&mut self, id: EnemyId, player: Vec2) -> Option<Hit> {
+    pub fn hit(&mut self, id: EnemyId, player: Vec2, memory: &Memory) -> Option<Hit> {
         let index = self.enemies.iter().position(|e| e.id == id)?;
         let answered = self.enemies[index].clone();
         let target_pos = answered.pos;
@@ -194,8 +166,8 @@ impl World {
             .and_then(|lives| lives.queue.pop_front());
         let (target, outcome) = match next {
             Some(question) => {
-                let earlier = self.count_appearance(&question);
-                self.enemies[index].show(question, earlier);
+                let difficulty = Enemy::difficulty_of(&question, memory);
+                self.enemies[index].show(question, difficulty);
                 (SpellTarget::Boss, HitOutcome::Wounded)
             }
             None => {

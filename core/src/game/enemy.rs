@@ -1,5 +1,6 @@
 //! Monsters and bosses: what they ask, how they move, where they may be.
 
+use crate::memory::Memory;
 use std::collections::VecDeque;
 
 use glam::{Vec2, vec2};
@@ -57,9 +58,10 @@ pub struct Enemy {
     /// The answer, as shown in a hint.
     pub hint: String,
     pub hint_width: f32,
-    /// How many times the current pair (or, for a long number, any long
-    /// number) had appeared in the game before it was shown here.
-    pub earlier_appearances: u32,
+    /// How well she knows the current pair (for a long number, its hardest
+    /// pair) when it was shown here, from 0 (learned) to 1; sets how soon
+    /// the hint comes.
+    pub difficulty: f32,
     /// Seconds on screen; sets the speed.
     pub age: f32,
     /// Speed gained per second on screen, which the level sets.
@@ -73,7 +75,7 @@ pub struct Enemy {
 
 impl Enemy {
     /// `phase` offsets its animation from other enemies'.
-    pub fn new(question: Question, shows_word: bool, earlier_appearances: u32, phase: f32) -> Self {
+    pub fn new(question: Question, shows_word: bool, difficulty: f32, phase: f32) -> Self {
         let mut enemy = Enemy {
             id: EnemyId(0),
             pos: Vec2::ZERO,
@@ -86,24 +88,24 @@ impl Enemy {
             answer: String::new(),
             hint: String::new(),
             hint_width: 0.0,
-            earlier_appearances: 0,
+            difficulty: 0.0,
             age: 0.0,
             speed_growth: SPEED_GROWTH,
             shown_for: 0.0,
             phase,
             boss: None,
         };
-        enemy.show(question, earlier_appearances);
+        enemy.show(question, difficulty);
         enemy
     }
 
     /// A boss showing `numbers`, one after another, long numbers split
-    /// into their pairs if `split`. Its `earlier_appearances` are for the
+    /// into their pairs if `split`. Its `difficulty` is for the
     /// first number.
-    pub fn boss(numbers: &[Question], split: bool, earlier_appearances: u32, phase: f32) -> Self {
-        let mut boss = Enemy::new(numbers[0].clone(), false, 0, phase);
+    pub fn boss(numbers: &[Question], split: bool, difficulty: f32, phase: f32) -> Self {
+        let mut boss = Enemy::new(numbers[0].clone(), false, difficulty, phase);
         boss.split = split;
-        boss.show(numbers[0].clone(), earlier_appearances);
+        boss.show(numbers[0].clone(), difficulty);
         boss.radius = BOSS_RADIUS;
         boss.boss = Some(BossLives {
             queue: numbers[1..].iter().cloned().collect(),
@@ -114,8 +116,18 @@ impl Enemy {
         boss
     }
 
+    /// How well she knows `question` for the hint's sake: the difficulty of
+    /// its hardest pair.
+    pub fn difficulty_of(question: &Question, memory: &Memory) -> f32 {
+        question
+            .pairs()
+            .iter()
+            .map(|p| memory.difficulty(p))
+            .fold(0.0, f32::max)
+    }
+
     /// Switches to showing `question`.
-    pub fn show(&mut self, question: Question, earlier_appearances: u32) {
+    pub fn show(&mut self, question: Question, difficulty: f32) {
         let (label, hint) = if self.shows_word {
             (question.words(), question.number(false))
         } else {
@@ -131,7 +143,7 @@ impl Enemy {
         self.hint = format!("= {hint}");
         self.hint_width = text_width(&self.hint, HINT_FONT_SIZE);
         self.question = question;
-        self.earlier_appearances = earlier_appearances;
+        self.difficulty = difficulty;
         self.shown_for = 0.0;
     }
 
@@ -172,7 +184,7 @@ impl Enemy {
         // not the level's, so they still appear after the same time on the
         // slow early levels.
         let speed_fraction = enemy_speed(self.age, SPEED_GROWTH) / PLAYER_SPEED;
-        shows_hint(self.earlier_appearances, self.shown_for, speed_fraction)
+        shows_hint(self.difficulty, self.shown_for, speed_fraction)
     }
 
     fn hint_space(&self) -> f32 {
@@ -262,12 +274,12 @@ mod tests {
     use crate::pairs::PAIRS;
 
     fn enemy(pair: usize, shows_word: bool) -> Enemy {
-        Enemy::new(Question::single(PAIRS[pair]), shows_word, 0, 0.0)
+        Enemy::new(Question::single(PAIRS[pair]), shows_word, 0.5, 0.0)
     }
 
     fn boss() -> Enemy {
         let numbers: Vec<Question> = PAIRS[..5].iter().map(|p| Question::single(*p)).collect();
-        Enemy::boss(&numbers, false, 0, 0.0)
+        Enemy::boss(&numbers, false, 0.5, 0.0)
     }
 
     fn label_rect(e: &Enemy) -> (f32, f32, f32, f32) {
@@ -381,7 +393,7 @@ mod tests {
     fn showing_the_next_question_restarts_the_hint_timer() {
         let mut e = enemy(3, false);
         e.shown_for = 10.0;
-        e.show(Question::single(PAIRS[4]), 0);
+        e.show(Question::single(PAIRS[4]), 0.5);
         assert_eq!(e.shown_for, 0.0);
         assert_eq!(e.label, "4");
     }
