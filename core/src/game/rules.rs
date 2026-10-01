@@ -2,7 +2,8 @@
 //! things cost, how many points a level needs, how fast monsters move.
 
 use crate::color::{
-    Color, GOLD, MAGENTA, MAROON, ORANGE, PINK, RED, SKYBLUE, VIOLET, WHITE, YELLOW,
+    Color, GOLD, MAGENTA, MAROON, MOULD_GREEN, ORANGE, PINK, RED, SKYBLUE, SLIME, VIOLET, WHITE,
+    YELLOW,
 };
 
 pub const PLAYER_SPEED: f32 = 260.0;
@@ -70,6 +71,15 @@ pub const STAR_ENERGY: f32 = 20.0;
 /// points and `n` times the energy in all.
 pub const BOSS_POINTS_PER_HIT: u32 = 1;
 pub const BOSS_ENERGY_PER_HIT: f32 = 10.0;
+/// What answering a bird is worth: the hardest kind.
+pub const BIRD_POINTS: u32 = 3;
+pub const BIRD_ENERGY: f32 = 30.0;
+/// Each answered number of the mould is worth this, like a boss's hit.
+pub const MOULD_POINTS_PER_HIT: u32 = 1;
+pub const MOULD_ENERGY_PER_HIT: f32 = 10.0;
+/// What answering a golem is worth: it takes a whole long number.
+pub const GOLEM_POINTS: u32 = 5;
+pub const GOLEM_ENERGY: f32 = 50.0;
 pub const WRONG_PENALTY: f32 = 10.0;
 /// Wrong keys never take energy below this, so only collisions can end
 /// the game.
@@ -137,10 +147,56 @@ pub const CAST_SECONDS: f32 = 0.35;
 
 pub const KILL_PALETTE: [Color; 4] = [ORANGE, YELLOW, GOLD, WHITE];
 pub const SPELL_PALETTE: [Color; 4] = [PINK, MAGENTA, VIOLET, WHITE];
+/// The splashes of the mould.
+pub const MOULD_PALETTE: [Color; 3] = [SLIME, MOULD_GREEN, YELLOW];
 pub const COLLISION_PALETTE: [Color; 3] = [RED, MAROON, ORANGE];
 
 /// How often a new monster uses one of the level's new pairs, when one is
 /// free, so new pairs get extra practice.
+/// Birds appear from this level on...
+pub const BIRD_FIRST_LEVEL: u32 = 25;
+/// ...as this share of the newcomers, and never more than `MAX_BIRDS` at
+/// once.
+pub const BIRD_SHARE: f32 = 0.15;
+pub const MAX_BIRDS: usize = 2;
+/// A bird takes aim for this long before each attack, drifting slowly
+/// toward her so she has time to see it.
+pub const BIRD_AIM_SECONDS: f32 = 3.0;
+pub const BIRD_AIM_SPEED: f32 = 40.0;
+/// A bird in its attack flies this fast, as a fraction of her speed.
+pub const BIRD_ATTACK_SPEED_FACTOR: f32 = 1.2;
+/// The mould appears from this level on, as this share of the newcomers,
+/// and never more than one at a time.
+pub const MOULD_FIRST_LEVEL: u32 = 35;
+pub const MOULD_SHARE: f32 = 0.08;
+/// It creeps this fast, very slowly...
+pub const MOULD_SPEED: f32 = 8.0;
+/// ...and every time it has crept this far it gains a number, and the
+/// body it drags behind it grows a segment longer.
+pub const MOULD_GROWTH_DISTANCE: f32 = 40.0;
+/// It has at most this many numbers, which is also how many it brings in
+/// all: answering them makes room for no new ones beyond these.
+pub const MOULD_MAX_NUMBERS: usize = 8;
+/// The size of its head with one number, and how much each more adds.
+pub const MOULD_BASE_RADIUS: f32 = 22.0;
+pub const MOULD_RADIUS_PER_NUMBER: f32 = 1.5;
+/// The slimy body the head drags behind it is this thick (its radius)...
+pub const MOULD_TUBE_RADIUS: f32 = 16.0;
+/// ...and its tail end draws in this fast when it shrinks.
+pub const MOULD_TAIL_SPEED: f32 = 90.0;
+/// Golems appear from this level on, as this share of the newcomers, and
+/// never more than `MAX_GOLEMS` at once.
+pub const GOLEM_FIRST_LEVEL: u32 = 45;
+pub const GOLEM_SHARE: f32 = 0.1;
+pub const MAX_GOLEMS: usize = 2;
+/// A golem is bigger than the others, but smaller than a boss.
+pub const GOLEM_RADIUS: f32 = 28.0;
+/// It starts a little slower than a star monster...
+pub const GOLEM_START_SPEED_FACTOR: f32 = 0.85;
+/// ...speeds up a little slower...
+pub const GOLEM_GROWTH_FACTOR: f32 = 0.8;
+/// ...and is never faster than this, as a fraction of her speed.
+pub const GOLEM_TOP_SPEED_FACTOR: f32 = 0.6;
 pub const NEW_PAIR_SHARE: f32 = 0.5;
 
 /// How often a new monster comes out of a portal rather than a screen

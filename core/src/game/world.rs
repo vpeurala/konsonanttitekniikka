@@ -7,7 +7,7 @@
 
 use glam::Vec2;
 
-use super::enemy::{Enemy, EnemyId};
+use super::enemy::{Enemy, EnemyId, Kind};
 use super::rules::{
     BOSS_COLLISION_KNOCKBACK, BOSS_HARMLESS_SECONDS, BOSS_HIT_FLASH_SECONDS, BOSS_HIT_KNOCKBACK,
     PLAYER_RADIUS, SPELL_SPEED,
@@ -21,9 +21,11 @@ use crate::rng::Rng;
 /// What a spell is flying toward.
 pub enum SpellTarget {
     /// An enemy that is already out of play and explodes when hit.
-    Doomed(Enemy),
+    Doomed(Box<Enemy>),
     /// The boss, which is still in play and only loses a life.
     Boss,
+    /// The mould called this, which is still in play and shrinks.
+    Mould(EnemyId),
 }
 
 /// A magic bolt flying toward an answered enemy.
@@ -38,8 +40,8 @@ impl Spell {
     /// The enemy that is out of play and waiting for this spell.
     pub fn doomed(&self) -> Option<&Enemy> {
         match &self.target {
-            SpellTarget::Doomed(enemy) => Some(enemy),
-            SpellTarget::Boss => None,
+            SpellTarget::Doomed(enemy) => Some(enemy.as_ref()),
+            SpellTarget::Boss | SpellTarget::Mould(_) => None,
         }
     }
 }
@@ -68,6 +70,8 @@ pub struct Contact {
 pub enum ContactKind {
     /// A boss touched her at this point, and bounced away. It stays.
     Boss { at: Vec2 },
+    /// The mould touched her at this point. It stays and creeps on.
+    Mould { at: Vec2 },
     /// An ordinary monster touched her and left play.
     Ordinary,
 }
@@ -90,6 +94,8 @@ pub enum ImpactTarget {
     Doomed { radius: f32, boss: bool },
     /// The boss lost a life and was knocked back.
     Boss,
+    /// The mould shrank.
+    Mould { radius: f32 },
     /// The boss it followed was gone.
     Nothing,
 }
@@ -169,20 +175,33 @@ impl World {
         let index = self.enemies.iter().position(|e| e.id == id)?;
         let answered = self.enemies[index].clone();
         let target_pos = answered.pos;
-        let next = self.enemies[index]
-            .boss
-            .as_mut()
-            .and_then(|lives| lives.queue.pop_front());
+        let is_mould = answered.mould.is_some();
+        let next = if is_mould {
+            self.enemies[index].shrink()
+        } else {
+            self.enemies[index]
+                .boss
+                .as_mut()
+                .and_then(|lives| lives.queue.pop_front())
+        };
         let (target, outcome) = match next {
             Some(question) => {
                 let difficulty = Enemy::difficulty_of(&question, memory);
                 self.enemies[index].show(question, difficulty);
-                (SpellTarget::Boss, HitOutcome::Wounded)
+                let target = if is_mould {
+                    SpellTarget::Mould(id)
+                } else {
+                    SpellTarget::Boss
+                };
+                (target, HitOutcome::Wounded)
             }
             None => {
                 let enemy = self.enemies.remove(index);
                 let boss = enemy.is_boss();
-                (SpellTarget::Doomed(enemy), HitOutcome::Defeated { boss })
+                (
+                    SpellTarget::Doomed(Box::new(enemy)),
+                    HitOutcome::Defeated { boss },
+                )
             }
         };
         self.spells.push(Spell {
@@ -205,9 +224,13 @@ impl World {
         let mut events = Vec::new();
         let enemies = &mut self.enemies;
         self.spells.retain_mut(|spell| {
-            // A spell at the boss follows it around.
-            let boss = enemies.iter_mut().find(|e| e.is_boss());
-            if let (SpellTarget::Boss, Some(boss)) = (&spell.target, &boss) {
+            // A spell at the boss, or the mould, follows it around.
+            let boss = match &spell.target {
+                SpellTarget::Mould(id) => enemies.iter_mut().find(|e| e.id == *id),
+                _ => enemies.iter_mut().find(|e| e.is_boss()),
+            };
+            if let (SpellTarget::Boss | SpellTarget::Mould(_), Some(boss)) = (&spell.target, &boss)
+            {
                 spell.target_pos = boss.pos;
             }
 
@@ -231,7 +254,10 @@ impl World {
                     boss.keep_on_screen();
                     ImpactTarget::Boss
                 }
-                (SpellTarget::Boss, None) => ImpactTarget::Nothing,
+                (SpellTarget::Mould(_), Some(mould)) => ImpactTarget::Mould {
+                    radius: mould.radius,
+                },
+                (SpellTarget::Boss | SpellTarget::Mould(_), None) => ImpactTarget::Nothing,
             };
             events.push(SpellEvent::Impact(Impact {
                 pos: spell.target_pos,
@@ -248,6 +274,7 @@ impl World {
     pub fn advance_enemies(&mut self, dt: f32, player: Vec2, rng: &mut Rng) -> Vec<Contact> {
         self.walk_toward(dt, player, rng);
         let mut contacts = self.bounce_bosses(dt, player);
+        contacts.extend(self.touch_moulds(dt, player));
         contacts.extend(self.take_ordinary_contacts(player));
         contacts
     }
@@ -257,8 +284,36 @@ impl World {
     fn walk_toward(&mut self, dt: f32, player: Vec2, rng: &mut Rng) {
         // Where everyone stood at the start of the step, for those who steer
         // around the others.
-        let crowd: Vec<(Vec2, f32)> = self.enemies.iter().map(|e| (e.pos, e.radius)).collect();
+        // Birds fly over everything, so nobody steers around them.
+        let crowd: Vec<(Vec2, f32)> = self
+            .enemies
+            .iter()
+            .map(|e| {
+                (
+                    e.pos,
+                    if matches!(e.kind(), Kind::Bird | Kind::Mould) {
+                        0.0
+                    } else {
+                        e.radius
+                    },
+                )
+            })
+            .collect();
+        // The moulds' heads and blobs, which everyone but the birds and the
+        // moulds themselves goes around.
+        let mould_circles: Vec<(Vec2, f32)> = self
+            .enemies
+            .iter()
+            .filter(|e| e.mould.is_some())
+            .flat_map(|e| std::iter::once((e.pos, e.radius)).chain(e.mould_body_circles()))
+            .collect();
         for (i, enemy) in self.enemies.iter_mut().enumerate() {
+            if enemy.kind() == Kind::Bird {
+                enemy.fly(dt, player);
+                enemy.age += dt;
+                enemy.shown_for += dt;
+                continue;
+            }
             let speed = enemy.speed();
             let toward = (player - enemy.pos).normalize_or_zero();
             // Enemies with an even phase go left around obstacles, the rest
@@ -268,21 +323,28 @@ impl World {
             let others = crowd
                 .iter()
                 .enumerate()
-                .filter(|(j, _)| enemy.avoids_monsters() && *j != i)
+                .filter(|(j, (_, radius))| enemy.avoids_monsters() && *j != i && *radius > 0.0)
                 .map(|(_, &circle)| circle);
+            let around_moulds = mould_circles
+                .iter()
+                .copied()
+                .filter(|_| enemy.mould.is_none());
             let dir = steer_around(
                 enemy.pos,
                 enemy.radius,
                 toward,
-                obstacles.chain(others),
+                obstacles.chain(others).chain(around_moulds),
                 prefer_left,
             );
-            enemy.pos += dir * speed * dt;
+            enemy.creep_to(enemy.pos + dir * speed * dt, dt);
             enemy.age += dt;
             enemy.shown_for += dt;
         }
         self.separate_enemies(rng);
         for enemy in &mut self.enemies {
+            if enemy.kind() == Kind::Bird {
+                continue;
+            }
             if enemy.is_boss() {
                 enemy.keep_on_screen();
             }
@@ -317,11 +379,44 @@ impl World {
         contacts
     }
 
+    /// A mould whose head or body touches her hurts her, once in a while. It stays, and
+    /// creeps on.
+    fn touch_moulds(&mut self, dt: f32, player: Vec2) -> Vec<Contact> {
+        let mut contacts = Vec::new();
+        for enemy in &mut self.enemies {
+            if enemy.mould.is_none() {
+                continue;
+            }
+            // Touching the head or any part of the body hurts.
+            let at = if touches(enemy, player) {
+                Some((enemy.pos + player) / 2.0)
+            } else {
+                enemy.mould_body_touch(player, PLAYER_RADIUS)
+            };
+            let Some(mould) = &mut enemy.mould else {
+                continue;
+            };
+            mould.harmless_for = (mould.harmless_for - dt).max(0.0);
+            let Some(at) = at else {
+                continue;
+            };
+            if mould.harmless_for > 0.0 {
+                continue;
+            }
+            mould.harmless_for = BOSS_HARMLESS_SECONDS;
+            contacts.push(Contact {
+                enemy: enemy.clone(),
+                kind: ContactKind::Mould { at },
+            });
+        }
+        contacts
+    }
+
     /// The ordinary monsters that touch her leave play.
     fn take_ordinary_contacts(&mut self, player: Vec2) -> Vec<Contact> {
         let (collided, remaining): (Vec<Enemy>, Vec<Enemy>) = std::mem::take(&mut self.enemies)
             .into_iter()
-            .partition(|e| !e.is_boss() && touches(e, player));
+            .partition(|e| !e.is_boss() && e.mould.is_none() && touches(e, player));
         self.enemies = remaining;
         collided
             .into_iter()
@@ -338,6 +433,10 @@ impl World {
             for i in 0..self.enemies.len() {
                 for j in i + 1..self.enemies.len() {
                     let (a, b) = (&self.enemies[i], &self.enemies[j]);
+                    // Birds fly over the others.
+                    if a.kind() == Kind::Bird || b.kind() == Kind::Bird {
+                        continue;
+                    }
                     let offset = b.reach_center() - a.reach_center();
                     let min_distance = a.reach() + b.reach();
                     let distance = offset.length();

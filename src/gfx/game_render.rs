@@ -3,13 +3,15 @@
 
 use lukuloitsu_core::color;
 use lukuloitsu_core::effects::Effects;
+use lukuloitsu_core::game::enemy::Kind;
 use lukuloitsu_core::game::rules::*;
 use lukuloitsu_core::game::{Banner, Enemy, Scene, Slot, SlotView, SpellTarget, Tone};
 use macroquad::prelude::*;
 
 use crate::gfx::fonts::{self, Style, draw_centered_text};
 use crate::gfx::sprites::{
-    draw_boss, draw_cyclops, draw_girl, draw_monster, draw_obstacle, draw_portal, draw_star,
+    draw_bird, draw_boss, draw_cyclops, draw_girl, draw_golem, draw_monster, draw_mould,
+    draw_mould_body, draw_obstacle, draw_portal, draw_star,
 };
 use crate::gfx::view::{ARENA_H, ARENA_W, View};
 use crate::long_numbers::{self, Question};
@@ -83,7 +85,8 @@ fn draw_flash(effects: &Effects, view: View) {
     }
 }
 
-/// Draws a body: a boss, a cyclops showing a word or an ordinary monster.
+/// Draws a body: a boss, a golem, a mould, a bird, a cyclops showing a word or an ordinary
+/// monster.
 fn draw_enemy_body(enemy: &Enemy, time: f32, player: Vec2) {
     if let Some(lives) = &enemy.boss {
         draw_boss(enemy.pos, enemy.radius, time, enemy.phase);
@@ -96,6 +99,18 @@ fn draw_enemy_body(enemy: &Enemy, time: f32, player: Vec2) {
                 Color::new(1.0, 1.0, 1.0, alpha),
             );
         }
+    } else if enemy.kind() == Kind::Golem {
+        draw_golem(enemy.pos, enemy.radius, time, enemy.phase);
+    } else if enemy.kind() == Kind::Mould {
+        draw_mould(enemy.pos, enemy.radius, time, enemy.phase);
+    } else if enemy.kind() == Kind::Bird {
+        draw_bird(
+            enemy.pos,
+            enemy.radius,
+            time,
+            enemy.phase,
+            enemy.is_attacking(),
+        );
     } else if enemy.shows_word {
         draw_cyclops(enemy.pos, enemy.radius, time, enemy.phase, player);
     } else {
@@ -155,6 +170,10 @@ fn draw_arena(scene: &Scene) {
         draw_obstacle(obstacle, time);
     }
 
+    // The moulds' bodies lie under every monster.
+    for mould in scene.enemies.iter().filter(|e| e.mould.is_some()) {
+        draw_mould_body(&mould.mould_body(), MOULD_TUBE_RADIUS, time, mould.phase);
+    }
     for enemy in scene.enemies {
         draw_enemy_body(enemy, time, scene.player);
     }

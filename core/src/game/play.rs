@@ -6,8 +6,8 @@ use super::answer::{InputOutcome, Slot, resolve_input};
 use super::display::Tone;
 use super::enemy::{Enemy, EnemyId};
 use super::rules::{
-    COLLISION_PALETTE, ENEMY_RADIUS, KILL_PALETTE, LEVEL_BREAK_SECONDS, PORTAL_PALETTE,
-    SPELL_PALETTE, energy_cap, points_to_clear, stars_for,
+    COLLISION_PALETTE, ENEMY_RADIUS, KILL_PALETTE, LEVEL_BREAK_SECONDS, MOULD_PALETTE,
+    PORTAL_PALETTE, SPELL_PALETTE, energy_cap, points_to_clear, stars_for,
 };
 use super::spawn::SpawnContext;
 use super::stage::Stage;
@@ -205,6 +205,9 @@ impl Game {
                     self.display
                         .effects
                         .explode(pos, ENEMY_RADIUS * 0.5, &SPELL_PALETTE);
+                    if let ImpactTarget::Mould { radius } = impact.target {
+                        self.display.effects.explode(pos, radius, &MOULD_PALETTE);
+                    }
                     if let ImpactTarget::Doomed { radius, boss } = impact.target {
                         self.display.effects.explode(pos, radius, &KILL_PALETTE);
                         if boss {
@@ -246,6 +249,12 @@ impl Game {
                     self.display
                         .effects
                         .explode(at, ENEMY_RADIUS, &COLLISION_PALETTE);
+                }
+                ContactKind::Mould { at } => {
+                    out.sfx.push(Sfx::Hurt);
+                    self.display
+                        .effects
+                        .explode(at, ENEMY_RADIUS, &MOULD_PALETTE);
                 }
                 ContactKind::Ordinary => {
                     out.sfx.extend([Sfx::Explode, Sfx::Hurt]);

@@ -20,7 +20,7 @@ const SHORTEST_LONG: usize = 3;
 /// ...grow a digit longer every this many levels...
 const LEVELS_PER_EXTRA_DIGIT: u32 = 3;
 /// ...up to this many.
-const LONGEST_LONG: usize = 6;
+pub const LONGEST_LONG: usize = 6;
 
 /// What a monster asks: one pair, or a long number made of several.
 #[derive(Debug, Clone, PartialEq)]
@@ -140,6 +140,17 @@ pub fn random_long_number(
     } else {
         max
     };
+    long_number_of(digits, pairs, rng, weight)
+}
+
+/// A long number of exactly `digits` digits (an odd number ends in a
+/// single-digit pair), each pair picked from `pairs` by `weight`.
+pub fn long_number_of(
+    digits: usize,
+    pairs: &[Pair],
+    rng: &mut Rng,
+    weight: impl Fn(&Pair) -> f32,
+) -> Question {
     let doubles: Vec<Pair> = pairs
         .iter()
         .filter(|p| p.number.len() == 2)
