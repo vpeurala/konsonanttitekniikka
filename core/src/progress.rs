@@ -1,7 +1,8 @@
 //! What is known about the player: how well each pair is known, the best
-//! level, stars, the daily streak, the lifetime counters, the badges and
-//! the sound setting. The one copy of it all; `save` only turns it into
-//! text and back.
+//! level, stars, the daily streak, the lifetime counters and the badges,
+//! kept separately for the easy mode and the hardcore mode so that results
+//! can be compared honestly, and the settings that are the same for both.
+//! The one copy of it all; `save` only turns it into text and back.
 
 use std::collections::BTreeMap;
 
@@ -12,13 +13,11 @@ use crate::memory::Memory;
 /// and a damaged number must not send the game counting to billions.
 pub const MAX_LEVEL: u32 = 1000;
 
+/// What is known about the player in one of the modes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Progress {
     /// How well each pair is known.
     pub memory: Memory,
-    pub music_on: bool,
-    /// Hardcore mode: monsters never show hints.
-    pub hardcore: bool,
     /// The highest level reached.
     pub best_level: u32,
     /// The best stars earned on each level, from 1 to 3.
@@ -38,14 +37,58 @@ impl Default for Progress {
     fn default() -> Self {
         Progress {
             memory: Memory::default(),
-            music_on: true,
-            hardcore: false,
             best_level: 1,
             stars: BTreeMap::new(),
             streak_day: 0,
             streak: 0,
             stats: Stats::default(),
             badges: BTreeMap::new(),
+        }
+    }
+}
+
+/// Everything about the player: the progress in each mode and the settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Profile {
+    pub music_on: bool,
+    /// The mode being played: hardcore mode has monsters that never show
+    /// hints, and a progress of its own.
+    pub hardcore: bool,
+    pub easy: Progress,
+    pub hard: Progress,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        Profile {
+            music_on: true,
+            hardcore: false,
+            easy: Progress::default(),
+            hard: Progress::default(),
+        }
+    }
+}
+
+impl Profile {
+    /// The progress in the mode being played.
+    pub fn current(&self) -> &Progress {
+        self.of(self.hardcore)
+    }
+
+    pub fn current_mut(&mut self) -> &mut Progress {
+        self.of_mut(self.hardcore)
+    }
+
+    /// The progress in hardcore mode if `hardcore`, else in the easy mode.
+    pub fn of(&self, hardcore: bool) -> &Progress {
+        if hardcore { &self.hard } else { &self.easy }
+    }
+
+    pub fn of_mut(&mut self, hardcore: bool) -> &mut Progress {
+        if hardcore {
+            &mut self.hard
+        } else {
+            &mut self.easy
         }
     }
 }

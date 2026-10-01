@@ -27,10 +27,12 @@ pub fn draw(app: &App) {
     let (progress_data, touch_mode) = (app.progress(), app.touch_mode());
     let time = app.time() as f32;
     match app.screen() {
-        Screen::Title => title::draw(app.title(), progress_data, view, time),
+        Screen::Title => title::draw(app.title(), progress_data, app.hardcore(), view, time),
         Screen::Levels(select) => levels::draw(select),
-        Screen::Progress => progress::draw(progress_data, touch_mode),
-        Screen::Badges(screen) => badge_screen::draw(screen, progress_data, touch_mode),
+        Screen::Progress => progress::draw(progress_data, app.hardcore(), touch_mode),
+        Screen::Badges(screen) => {
+            badge_screen::draw(screen, progress_data, app.hardcore(), touch_mode)
+        }
         Screen::Practice(screen) => {
             practice::draw(screen, time);
             if touch_mode {

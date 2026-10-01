@@ -21,7 +21,7 @@ const TEXT_COLOR: Color = Color::new(0.9, 0.9, 0.9, 1.0);
 const DIM: Color = Color::new(0.6, 0.6, 0.65, 1.0);
 const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 
-pub fn draw(screen: &TitleScreen, progress: &Progress, view: View, time: f32) {
+pub fn draw(screen: &TitleScreen, progress: &Progress, hardcore: bool, view: View, time: f32) {
     clear_background(BACKGROUND);
     let cx = ARENA_W / 2.0;
     let mut y = 70.0 - screen.scroll();
@@ -30,7 +30,7 @@ pub fn draw(screen: &TitleScreen, progress: &Progress, view: View, time: f32) {
     y += 90.0;
     draw_cast(cx, y, time);
     y += 90.0;
-    draw_menu(screen, progress);
+    draw_menu(screen, progress, hardcore);
     y += MENU_SPACE;
 
     for line in EXPLANATION_BEFORE_TABLE {
@@ -69,7 +69,7 @@ pub fn draw(screen: &TitleScreen, progress: &Progress, view: View, time: f32) {
     draw_footer(screen.touch());
 }
 
-fn draw_menu(screen: &TitleScreen, progress: &Progress) {
+fn draw_menu(screen: &TitleScreen, progress: &Progress, hardcore: bool) {
     for (i, (label, key, _)) in MENU.iter().enumerate() {
         let rect = button_rect(i, screen.scroll());
         let primary = i == 0;
@@ -96,7 +96,7 @@ fn draw_menu(screen: &TitleScreen, progress: &Progress) {
     );
     let y = MENU_Y + BUTTON_H / 2.0 + 26.0 - screen.scroll();
     draw_centered_text(&status, ARENA_W / 2.0, y, 20, DIM);
-    draw_hardcore_switch(screen, progress.hardcore);
+    draw_hardcore_switch(screen, hardcore);
 }
 
 /// The switch for hardcore mode, a game without hints.

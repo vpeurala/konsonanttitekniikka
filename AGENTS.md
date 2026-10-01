@@ -187,12 +187,17 @@ so it can be tested without a screen; do the same for new layouts.
   5 hours to 6 days by difficulty. A streak of good answers in a row (quick,
   no hint; anything else resets it) stretches a learned pair's interval by
   half again per answer past five, up to 3 weeks.
-- `progress.rs`: `Progress`, the one copy of what is known about the player:
-  the memory of each pair, best level, stars, streak, stats, badges, sound
-  setting and hardcore mode (`hardcore`: monsters never show hints; the
-  title screen's switch, key A; `Game::new` takes it and `World::set_hints`
-  passes it on to each monster). `App` holds the live copy; nothing else keeps a second one.
-- `save.rs`: turns a `Progress` into the save file and back, plain text with one fact per line, damaged lines
+- `progress.rs`: `Profile`, the one copy of what is known about the player:
+  the sound setting, the mode being played and a `Progress` for each of the
+  two modes, `easy` and `hard` (the memory of each pair, best level, stars,
+  streak, stats and badges, kept apart so results compare honestly, and
+  each mode has its own badge inventory). Hardcore mode (`Profile::hardcore`:
+  monsters never show hints; the title screen's switch, key A; `Game::new`
+  takes it and `World::set_hints` passes it on to each monster) plays
+  against the `hard` progress; `Profile::current` is the one in use. `App`
+  holds the live copy; nothing else keeps a second one.
+- `save.rs`: turns a `Profile` into the save file and back (the settings,
+  the easy mode's lines, then `mode hardcore` and the hardcore mode's), plain text with one fact per line, damaged lines
   skipped and absurd numbers clamped or dropped (tests read thousands of
   garbage files). Saves from before a field existed must keep loading. On
   the web it goes to local storage.
@@ -206,7 +211,7 @@ so it can be tested without a screen; do the same for new layouts.
   never takes one back. The game reports counts as `GameEvent`s
   (`Answered`, `MonsterDefeated`, `FlawlessLevel`, and `LevelCompleted` for
   a boss); `App` adds them to the stats and, at the end of each frame,
-  awards badges: a toast, `Sfx::Badge`, a `merkki/<id>` count and a save.
+  awards badges: a toast, `Sfx::Badge`, a `merkki/<id>` count (`merkki/ankara/<id>` in hardcore mode) and a save.
   Players from before badges get theirs quietly in `App::new`. To add a
   badge, add a line to the table (and raise its length); the tests check
   ids, order and that nothing is met from the start.
@@ -279,7 +284,8 @@ so it can be tested without a screen; do the same for new layouts.
   (https://lukuloitsu.goatcounter.com). It doesn't count localhost. Events
   are paths like `peli-alkoi/taso-1`, `taso-lapaisty/5`,
   `peli-paattyi/taso-4`, `harjoittelu`, `edistyminen`, `kunniamerkit` and
-  `merkki/<badge id>` when a badge is earned.
+  `merkki/<badge id>` when a badge is earned (`merkki/ankara/<badge id>` in
+  hardcore mode).
 - The domain is at DNSimple and points to Netlify.
 
 ### Android

@@ -3,14 +3,19 @@
 use super::*;
 use crate::badges::Stats;
 use crate::game::GameEvent;
-use crate::memory::Memory;
+use crate::memory::{Lesson, Memory};
+use crate::progress::Profile;
 use glam::vec2;
 
 const START: f64 = 1_800_000_000.0;
 const FRAME: f32 = 1.0 / 60.0;
 
 fn app_with(progress: Progress, can_quit: bool) -> App {
-    App::start(progress, false, can_quit, START).0
+    let profile = Profile {
+        easy: progress,
+        ..Profile::default()
+    };
+    App::start(profile, false, can_quit, START).0
 }
 
 fn app() -> App {
@@ -199,15 +204,15 @@ fn a_game_is_saved_now_and_then_but_not_every_frame() {
 
 #[test]
 fn a_finished_level_is_counted_remembered_and_saved() {
-    let mut data = Persistence::new(Progress::default(), START);
+    let mut data = Persistence::new(Profile::default(), START);
     let event = GameEvent::LevelCompleted { level: 1, stars: 2 };
     assert!(data.record(&event));
     assert_eq!(
         analytics_of(&event).map(|e| e.path()),
         Some("taso-lapaisty/1".to_owned())
     );
-    assert_eq!(data.progress.stars.get(&1), Some(&2));
-    assert!(data.progress.best_level >= 2);
+    assert_eq!(data.progress().stars.get(&1), Some(&2));
+    assert!(data.progress().best_level >= 2);
 }
 
 #[test]
@@ -254,9 +259,18 @@ fn answers_are_not_worth_a_save_by_themselves() {
 }
 
 #[test]
+fn a_badge_earned_in_hardcore_mode_is_counted_under_its_own_path() {
+    let mut app = app();
+    app.update(&press(KeyCode::A));
+    app.context.data.profile.hard.stats.monsters = 1;
+    let effects = app.update(&frame());
+    assert_eq!(counted(&effects), vec!["merkki/ankara/monsters-1"]);
+}
+
+#[test]
 fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
     let mut app = app();
-    app.context.data.progress.stats.monsters = 1;
+    app.context.data.profile.easy.stats.monsters = 1;
     let effects = app.update(&frame());
     assert!(effects.contains(&Effect::Play(Sfx::Badge)));
     assert_eq!(counted(&effects), vec!["merkki/monsters-1"]);
@@ -264,6 +278,7 @@ fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
     assert!(
         last_saved(&effects)
             .unwrap()
+            .easy
             .badges
             .contains_key("monsters-1")
     );
@@ -280,7 +295,7 @@ fn earning_a_badge_gives_a_notice_a_sound_a_count_and_a_save_once() {
 #[test]
 fn several_badges_at_once_each_get_their_notice_in_turn() {
     let mut app = app();
-    app.context.data.progress.stats.monsters = 10;
+    app.context.data.profile.easy.stats.monsters = 10;
     let effects = app.update(&frame());
     assert_eq!(
         counted(&effects),
@@ -297,17 +312,31 @@ fn several_badges_at_once_each_get_their_notice_in_turn() {
 fn the_sound_switch_silences_the_badge_sound_but_not_the_badge() {
     let mut app = app();
     app.update(&press(KeyCode::Tab));
-    app.context.data.progress.stats.monsters = 1;
+    app.context.data.profile.easy.stats.monsters = 1;
     let effects = app.update(&frame());
     assert!(!effects.iter().any(|e| matches!(e, Effect::Play(_))));
-    assert!(app.context.data.progress.badges.contains_key("monsters-1"));
+    assert!(
+        app.context
+            .data
+            .profile
+            .easy
+            .badges
+            .contains_key("monsters-1")
+    );
     assert!(app.context.toasts.current().is_some());
 }
 
 #[test]
 fn badges_earned_before_they_existed_are_given_quietly() {
     let mut app = veteran(6);
-    assert!(app.context.data.progress.badges.contains_key("levels-5"));
+    assert!(
+        app.context
+            .data
+            .profile
+            .easy
+            .badges
+            .contains_key("levels-5")
+    );
     let effects = app.update(&frame());
     assert!(!effects.contains(&Effect::Play(Sfx::Badge)));
     assert!(app.context.toasts.current().is_none());
@@ -324,7 +353,7 @@ fn learning_pairs_earns_their_badge_at_once() {
             learned.record_answer(*pair, 1.0, false, START);
         }
     }
-    app.context.data.progress.memory = learned;
+    app.context.data.profile.easy.memory = learned;
     let effects = app.update(&frame());
     assert!(counted(&effects).contains(&"merkki/pairs-digits".to_owned()));
 }
@@ -341,7 +370,7 @@ fn k_opens_the_badges_and_escape_comes_back() {
 
 #[test]
 fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
-    let mut data = Persistence::new(Progress::default(), START);
+    let mut data = Persistence::new(Profile::default(), START);
     let started = GameEvent::Started { level: 5 };
     let over = GameEvent::Over { level: 7 };
     assert!(!data.record(&started));
@@ -354,7 +383,7 @@ fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
             .collect::<Vec<_>>(),
         vec!["peli-alkoi/taso-5", "peli-paattyi/taso-7"]
     );
-    assert_eq!(data.progress, Progress::default());
+    assert_eq!(data.profile, Profile::default());
 }
 
 #[test]
@@ -398,9 +427,9 @@ fn switching_the_sound_off_silences_the_sound_effects_too() {
 #[test]
 fn hardcore_mode_is_switched_on_the_title_screen_saved_and_kept_across_games() {
     let mut app = app();
-    assert!(!app.progress().hardcore);
+    assert!(!app.hardcore());
     let effects = app.update(&press(KeyCode::A));
-    assert!(app.progress().hardcore);
+    assert!(app.hardcore());
     assert!(
         effects
             .iter()
@@ -415,12 +444,62 @@ fn hardcore_mode_is_switched_on_the_title_screen_saved_and_kept_across_games() {
     // Back on the title screen the mode can be switched off again.
     app.update(&press(KeyCode::Escape));
     app.update(&press(KeyCode::A));
-    assert!(!app.progress().hardcore);
+    assert!(!app.hardcore());
     app.update(&press(KeyCode::Enter));
     let Screen::Game(game) = app.screen() else {
         panic!("a game should have started");
     };
     assert!(!game.scene().hardcore);
+}
+
+#[test]
+fn each_mode_keeps_its_own_progress_and_badges() {
+    let mut app = app();
+    // A monster defeated in the easy mode counts there only.
+    app.context.data.record(&GameEvent::MonsterDefeated);
+    app.update(&frame());
+    assert_eq!(app.progress().stats.monsters, 1);
+    assert!(app.progress().badges.contains_key("monsters-1"));
+    // Switching to hardcore mode shows a fresh progress...
+    app.update(&press(KeyCode::A));
+    assert!(app.hardcore());
+    assert_eq!(app.progress().stats.monsters, 0);
+    assert!(app.progress().badges.is_empty());
+    // ...which what happens there fills, without touching the easy mode's.
+    app.context.data.record(&GameEvent::MonsterDefeated);
+    app.context.data.record(&GameEvent::MonsterDefeated);
+    app.update(&frame());
+    assert_eq!(app.progress().stats.monsters, 2);
+    assert_eq!(app.context.data.profile.easy.stats.monsters, 1);
+    app.update(&press(KeyCode::A));
+    assert!(!app.hardcore());
+    assert_eq!(app.progress().stats.monsters, 1);
+    assert_eq!(app.context.data.profile.hard.stats.monsters, 2);
+    assert!(
+        app.context
+            .data
+            .profile
+            .hard
+            .badges
+            .contains_key("monsters-1")
+    );
+}
+
+#[test]
+fn what_she_learns_goes_to_the_memory_of_the_mode_she_plays() {
+    let mut app = app();
+    app.update(&press(KeyCode::A));
+    let pair = crate::pairs::PAIRS[3];
+    app.context.data.learn(&[Lesson {
+        pair,
+        what: crate::memory::Happened::Answered {
+            seconds: 1.0,
+            with_hint: false,
+        },
+        at: START,
+    }]);
+    assert!(app.context.data.profile.hard.memory.record(&pair).is_some());
+    assert!(app.context.data.profile.easy.memory.record(&pair).is_none());
 }
 
 #[test]
@@ -434,9 +513,9 @@ fn the_same_frames_give_the_same_effects() {
     assert_eq!(run(), run());
 }
 
-fn last_saved(effects: &[Effect]) -> Option<Progress> {
+fn last_saved(effects: &[Effect]) -> Option<Profile> {
     effects.iter().rev().find_map(|e| match e {
-        Effect::Save(text) => Some(Progress::from_text(text)),
+        Effect::Save(text) => Some(Profile::from_text(text)),
         _ => None,
     })
 }
@@ -449,7 +528,7 @@ fn what_practice_teaches_is_saved_when_leaving() {
     app.update(&press(KeyCode::Space));
     let effects = app.update(&press(KeyCode::Escape));
     let saved = last_saved(&effects).expect("leaving practice saves");
-    assert_eq!(saved.memory.records().count(), 1);
+    assert_eq!(saved.easy.memory.records().count(), 1);
 }
 
 #[test]
@@ -461,7 +540,7 @@ fn what_a_game_teaches_is_saved_when_leaving() {
     let effects = app.update(&press(KeyCode::Escape));
     let saved = last_saved(&effects).expect("leaving a game saves");
     assert!(
-        saved.memory.records().count() > 0,
+        saved.easy.memory.records().count() > 0,
         "the misses are in the save"
     );
     assert!(on_title(&app));
@@ -473,7 +552,7 @@ fn the_progress_screen_shows_what_was_learned_without_saving_first() {
     app.update(&press(KeyCode::H));
     app.update(&press(KeyCode::Space));
     assert_eq!(
-        app.context.data.progress.memory.records().count(),
+        app.context.data.profile.easy.memory.records().count(),
         1,
         "kept live in the app"
     );
@@ -492,9 +571,9 @@ fn menu_animations_follow_the_frames_shown() {
 
 #[test]
 fn starting_counts_today_as_a_day_played_and_saves_it() {
-    let (app, effects) = App::start(Progress::default(), false, true, START);
-    assert_eq!(app.context.data.progress.streak, 1);
-    assert_eq!(app.context.data.progress.streak_day, day_of(START));
+    let (app, effects) = App::start(Profile::default(), false, true, START);
+    assert_eq!(app.context.data.profile.easy.streak, 1);
+    assert_eq!(app.context.data.profile.easy.streak_day, day_of(START));
     let saved = last_saved(&effects).expect("the launch is saved");
-    assert_eq!(saved.streak, 1);
+    assert_eq!(saved.easy.streak, 1);
 }

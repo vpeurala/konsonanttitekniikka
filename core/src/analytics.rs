@@ -19,10 +19,11 @@ pub enum Event {
     GameOver { level: u32 },
     /// A level was finished with this many stars.
     LevelCleared { level: u32, stars: u8 },
-    /// A badge was earned.
+    /// A badge was earned, in hardcore mode if `hardcore`.
     BadgeEarned {
         id: &'static str,
         name: &'static str,
+        hardcore: bool,
     },
 }
 
@@ -36,7 +37,14 @@ impl Event {
             Event::GameStarted { level } => format!("peli-alkoi/taso-{level}"),
             Event::GameOver { level } => format!("peli-paattyi/taso-{level}"),
             Event::LevelCleared { level, .. } => format!("taso-lapaisty/{level}"),
-            Event::BadgeEarned { id, .. } => format!("merkki/{id}"),
+            Event::BadgeEarned {
+                id,
+                hardcore: false,
+                ..
+            } => format!("merkki/{id}"),
+            Event::BadgeEarned {
+                id, hardcore: true, ..
+            } => format!("merkki/ankara/{id}"),
         }
     }
 
@@ -51,7 +59,16 @@ impl Event {
             Event::LevelCleared { level, stars } => {
                 format!("Taso {level} läpäisty ({stars} tähteä)")
             }
-            Event::BadgeEarned { name, .. } => format!("Kunniamerkki: {name}"),
+            Event::BadgeEarned {
+                name,
+                hardcore: false,
+                ..
+            } => format!("Kunniamerkki: {name}"),
+            Event::BadgeEarned {
+                name,
+                hardcore: true,
+                ..
+            } => format!("Kunniamerkki (ankara tila): {name}"),
         }
     }
 }
@@ -70,9 +87,17 @@ mod tests {
         let badge = Event::BadgeEarned {
             id: "monsters-1",
             name: "Ensimmäinen",
+            hardcore: false,
         };
         assert_eq!(badge.path(), "merkki/monsters-1");
         assert_eq!(badge.title(), "Kunniamerkki: Ensimmäinen");
+        let hard = Event::BadgeEarned {
+            id: "monsters-1",
+            name: "Ensimmäinen",
+            hardcore: true,
+        };
+        assert_eq!(hard.path(), "merkki/ankara/monsters-1");
+        assert_eq!(hard.title(), "Kunniamerkki (ankara tila): Ensimmäinen");
         assert_eq!(Event::Practice.path(), "harjoittelu");
         assert_eq!(Event::Progress.title(), "Edistyminen");
         assert_eq!(Event::Badges.path(), "kunniamerkit");

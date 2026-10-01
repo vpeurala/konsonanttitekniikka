@@ -17,11 +17,12 @@ const BACKGROUND: Color = Color::new(0.09, 0.09, 0.125, 1.0);
 const PANEL: Color = Color::new(0.13, 0.13, 0.19, 1.0);
 const DIM: Color = Color::new(0.6, 0.6, 0.65, 1.0);
 
-pub fn draw(screen: &BadgeScreen, data: &Progress, touch: bool) {
+pub fn draw(screen: &BadgeScreen, data: &Progress, hardcore: bool, touch: bool) {
     clear_background(BACKGROUND);
     draw_list(screen, data);
     // The heading and the panel are drawn last, over the list.
     draw_heading(data, touch);
+    fonts::draw_mode_tag(hardcore);
     draw_panel(screen, data);
 }
 

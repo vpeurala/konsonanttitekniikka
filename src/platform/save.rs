@@ -1,10 +1,10 @@
 //! Where the save file lives and reading and writing it: the impure edge
-//! of saving. What is in it is `Progress`, in the core crate.
+//! of saving. What is in it is `Profile`, in the core crate.
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
-pub use lukuloitsu_core::progress::Progress;
+pub use lukuloitsu_core::progress::Profile;
 
 /// Where the save file lives, if saving is possible on this platform.
 #[cfg(not(target_arch = "wasm32"))]
@@ -27,9 +27,9 @@ fn path() -> Option<PathBuf> {
 }
 
 /// Loads the saved progress, or the defaults if there is none.
-pub fn load() -> Progress {
+pub fn load() -> Profile {
     read_text()
-        .map(|text| Progress::from_text(&text))
+        .map(|text| Profile::from_text(&text))
         .unwrap_or_default()
 }
 

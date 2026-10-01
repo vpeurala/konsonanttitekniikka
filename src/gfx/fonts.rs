@@ -85,3 +85,21 @@ pub fn draw_centered(text: &str, x: f32, y: f32, size: u16, color: Color, style:
 pub fn draw_centered_text(text: &str, x: f32, y: f32, size: u16, color: Color) {
     draw_centered(text, x, y, size, color, Style::Body);
 }
+
+/// Marks a screen of progress as the hardcore mode's, in the top right
+/// corner. Nothing is drawn for the easy mode.
+pub fn draw_mode_tag(hardcore: bool) {
+    if !hardcore {
+        return;
+    }
+    let tag = "Ankara tila";
+    let width = measure(tag, Style::Heading, 22).width;
+    draw(
+        tag,
+        crate::gfx::view::ARENA_W - width - 16.0,
+        32.0,
+        22,
+        macroquad::prelude::Color::new(0.9, 0.25, 0.25, 1.0),
+        Style::Heading,
+    );
+}

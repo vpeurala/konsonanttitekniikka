@@ -4,17 +4,23 @@
 //! page's local storage.
 //!
 //! The file is plain text, one fact per line, and a damaged line is
-//! skipped rather than losing everything:
+//! skipped rather than losing everything. The settings come first, then
+//! the easy mode's progress, then, after a `mode hardcore` line, the
+//! hardcore mode's. (Files from before hardcore mode have only the easy
+//! mode's, with no such line.)
 //!
 //! ```text
 //! lukuloitsu-save 1
 //! music on
+//! hardcore off
 //! best-level 4
 //! stars 1 3
 //! streak 20356 5
 //! stat monsters 120
 //! badge monsters-100 20357
 //! pair 22 0.3512 1790000000 7
+//! mode hardcore
+//! best-level 2
 //! ```
 
 use std::fmt::Write;
@@ -23,11 +29,11 @@ use crate::badges;
 use crate::memory::{Memory, PairRecord};
 use crate::pairs;
 pub use crate::progress::day_of;
-use crate::progress::{MAX_LEVEL, Progress};
+use crate::progress::{MAX_LEVEL, Profile, Progress};
 
 const HEADER: &str = "lukuloitsu-save 1";
 
-impl Progress {
+impl Profile {
     pub fn to_text(&self) -> String {
         // Writing to a `String` can't fail.
         let mut text = String::new();
@@ -43,6 +49,54 @@ impl Progress {
             "hardcore {}",
             if self.hardcore { "on" } else { "off" }
         )?;
+        self.easy.write_lines(text)?;
+        writeln!(text, "mode hardcore")?;
+        self.hard.write_lines(text)
+    }
+
+    /// Reads a save file, skipping lines it can't understand. Returns the
+    /// defaults if the text isn't a save file at all.
+    pub fn from_text(text: &str) -> Self {
+        let mut profile = Profile::default();
+        let mut lines = text.lines();
+        if lines.next() != Some(HEADER) {
+            return profile;
+        }
+        let (mut easy_records, mut hard_records) = (Vec::new(), Vec::new());
+        let mut in_hard_mode = false;
+        for line in lines {
+            let words: Vec<&str> = line.split_whitespace().collect();
+            match words.as_slice() {
+                ["music", setting] => profile.music_on = *setting != "off",
+                ["hardcore", setting] => profile.hardcore = *setting == "on",
+                ["mode", "hardcore"] => in_hard_mode = true,
+                _ if in_hard_mode => profile.hard.read_line(&words, &mut hard_records),
+                _ => profile.easy.read_line(&words, &mut easy_records),
+            }
+        }
+        profile.easy.memory = Memory::from_records(easy_records);
+        profile.hard.memory = Memory::from_records(hard_records);
+        profile
+    }
+}
+
+impl Progress {
+    /// One mode's progress as a save file with no settings, for tests.
+    #[cfg(test)]
+    pub fn to_text(&self) -> String {
+        let mut text = format!("{HEADER}\n");
+        let _ = self.write_lines(&mut text);
+        text
+    }
+
+    /// One mode's progress as it is read from a save file, for tests: the
+    /// lines before any `mode hardcore` line.
+    #[cfg(test)]
+    pub fn from_text(text: &str) -> Self {
+        Profile::from_text(text).easy
+    }
+
+    fn write_lines(&self, text: &mut String) -> std::fmt::Result {
         writeln!(text, "best-level {}", self.best_level)?;
         for (level, stars) in &self.stars {
             writeln!(text, "stars {level} {stars}")?;
@@ -68,30 +122,11 @@ impl Progress {
         Ok(())
     }
 
-    /// Reads a save file, skipping lines it can't understand. Returns the
-    /// defaults if the text isn't a save file at all.
-    pub fn from_text(text: &str) -> Self {
-        let mut data = Progress::default();
-        let mut records = Vec::new();
-        let mut lines = text.lines();
-        if lines.next() != Some(HEADER) {
-            return data;
-        }
-        for line in lines {
-            let words: Vec<&str> = line.split_whitespace().collect();
-            data.read_line(&words, &mut records);
-        }
-        data.memory = Memory::from_records(records);
-        data
-    }
-
     /// Takes in one line of the file, already split into words: a fact
     /// about the player, or a pair's record, which is added to `records`.
     /// A line that isn't understood is skipped.
     fn read_line(&mut self, words: &[&str], records: &mut Vec<(String, PairRecord)>) {
         match words {
-            ["music", setting] => self.music_on = *setting != "off",
-            ["hardcore", setting] => self.hardcore = *setting == "on",
             ["best-level", level] => {
                 if let Ok(level) = level.parse::<u32>() {
                     self.best_level = level.clamp(1, MAX_LEVEL);
@@ -168,8 +203,6 @@ mod tests {
 
     fn sample() -> Progress {
         let mut data = Progress {
-            music_on: false,
-            hardcore: true,
             best_level: 4,
             streak_day: 20_356,
             streak: 5,
@@ -217,8 +250,10 @@ mod tests {
     /// A save file made of plausible and implausible pieces, as damaged or
     /// tampered local storage might hold.
     fn garbage(seed: u64) -> String {
-        const TOKENS: [&str; 26] = [
+        const TOKENS: [&str; 28] = [
             "music",
+            "mode",
+            "hardcore",
             "best-level",
             "stars",
             "streak",
@@ -383,5 +418,55 @@ mod tests {
         assert_eq!(data.stats, Stats::default());
         assert!(data.badges.is_empty());
         assert_eq!(data.best_level, 3);
+    }
+
+    #[test]
+    fn each_modes_progress_survives_a_round_trip_apart_from_the_others() {
+        let mut profile = Profile {
+            music_on: false,
+            hardcore: true,
+            easy: sample(),
+            ..Profile::default()
+        };
+        profile.hard.best_level = 9;
+        profile.hard.stars.insert(8, 2);
+        profile.hard.badges.insert("monsters-1".to_string(), 20_400);
+        let back = Profile::from_text(&profile.to_text());
+        assert_eq!(back, profile);
+        assert_eq!(back.easy.best_level, 4);
+        assert_eq!(back.hard.best_level, 9);
+        assert!(!back.easy.badges.contains_key("monsters-1"));
+    }
+
+    #[test]
+    fn saves_from_before_hardcore_mode_are_the_easy_modes_progress() {
+        let text =
+            format!("{HEADER}\nmusic off\nbest-level 7\nstars 3 2\npair 22 0.3 1790000000 4 1\n");
+        let profile = Profile::from_text(&text);
+        assert!(!profile.music_on);
+        assert!(!profile.hardcore);
+        assert_eq!(profile.easy.best_level, 7);
+        assert_eq!(profile.easy.memory.records().count(), 1);
+        assert_eq!(profile.hard, Progress::default());
+    }
+
+    #[test]
+    fn lines_after_the_mode_line_belong_to_hardcore_mode() {
+        let text = format!(
+            "{HEADER}\nbest-level 3\nmode hardcore\nbest-level 12\npair 22 0.3 1790000000 4 1\n"
+        );
+        let profile = Profile::from_text(&text);
+        assert_eq!(profile.easy.best_level, 3);
+        assert_eq!(profile.hard.best_level, 12);
+        assert_eq!(profile.easy.memory.records().count(), 0);
+        assert_eq!(profile.hard.memory.records().count(), 1);
+    }
+
+    #[test]
+    fn damaged_profiles_never_panic_and_survive_a_second_round_trip() {
+        for seed in 0..2000 {
+            let once = Profile::from_text(&garbage(seed));
+            assert_eq!(Profile::from_text(&once.to_text()), once, "seed {seed}");
+        }
     }
 }

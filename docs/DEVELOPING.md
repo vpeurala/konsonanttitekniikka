@@ -55,7 +55,7 @@ Vocabulary you will meet in the code (the game's own text is Finnish):
 | **Memory** | Spaced-repetition state: per pair, a difficulty and when it was last seen. Decides what appears and when. |
 | **Lesson** | Something that happened to a pair (answered in *n* seconds, or missed) which memory learns from. |
 | **Badge** (*kunniamerkki*) | An achievement; never taken back once earned. |
-| **Progress** | Everything known about the player: memory, best level, stars, streak, stats, badges, sound setting. |
+| **Progress** | What is known about the player in one mode: memory, best level, stars, streak, stats, badges. A **Profile** holds one for the easy mode and one for hardcore mode (no hints), plus the sound setting. |
 | **Harjoittele / Edistyminen / Kunniamerkit / Pelaa** | Practice / progress map / badges / play. |
 
 The players are **children and teens** (the game was made for the author's
@@ -153,8 +153,8 @@ docs/            this document; screenshots for the README
 | `curriculum` | Which pairs each level introduces (5 per level, seeded, so identical in every game); `unlocked_pairs(level)`. |
 | `long_numbers` | Reads long numbers two digits at a time, leading zeros allowed; when and how long they appear. |
 | `memory` | Spaced repetition (see [6.4](#64-spaced-repetition)). `Memory`, `Lesson`, `Happened`. |
-| `progress` | `Progress`: the one copy of everything known about the player. |
-| `save` | `Progress` ⇄ text. Only the format; where the file lives is the shell's business. |
+| `progress` | `Profile` (settings and a `Progress` per mode): the one copy of everything known about the player. |
+| `save` | `Profile` ⇄ text. Only the format; where the file lives is the shell's business. |
 | `badges` | The table `BADGES`, `Stats`, `Standing`, `award`. |
 | `levels` | The checkpoint rule. |
 | `game/` | The simulation: `Game`, `World`, `Player`, `Vitals`, `Stage`, `Display`, rules, spawning, answer matching, `Scene` (read-only view for drawing). |
@@ -334,17 +334,20 @@ negative x and beyond 800.
 
 ### 6.5 Saving and compatibility
 
-`Progress` ⇄ plain text, one fact per line, in `core/src/save.rs`:
+`Profile` ⇄ plain text, one fact per line, in `core/src/save.rs`. The settings come first, then the easy mode's progress, then a `mode hardcore` line and the hardcore mode's (older files have no such line, so they are the easy mode's):
 
 ```
 lukuloitsu-save 1
 music on
+hardcore off
 best-level 4
 stars 1 3
 streak 20356 5
 stat monsters 120
 badge monsters-100 20357
 pair 22 0.3512 1790000000 7 3
+mode hardcore
+best-level 2
 ```
 
 Rules: a damaged line is skipped, not fatal; absurd numbers are clamped or
@@ -491,7 +494,7 @@ page is hidden (a hidden page gets no frames, so the game can't stop its own
 music), shows "Ladataan…" until ready, and asks you to turn an upright phone.
 Statistics: GoatCounter, site code `lukuloitsu`; it doesn't count localhost.
 Events are paths like `peli-alkoi/taso-1`, `taso-lapaisty/5`, `harjoittelu`,
-`merkki/<badge id>`. The domain is at DNSimple and points to Netlify.
+`merkki/<badge id>` (`merkki/ankara/<badge id>` in hardcore mode). The domain is at DNSimple and points to Netlify.
 
 **Android.** `scripts/android.sh` builds with `cargo quad-apk`, installs and
 starts it. Needs Java 8, the SDK with build-tools 30.0.3 and platform 33, and

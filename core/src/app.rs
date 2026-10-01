@@ -17,7 +17,7 @@ use crate::game::rules::MAX_FRAME_SECONDS;
 use crate::game::{self, Game};
 use crate::geometry::Rect;
 use crate::input::{Frame, Key, KeyCode, Pointer};
-use crate::progress::{Progress, day_of};
+use crate::progress::{Profile, Progress, day_of};
 use crate::screens::badge_screen::BadgeScreen;
 use crate::screens::levels::{LevelAction, LevelSelect};
 use crate::screens::practice::{PracticeAction, PracticeScreen};
@@ -113,13 +113,13 @@ impl App {
     /// loaded from the device. Today counts as a day played, which is
     /// saved right away.
     pub fn start(
-        mut progress: Progress,
+        mut profile: Profile,
         touch_mode: bool,
         can_quit: bool,
         now: f64,
     ) -> (Self, Vec<Effect>) {
-        progress.record_play_day(day_of(now));
-        let mut data = Persistence::new(progress, now);
+        profile.current_mut().record_play_day(day_of(now));
+        let mut data = Persistence::new(profile, now);
         let saved = data.save(now);
         let app = App {
             screen: Screen::Title,
@@ -152,7 +152,12 @@ impl App {
 
     /// What is known about the player.
     pub fn progress(&self) -> &Progress {
-        &self.context.data.progress
+        self.context.data.progress()
+    }
+
+    /// Whether hardcore mode is on: no hints, and a progress of its own.
+    pub fn hardcore(&self) -> bool {
+        self.context.data.profile.hardcore
     }
 
     pub fn toasts(&self) -> &Toasts {
@@ -173,7 +178,7 @@ impl App {
     /// Whether the player has sound switched on: the music and the sound
     /// effects both.
     pub fn music_on(&self) -> bool {
-        self.context.data.progress.music_on
+        self.context.data.profile.music_on
     }
 
     /// Whether the screen wants music playing, if the player allows it:
@@ -237,7 +242,7 @@ impl Context {
             TitleAction::StartGame => {
                 // With only the first level to start from, there is
                 // nothing to choose.
-                let levels = LevelSelect::new(self.data.progress.best_level, self.touch_mode);
+                let levels = LevelSelect::new(self.data.progress().best_level, self.touch_mode);
                 Step::go(if levels.choices() > 1 {
                     Screen::Levels(levels)
                 } else {
@@ -246,8 +251,8 @@ impl Context {
             }
             TitleAction::Practice => Step::go_counting(
                 Screen::Practice(Box::new(PracticeScreen::new(
-                    self.data.progress.best_level,
-                    &self.data.progress.memory,
+                    self.data.progress().best_level,
+                    &self.data.progress().memory,
                     self.touch_mode,
                     frame.now,
                 ))),
@@ -258,7 +263,7 @@ impl Context {
             }
             TitleAction::ToggleHardcore => Step {
                 next: None,
-                effects: vec![self.data.toggle_hardcore()],
+                effects: vec![self.data.toggle_hardcore(frame.now)],
             },
             TitleAction::Badges => {
                 Step::go_counting(Screen::Badges(Box::default()), analytics::Event::Badges)
@@ -289,7 +294,7 @@ impl Context {
             &keys,
             input.arena_taps,
             back,
-            &self.data.progress.memory,
+            &self.data.progress().memory,
         );
         self.data.learn(&outcome.lessons);
         self.data.count_practice_correct(outcome.answered_right);
@@ -320,7 +325,7 @@ impl Context {
                 confirm: frame.pressed(KeyCode::Enter),
                 taps: input.arena_taps,
             },
-            &self.data.progress.memory,
+            &self.data.progress().memory,
         );
         self.data.learn(&outputs.lessons);
         step.effects
@@ -373,13 +378,14 @@ impl Context {
             effects.push(Effect::Count(analytics::Event::BadgeEarned {
                 id: badge.id,
                 name: badge.name,
+                hardcore: self.data.profile.hardcore,
             }));
         }
         effects.push(self.data.save(frame.now));
     }
 
     fn new_game(&self, level: u32) -> Game {
-        Game::new(self.touch_mode, level, self.data.progress.hardcore)
+        Game::new(self.touch_mode, level, self.data.profile.hardcore)
     }
 }
 

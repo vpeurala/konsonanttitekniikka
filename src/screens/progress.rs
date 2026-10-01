@@ -49,11 +49,12 @@ fn tier_color(tier: Option<u8>) -> Color {
     }
 }
 
-pub fn draw(data: &Progress, touch: bool) {
+pub fn draw(data: &Progress, hardcore: bool, touch: bool) {
     let memory = &data.memory;
     clear_background(BACKGROUND);
     let cx = ARENA_W / 2.0;
     fonts::draw_centered("Edistyminen", cx, 36.0, 44, GOLD, Style::Heading);
+    fonts::draw_mode_tag(hardcore);
 
     let stars: u32 = data.stars.values().map(|&s| u32::from(s)).sum();
     let stats = format!(
