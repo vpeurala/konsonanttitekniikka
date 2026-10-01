@@ -101,6 +101,30 @@ fn a_new_player_goes_straight_into_a_game() {
 }
 
 #[test]
+fn everything_counted_in_hardcore_mode_is_filed_under_its_own_paths() {
+    let mut app = app();
+    app.update(&press(KeyCode::A));
+    app.update(&press(KeyCode::Enter));
+    let effects = idle(&mut app, START, 0.1);
+    assert_eq!(counted(&effects), vec!["peli-alkoi/ankara/taso-1"]);
+    app.update(&press(KeyCode::Escape));
+    assert_eq!(
+        counted(&app.update(&press(KeyCode::H))),
+        vec!["harjoittelu/ankara"]
+    );
+    app.update(&press(KeyCode::Escape));
+    assert_eq!(
+        counted(&app.update(&press(KeyCode::E))),
+        vec!["edistyminen/ankara"]
+    );
+    app.update(&press(KeyCode::Escape));
+    assert_eq!(
+        counted(&app.update(&press(KeyCode::K))),
+        vec!["kunniamerkit/ankara"]
+    );
+}
+
+#[test]
 fn a_returning_player_chooses_the_level_first() {
     let mut app = veteran(12);
     app.update(&press(KeyCode::Enter));
@@ -208,7 +232,7 @@ fn a_finished_level_is_counted_remembered_and_saved() {
     let event = GameEvent::LevelCompleted { level: 1, stars: 2 };
     assert!(data.record(&event));
     assert_eq!(
-        analytics_of(&event).map(|e| e.path()),
+        analytics_of(&event, false).map(|e| e.path()),
         Some("taso-lapaisty/1".to_owned())
     );
     assert_eq!(data.progress().stars.get(&1), Some(&2));
@@ -254,7 +278,7 @@ fn answers_are_not_worth_a_save_by_themselves() {
         },
     ] {
         assert!(!events::worth_saving(&event));
-        assert_eq!(analytics_of(&event), None);
+        assert_eq!(analytics_of(&event, false), None);
     }
 }
 
@@ -378,7 +402,7 @@ fn starting_and_ending_a_game_are_counted_but_not_worth_a_save() {
     assert_eq!(
         [started, over]
             .iter()
-            .filter_map(analytics_of)
+            .filter_map(|e| analytics_of(e, false))
             .map(|e| e.path())
             .collect::<Vec<_>>(),
         vec!["peli-alkoi/taso-5", "peli-paattyi/taso-7"]

@@ -25,14 +25,17 @@ pub fn tally(mut stats: Stats, event: &GameEvent) -> Stats {
     stats
 }
 
-/// What to count in the statistics, if anything.
-pub fn analytics_of(event: &GameEvent) -> Option<analytics::Event> {
+/// What to count in the statistics, if anything, for a game played in
+/// `hardcore` mode or not.
+pub fn analytics_of(event: &GameEvent, hardcore: bool) -> Option<analytics::Event> {
     match *event {
-        GameEvent::Started { level } => Some(analytics::Event::GameStarted { level }),
-        GameEvent::Over { level } => Some(analytics::Event::GameOver { level }),
-        GameEvent::LevelCompleted { level, stars } => {
-            Some(analytics::Event::LevelCleared { level, stars })
-        }
+        GameEvent::Started { level } => Some(analytics::Event::GameStarted { level, hardcore }),
+        GameEvent::Over { level } => Some(analytics::Event::GameOver { level, hardcore }),
+        GameEvent::LevelCompleted { level, stars } => Some(analytics::Event::LevelCleared {
+            level,
+            stars,
+            hardcore,
+        }),
         GameEvent::Answered { .. } | GameEvent::MonsterDefeated | GameEvent::FlawlessLevel => None,
     }
 }

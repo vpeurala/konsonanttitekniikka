@@ -211,7 +211,7 @@ so it can be tested without a screen; do the same for new layouts.
   never takes one back. The game reports counts as `GameEvent`s
   (`Answered`, `MonsterDefeated`, `FlawlessLevel`, and `LevelCompleted` for
   a boss); `App` adds them to the stats and, at the end of each frame,
-  awards badges: a toast, `Sfx::Badge`, a `merkki/<id>` count (`merkki/ankara/<id>` in hardcore mode) and a save.
+  awards badges: a toast, `Sfx::Badge`, a `merkki/<id>` count and a save.
   Players from before badges get theirs quietly in `App::new`. To add a
   badge, add a line to the table (and raise its length); the tests check
   ids, order and that nothing is met from the start.
@@ -284,8 +284,10 @@ so it can be tested without a screen; do the same for new layouts.
   (https://lukuloitsu.goatcounter.com). It doesn't count localhost. Events
   are paths like `peli-alkoi/taso-1`, `taso-lapaisty/5`,
   `peli-paattyi/taso-4`, `harjoittelu`, `edistyminen`, `kunniamerkit` and
-  `merkki/<badge id>` when a badge is earned (`merkki/ankara/<badge id>` in
-  hardcore mode).
+  `merkki/<badge id>` when a badge is earned. In hardcore mode every path
+  has `ankara` after its first part (`peli-alkoi/ankara/taso-1`,
+  `harjoittelu/ankara`, `merkki/ankara/<badge id>`), so the easy mode's paths
+  are as they always were and the two can be compared.
 - The domain is at DNSimple and points to Netlify.
 
 ### Android

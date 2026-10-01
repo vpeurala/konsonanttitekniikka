@@ -256,18 +256,26 @@ impl Context {
                     self.touch_mode,
                     frame.now,
                 ))),
-                analytics::Event::Practice,
+                analytics::Event::Practice {
+                    hardcore: self.data.profile.hardcore,
+                },
             ),
-            TitleAction::Progress => {
-                Step::go_counting(Screen::Progress, analytics::Event::Progress)
-            }
+            TitleAction::Progress => Step::go_counting(
+                Screen::Progress,
+                analytics::Event::Progress {
+                    hardcore: self.data.profile.hardcore,
+                },
+            ),
             TitleAction::ToggleHardcore => Step {
                 next: None,
                 effects: vec![self.data.toggle_hardcore(frame.now)],
             },
-            TitleAction::Badges => {
-                Step::go_counting(Screen::Badges(Box::default()), analytics::Event::Badges)
-            }
+            TitleAction::Badges => Step::go_counting(
+                Screen::Badges(Box::default()),
+                analytics::Event::Badges {
+                    hardcore: self.data.profile.hardcore,
+                },
+            ),
         }
     }
 
@@ -333,7 +341,8 @@ impl Context {
         let mut save_now = escape;
         for event in &outputs.events {
             save_now |= self.data.record(event);
-            step.effects.extend(analytics_of(event).map(Effect::Count));
+            step.effects
+                .extend(analytics_of(event, self.data.profile.hardcore).map(Effect::Count));
         }
         if !was_over && game.is_over() {
             step.effects.push(Effect::Play(Sfx::GameOver));

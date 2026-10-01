@@ -494,7 +494,9 @@ page is hidden (a hidden page gets no frames, so the game can't stop its own
 music), shows "Ladataan…" until ready, and asks you to turn an upright phone.
 Statistics: GoatCounter, site code `lukuloitsu`; it doesn't count localhost.
 Events are paths like `peli-alkoi/taso-1`, `taso-lapaisty/5`, `harjoittelu`,
-`merkki/<badge id>` (`merkki/ankara/<badge id>` in hardcore mode). The domain is at DNSimple and points to Netlify.
+`merkki/<badge id>`. In hardcore mode every path has `ankara` after its first
+part (`peli-alkoi/ankara/taso-1`, `merkki/ankara/<badge id>`), so the two modes
+can be compared. The domain is at DNSimple and points to Netlify.
 
 **Android.** `scripts/android.sh` builds with `cargo quad-apk`, installs and
 starts it. Needs Java 8, the SDK with build-tools 30.0.3 and platform 33, and
